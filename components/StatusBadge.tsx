@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { PNCStatus, Priority, ApprovalStatus } from '../types';
+import { PNCStatus, Priority, ApprovalStatus, VerificationStatus } from '../types';
 
 interface BadgeProps {
-  type: 'pnc' | 'priority' | 'approval';
+  type: 'pnc' | 'priority' | 'approval' | 'status';
   value: string;
 }
 
@@ -18,7 +18,7 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
         default: return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
       }
     }
-    
+
     if (type === 'pnc') {
       switch (value) {
         case PNCStatus.BOOKED_AND_CLOSED: return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50';
@@ -30,18 +30,40 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
     }
 
     if (type === 'approval') {
-        switch (value) {
-          case ApprovalStatus.APPROVED: return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/50';
-          case ApprovalStatus.PENDING: return 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/20 dark:text-amber-500 dark:border-amber-800/50';
-          default: return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
-        }
+      switch (value) {
+        case ApprovalStatus.APPROVED: return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/50';
+        case ApprovalStatus.PENDING: return 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/20 dark:text-amber-500 dark:border-amber-800/50';
+        default: return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+      }
     }
-    
+
+    if (type === 'status') {
+      switch (value) {
+        case VerificationStatus.APPROVED: return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/50';
+        case VerificationStatus.PENDING: return 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/20 dark:text-amber-500 dark:border-amber-800/50';
+        case VerificationStatus.REJECTED: return 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800/50';
+        default: return 'bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-900/50 dark:text-slate-500 dark:border-slate-800';
+      }
+    }
+
     return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
   };
 
+  const getIcon = () => {
+    if (type === 'status') {
+      switch (value) {
+        case VerificationStatus.APPROVED: return <i className="fa-solid fa-circle-check mr-1"></i>;
+        case VerificationStatus.PENDING: return <i className="fa-solid fa-clock mr-1"></i>;
+        case VerificationStatus.REJECTED: return <i className="fa-solid fa-circle-xmark mr-1"></i>;
+        default: return null;
+      }
+    }
+    return null;
+  };
+
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold border transition-colors ${getStyles()}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-2xs uppercase font-bold border transition-colors ${getStyles()}`}>
+      {getIcon()}
       {value}
     </span>
   );

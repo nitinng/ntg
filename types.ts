@@ -26,6 +26,7 @@ export interface UserDocument {
   fileUrl?: string;
   status: VerificationStatus;
   rejectionReason?: string;
+  uploadedAt?: string; // Timestamp when document was uploaded/saved
 }
 
 export interface User {
@@ -36,12 +37,20 @@ export interface User {
   avatar?: string;
   passportPhoto?: UserDocument;
   idProof?: UserDocument;
+  skippedVerificationAt?: string; // Timestamp when user skipped verification
   // Professional details
   team?: string;
   managerName?: string;
   managerEmail?: string;
   department?: string;
   campus?: string;
+  // Personal & Emergency details
+  phone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  bloodGroup?: string;
+  medicalConditions?: string;
 }
 
 export enum TripType {
@@ -52,8 +61,7 @@ export enum TripType {
 export enum TravelMode {
   FLIGHT = 'Flight',
   TRAIN = 'Train',
-  BUS = 'Bus',
-  OTHER = 'Other'
+  BUS = 'Bus'
 }
 
 export enum ApprovalStatus {
@@ -100,20 +108,32 @@ export interface TravelRequest {
   requesterId: string;
   requesterName: string;
   requesterEmail: string;
-  requesterPhone: string;
-  requesterDepartment?: string;
   requesterCampus?: string;
-  
+  requesterDepartment?: string;
+  requesterPhone: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelation: string;
+  bloodGroup: string;
+  medicalConditions?: string;
+
   purpose: string;
+  approvingManagerName?: string;
+  approvingManagerEmail?: string;
   tripType: TripType;
   mode: TravelMode;
   from: string;
   to: string;
   dateOfTravel: string;
+  preferredDepartureWindow?: string;
   returnDate?: string;
+  returnPreferredDepartureWindow?: string;
   numberOfTravelers: number;
+  travellerNames?: string;
+  contactNumbers?: string; // This can be removed later if redundant with new fields
   priority: Priority;
-  
+  specialRequirements?: string;
+
   // Compliance & Approvals
   approvalStatus: ApprovalStatus;
   pncStatus: PNCStatus;
@@ -121,7 +141,7 @@ export interface TravelRequest {
   violationDetails?: string;
   lateBookingReason?: string;
   comments: string[];
-  
+
   // Finance & PNC Tracker Data
   costCenter?: string;
   budgetCode?: string;
@@ -130,7 +150,7 @@ export interface TravelRequest {
   invoiceNumber?: string;
   invoiceDate?: string;
   paymentStatus?: PaymentStatus;
-  
+
   // System
   timeline: TimelineEvent[];
   pnr?: string;
@@ -148,4 +168,5 @@ export interface PolicyConfig {
   isPassportRequired: boolean;
   isIdRequired: boolean;
   isEnforcementEnabled: boolean;
+  temporaryUnlockDays: number; // Days to unlock access after document upload, even without approval
 }

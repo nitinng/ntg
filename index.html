@@ -1,61 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navgurukul Travel Desk</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              indigo: {
-                50: '#f5f7ff',
-                100: '#ebf0fe',
-                200: '#ced9fd',
-                300: '#a1b6fb',
-                400: '#6d8bf7',
-                500: '#4361ee',
-                600: '#3a4fd4',
-                700: '#2f3faf',
-                800: '#26328c',
-                900: '#202971',
-                950: '#131843',
-              },
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Navgurukul Travel Desk</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Roboto', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Arial', 'sans-serif'],
+          },
+          fontSize: {
+            '2xs': ['0.6875rem', { lineHeight: '1.4' }],
+            'xs': ['0.75rem', { lineHeight: '1.4' }],
+            'sm': ['0.875rem', { lineHeight: '1.4' }],
+            'base': ['1rem', { lineHeight: '1.5' }],
+            'lg': ['1.125rem', { lineHeight: '1.5' }],
+            'xl': ['1.25rem', { lineHeight: '1.3' }],
+            '2xl': ['1.5rem', { lineHeight: '1.2' }],
+            '3xl': ['1.875rem', { lineHeight: '1.2' }],
+            '4xl': ['2.25rem', { lineHeight: '1.2' }],
+            '5xl': ['3rem', { lineHeight: '1.2' }],
+          },
+          colors: {
+            indigo: {
+              50: '#f5f7ff',
+              100: '#ebf0fe',
+              200: '#ced9fd',
+              300: '#a1b6fb',
+              400: '#6d8bf7',
+              500: '#4361ee',
+              600: '#3a4fd4',
+              700: '#2f3faf',
+              800: '#26328c',
+              900: '#202971',
+              950: '#131843',
             },
           },
         },
-      }
-    </script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-      /* Global transition to synchronize theme changes across all components simultaneously */
-      *, *::before, *::after {
-        transition-property: background-color, border-color, color, fill, stroke, box-shadow;
-        transition-duration: 300ms;
-        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      /* Prevent transition on initial load or non-theme properties if necessary */
-      .no-transition {
-        transition: none !important;
-      }
-    </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "sonner": "https://esm.sh/sonner@1.7.4?external=react",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/"
-  }
-}
-</script>
+      },
+    }
+  </script>
+
 </head>
+
+
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
-    <div id="root"></div>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>

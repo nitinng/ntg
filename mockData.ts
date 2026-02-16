@@ -1,39 +1,57 @@
 
-import { 
-  TravelRequest, TripType, TravelMode, ApprovalStatus, PNCStatus, Priority, User, UserRole, VerificationStatus, IdProofType, PaymentStatus 
+import {
+  TravelRequest, TripType, TravelMode, ApprovalStatus, PNCStatus, Priority, User, UserRole, VerificationStatus, IdProofType, PaymentStatus
 } from './types';
 
 export const mockUsers: User[] = [
-  { 
-    id: 'u1', 
-    name: 'Priyanka Dangwal', 
-    email: 'priyanka@navgurukul.org', 
-    role: UserRole.EMPLOYEE, 
-    passportPhoto: { status: VerificationStatus.INCOMPLETE },
-    idProof: { status: VerificationStatus.INCOMPLETE },
+  {
+    id: 'u1',
+    name: 'Priyanka Dangwal',
+    email: 'priyanka@navgurukul.org',
+    role: UserRole.EMPLOYEE,
+    passportPhoto: {
+      status: VerificationStatus.PENDING,
+      fileUrl: 'https://i.pravatar.cc/150?u=u1',
+      uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
+    },
+    idProof: {
+      status: VerificationStatus.PENDING,
+      type: IdProofType.AADHAAR,
+      fileUrl: '#',
+      uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
+    },
     team: 'Program Operations',
     department: 'Programs',
     campus: 'Pune',
     managerName: 'Kishore Kumar',
     managerEmail: 'kishore@navgurukul.org'
   },
-  { 
-    id: 'u2', 
-    name: 'Verification Test User', 
-    email: 'test.verify@navgurukul.org', 
-    role: UserRole.EMPLOYEE, 
-    passportPhoto: { status: VerificationStatus.PENDING, fileUrl: 'https://i.pravatar.cc/150?u=u2' },
-    idProof: { status: VerificationStatus.PENDING, type: IdProofType.AADHAAR, fileUrl: '#' },
+  {
+    id: 'u2',
+    name: 'Verification Test User',
+    email: 'test.verify@navgurukul.org',
+    role: UserRole.EMPLOYEE,
+    passportPhoto: {
+      status: VerificationStatus.PENDING,
+      fileUrl: 'https://i.pravatar.cc/150?u=u2',
+      uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() // 5 days ago
+    },
+    idProof: {
+      status: VerificationStatus.PENDING,
+      type: IdProofType.AADHAAR,
+      fileUrl: '#',
+      uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() // 5 days ago
+    },
     team: 'Engineering',
     department: 'Tech',
     campus: 'Remote',
     managerName: 'Admin User',
     managerEmail: 'admin@navgurukul.org'
   },
-  { 
-    id: 'u3', 
-    name: 'Nitin S.', 
-    email: 'nitin.s@navgurukul.org', 
+  {
+    id: 'u3',
+    name: 'Nitin S.',
+    email: 'nitin.s@navgurukul.org',
     role: UserRole.PNC,
     passportPhoto: { status: VerificationStatus.APPROVED, fileUrl: 'https://i.pravatar.cc/150?u=u3' },
     idProof: { status: VerificationStatus.APPROVED, fileUrl: '#' },
@@ -41,20 +59,20 @@ export const mockUsers: User[] = [
     department: 'Ops',
     campus: 'Delhi'
   },
-  { 
-    id: 'u5', 
-    name: 'Finance User', 
-    email: 'finance@navgurukul.org', 
+  {
+    id: 'u5',
+    name: 'Finance User',
+    email: 'finance@navgurukul.org',
     role: UserRole.FINANCE,
     passportPhoto: { status: VerificationStatus.APPROVED, fileUrl: 'https://i.pravatar.cc/150?u=u5' },
     idProof: { status: VerificationStatus.APPROVED, fileUrl: '#' },
     department: 'Finance',
     campus: 'Delhi'
   },
-  { 
-    id: 'u4', 
-    name: 'Admin User', 
-    email: 'admin@navgurukul.org', 
+  {
+    id: 'u4',
+    name: 'Admin User',
+    email: 'admin@navgurukul.org',
     role: UserRole.ADMIN,
     passportPhoto: { status: VerificationStatus.APPROVED, fileUrl: 'https://i.pravatar.cc/150?u=u4' },
     idProof: { status: VerificationStatus.APPROVED, fileUrl: '#' },

@@ -1,0 +1,194 @@
+/* Import Roboto from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+/* Root CSS Variables for Text Sizes */
+:root {
+    /* Font Family */
+    --font-primary: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+
+    /* Text Sizes */
+    --text-2xs: 0.6875rem;
+    /* 11px - Badges, tags */
+    --text-xs: 0.75rem;
+    /* 12px - Labels, timestamps, metadata */
+    --text-sm: 0.875rem;
+    /* 14px - Secondary text, captions */
+    --text-base: 1rem;
+    /* 16px - Body text, paragraphs */
+    --text-lg: 1.125rem;
+    /* 18px - Emphasized body text */
+    --text-xl: 1.25rem;
+    /* 20px - Section subheadings */
+    --text-2xl: 1.5rem;
+    /* 24px - Page subheadings */
+    --text-3xl: 1.875rem;
+    /* 30px - Page titles (H1) */
+    --text-4xl: 2.25rem;
+    /* 36px - Hero headings */
+    --text-5xl: 3rem;
+    /* 48px - Large marketing headlines */
+
+    /* Line Heights */
+    --leading-tight: 1.2;
+    --leading-snug: 1.3;
+    --leading-normal: 1.4;
+    --leading-relaxed: 1.5;
+    --leading-loose: 1.6;
+}
+
+/* Apply Roboto globally */
+* {
+    font-family: var(--font-primary);
+}
+
+/* Allow FontAwesome to keep its own font-family */
+.fa,
+.fa-solid,
+.fa-regular,
+.fa-brands,
+.fa-duotone {
+    font-family: "Font Awesome 6 Free" !important;
+}
+
+
+body {
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Heading styles */
+h1 {
+    font-size: var(--text-3xl);
+    line-height: var(--leading-tight);
+    font-weight: 700;
+}
+
+h2 {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-snug);
+    font-weight: 700;
+}
+
+h3 {
+    font-size: var(--text-xl);
+    line-height: var(--leading-snug);
+    font-weight: 600;
+}
+
+h4 {
+    font-size: var(--text-lg);
+    line-height: var(--leading-normal);
+    font-weight: 600;
+}
+
+/* Button styles */
+button {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    font-weight: 500;
+}
+
+/* Input & Select styles */
+input,
+select,
+textarea {
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    font-weight: 400;
+}
+
+/* Label styles */
+label {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    font-weight: 500;
+}
+
+/* Small text (captions, helper text) */
+small,
+.text-small {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+}
+
+/* Extra small text (timestamps, metadata) */
+.text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+}
+
+/* Dark mode scrollbar */
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(71, 85, 105, 0.7);
+}
+
+/* Animation utilities */
+@keyframes zoom-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.animate-in {
+    animation: zoom-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+@keyframes slide-in-from-bottom {
+    from {
+        transform: translateY(1rem);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.slide-in-from-bottom-4 {
+    animation: slide-in-from-bottom 0.4s ease-out;
+}

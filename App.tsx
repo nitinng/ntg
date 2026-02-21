@@ -3487,6 +3487,23 @@ const App: React.FC = () => {
           })));
         }
 
+        // 6. Fetch Travel Mode Policies
+        const { data: policiesData, error: policiesError } = await supabase
+          .from('travel_mode_policies')
+          .select('*')
+          .order('travel_mode', { ascending: true });
+
+        if (!policiesError && policiesData) {
+          setTravelModePolicies(policiesData.map((p: any) => ({
+            id: p.id,
+            travelMode: p.travel_mode,
+            minAdvanceDays: p.min_advance_days,
+            description: p.description,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at
+          })));
+        }
+
       } catch (err: any) {
         toast.error("Failed to load data: " + err.message);
       } finally {
@@ -4146,6 +4163,9 @@ const App: React.FC = () => {
                 emergencyContactRelation: inserted.emergency_contact_relation,
                 bloodGroup: inserted.blood_group,
                 medicalConditions: inserted.medical_conditions,
+                hasViolation: inserted.has_violation,
+                violationDetails: inserted.violation_reason,
+                bookedBy: inserted.booked_by,
               }, ...prev]);
 
               setIsNewRequestModalOpen(false);
@@ -4349,7 +4369,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
             "{welcomeNote}"
           </p>
         </div>
-        <button onClick={onNewRequest} className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3">
+        <button onClick={() => onNewRequest()} className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3">
           <i className="fa-solid fa-plus-circle"></i>
           <span>New Booking</span>
         </button>
@@ -4460,7 +4480,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
               <h3 className="font-black text-slate-500 dark:text-slate-400 text-lg">No active travel requests</h3>
               <p className="text-slate-400 text-sm mt-1">When you book travel, it will appear here.</p>
             </div>
-            <button onClick={onNewRequest} className="text-indigo-600 font-black text-xs uppercase tracking-widest hover:text-indigo-700 transition-colors">Begin New Booking Request</button>
+            <button onClick={() => onNewRequest()} className="text-indigo-600 font-black text-xs uppercase tracking-widest hover:text-indigo-700 transition-colors">Begin New Booking Request</button>
           </div>
         )}
       </div>

@@ -230,7 +230,7 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
     };
 
     // ── Card ──────────────────────────────────────────────────────────────────
-    const TemplateCard = ({ template }: { template: MailTemplate }) => (
+    const TemplateCard: React.FC<{ template: MailTemplate }> = ({ template }) => (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 hover:shadow-lg transition-all group flex flex-col h-full">
             <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-2 flex-wrap">

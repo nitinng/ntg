@@ -112,7 +112,11 @@ const generateMockRequests = (): TravelRequest[] => {
       timeline: [
         { id: 'e1', timestamp: '2024-11-17T12:00:00Z', actor: 'Priyanka Dangwal', event: 'Request Submitted' },
         { id: 'e3', timestamp: '2024-11-19T14:00:00Z', actor: 'Nitin S.', event: 'PNC Processing Started' }
-      ]
+      ],
+      emergencyContactName: 'Rajesh Dangwal',
+      emergencyContactPhone: '9876543210',
+      emergencyContactRelation: 'Brother',
+      bloodGroup: 'O+',
     },
     {
       id: 'TRV-R-251110-015',
@@ -133,7 +137,7 @@ const generateMockRequests = (): TravelRequest[] => {
       returnDate: '2024-10-15',
       numberOfTravelers: 1,
       approvalStatus: ApprovalStatus.APPROVED,
-      pncStatus: PNCStatus.BOOKED_AND_CLOSED,
+      pncStatus: PNCStatus.CLOSED,
       priority: Priority.LOW,
       hasViolation: false,
       comments: [],
@@ -145,7 +149,11 @@ const generateMockRequests = (): TravelRequest[] => {
       timeline: [
         { id: 'e4', timestamp: '2024-10-01T10:00:00Z', actor: 'Priyanka Dangwal', event: 'Request Submitted' },
         { id: 'e6', timestamp: '2024-10-02T15:00:00Z', actor: 'Nitin S.', event: 'Booked & Closed', details: 'Confirmed via Indian Railways' }
-      ]
+      ],
+      emergencyContactName: 'Rajesh Dangwal',
+      emergencyContactPhone: '9876543210',
+      emergencyContactRelation: 'Brother',
+      bloodGroup: 'O+',
     },
     {
       id: 'TRV-O-251112-003',
@@ -171,7 +179,11 @@ const generateMockRequests = (): TravelRequest[] => {
       comments: [],
       timeline: [
         { id: 'e7', timestamp: '2024-11-12T09:00:00Z', actor: 'Verification Test User', event: 'Request Submitted' }
-      ]
+      ],
+      emergencyContactName: 'Test Emergency Contact',
+      emergencyContactPhone: '9999999999',
+      emergencyContactRelation: 'Spouse',
+      bloodGroup: 'A-',
     }
   ];
 

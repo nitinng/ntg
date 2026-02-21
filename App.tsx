@@ -2665,7 +2665,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     status: true,
     table: true
   });
-  const [isCustomizing, setIsCustomizing] = useState(false);
 
   // Filter Data Logic
   const filteredData = useMemo(() => {
@@ -2778,9 +2777,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           </p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setIsCustomizing(!isCustomizing)} className={`px-4 py-2.5 rounded-lg text-sm font-bold border transition-all ${isCustomizing ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700'}`}>
-            <i className="fa-solid fa-wand-magic-sparkles mr-2"></i>Customize
-          </button>
           <button onClick={() => {
             const csvContent = [
               ['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice URL'],
@@ -2877,10 +2873,9 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
       {/* Widget Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {widgets.status && (
-          <Card className={`p-6 ${isCustomizing ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
+          <Card className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h4 className="font-bold text-slate-800 dark:text-white">Request Status Breakdown</h4>
-              {isCustomizing && <button onClick={() => setWidgets({ ...widgets, status: false })} className="text-rose-500 text-xs font-bold uppercase"><i className="fa-solid fa-trash mr-1"></i> Remove</button>}
             </div>
             {isPNCView ? (
               <DonutChart data={statusData} />
@@ -2891,12 +2886,11 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         )}
 
         {widgets.volume && (
-          <Card className={`p-6 ${isCustomizing ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
+          <Card className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h4 className="font-bold text-slate-800 dark:text-white">
                 {isFinancialView ? 'Spend by Department' : 'Volume by Department'}
               </h4>
-              {isCustomizing && <button onClick={() => setWidgets({ ...widgets, volume: false })} className="text-rose-500 text-xs font-bold uppercase"><i className="fa-solid fa-trash mr-1"></i> Remove</button>}
             </div>
             <BarChart data={deptData} color={isFinancialView ? 'bg-emerald-500' : 'bg-indigo-500'} />
           </Card>
@@ -2905,10 +2899,9 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
 
       {/* Master Data Table */}
       {widgets.table && (
-        <Card className={`overflow-hidden ${isCustomizing ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
+        <Card className="overflow-hidden">
           <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
             <h4 className="font-bold text-slate-800 dark:text-white">Detailed Report</h4>
-            {isCustomizing && <button onClick={() => setWidgets({ ...widgets, table: false })} className="text-rose-500 text-xs font-bold uppercase"><i className="fa-solid fa-trash mr-1"></i> Remove</button>}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left whitespace-nowrap">
@@ -2953,13 +2946,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         </Card>
       )}
 
-      {/* Customization Hint */}
-      {isCustomizing && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-4">
-          <span className="text-xs font-bold">Customize your dashboard view</span>
-          <button onClick={() => setIsCustomizing(false)} className="bg-white text-slate-900 px-3 py-1 rounded-full text-xs font-bold hover:bg-indigo-50 transition-colors">Done</button>
-        </div>
-      )}
     </div>
   );
 };
@@ -3969,10 +3955,10 @@ const App: React.FC = () => {
 
       <div className="flex-1 flex flex-col md:flex-row transition-colors duration-300">
         <aside className="w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 p-6 flex flex-col space-y-6 transition-colors duration-300">
-          {currentUser.role === UserRole.EMPLOYEE ? (
+          {currentUser.role === UserRole.EMPLOYEE && (
             <>
               <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">My Space</p>
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">MY SPACE</p>
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                 <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
@@ -3995,15 +3981,17 @@ const App: React.FC = () => {
                 )}
               </div>
               <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">Account</p>
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
                 <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
                 <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
               </div>
             </>
-          ) : (
+          )}
+
+          {currentUser.role === UserRole.PNC && (
             <>
               <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">Operations</p>
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                 <SidebarLink
                   icon="fa-calendar-plus"
@@ -4016,6 +4004,9 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
+              </div>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">EVENTS</p>
                 <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />
                 {isMeetupApprover && (
                   <SidebarLink
@@ -4026,21 +4017,54 @@ const App: React.FC = () => {
                     badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
                   />
                 )}
-                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC) && (
-                  <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
-                )}
-                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC) && (
-                  <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
-                )}
-                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC) && (
-                  <>
-                    <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
-                    <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
-                  </>
-                )}
               </div>
               <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">Account</p>
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
+                <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
+                <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
+                <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
+                <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+              </div>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
+                <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
+                <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
+              </div>
+            </>
+          )}
+
+          {currentUser.role === UserRole.FINANCE && (
+            <>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
+                <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
+              </div>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
+                <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
+                <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
+              </div>
+            </>
+          )}
+
+          {currentUser.role === UserRole.ADMIN && (
+            <>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
+                <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
+              </div>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
+                <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
+                <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
+                <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
+                <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+              </div>
+              <div className="space-y-1">
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
                 <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
                 <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
               </div>

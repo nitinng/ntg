@@ -3263,10 +3263,17 @@ const App: React.FC = () => {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      // Clean up lingering '#' left by Supabase OAuth redirect
+      if (window.location.href.includes('#')) {
+        window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      if (window.location.href.includes('#')) {
+        window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+      }
       if (event === 'PASSWORD_RECOVERY') {
         setIsResettingPassword(true);
       }
@@ -3954,7 +3961,7 @@ const App: React.FC = () => {
       }} onOpenProfile={() => handleTabChange('profile')} />
 
       <div className="flex-1 flex flex-col md:flex-row transition-colors duration-300">
-        <aside className="w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 p-6 flex flex-col space-y-6 transition-colors duration-300">
+        <aside className="w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 p-6 flex flex-col space-y-6 transition-colors duration-300 md:sticky md:top-16 md:h-[calc(100vh-4rem)] overflow-y-auto custom-scrollbar">
           {currentUser.role === UserRole.EMPLOYEE && (
             <>
               <div className="space-y-1">

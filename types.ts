@@ -72,10 +72,13 @@ export enum ApprovalStatus {
 
 export enum PNCStatus {
   NOT_STARTED = 'Not Started',
-  STARTED = 'Started',
+  APPROVAL_PENDING = 'Approval Pending',
+  REJECTED_BY_MANAGER = 'Rejected by Manager',
+  APPROVED = 'Approved',
   PROCESSING = 'Processing',
-  BOOKED_AND_CLOSED = 'Booked & Closed',
-  REJECTED_PNC = 'Rejected & Closed'
+  BOOKED = 'Booked',
+  REJECTED_BY_PNC = 'Rejected by PNC',
+  CLOSED = 'Closed'
 }
 
 export enum Priority {
@@ -130,7 +133,6 @@ export interface TravelRequest {
   returnPreferredDepartureWindow?: string;
   numberOfTravelers: number;
   travellerNames?: string;
-  contactNumbers?: string; // This can be removed later if redundant with new fields
   priority: Priority;
   specialRequirements?: string;
 
@@ -157,6 +159,7 @@ export interface TravelRequest {
   vendorRef?: string;
   ticketUrl?: string;
   invoiceUrl?: string;
+  bookedBy?: string; // 'PNC' or 'SELF'
 }
 
 export interface PolicyConfig {
@@ -169,4 +172,51 @@ export interface PolicyConfig {
   isIdRequired: boolean;
   isEnforcementEnabled: boolean;
   temporaryUnlockDays: number; // Days to unlock access after document upload, even without approval
+}
+
+export interface TravelModePolicy {
+  id: string;
+  travelMode: TravelMode;
+  minAdvanceDays: number;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string; // HTML supported
+  statusTrigger: string; // e.g., 'Approved', 'Rejected'
+  isDraft: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetupApprover {
+  id: string;
+  email: string;
+  name?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MeetupAvailabilityRequest {
+  id: string;
+  profileId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  department?: string;
+  teamSize: number;
+  startDate: string;
+  endDate: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  createdAt: string;
+  updatedAt: string;
+  timeline: TimelineEvent[];
+  attendeeEmails?: string[];
+  isFinalized?: boolean;
 }

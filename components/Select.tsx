@@ -20,29 +20,31 @@ const Select = ({
     required = false
 }: SelectProps) => {
     return (
-        <div className="space-y-2.5">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {label} {required && <span className="text-red-500">*</span>}
+        <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">
+                {label} {required && <span className="text-rose-500">*</span>}
             </label>
-            <select
-                value={value}
-                onChange={onChange}
-                disabled={disabled}
-                className={`w-full px-4 py-2.5 border rounded-lg text-base transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] ${disabled
-                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white'
-                    }`}
-                style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`
-                }}
-            >
-                {placeholder && <option value="" disabled>{placeholder}</option>}
-                {options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                    </option>
-                ))}
-            </select>
+            <div className="relative">
+                <select
+                    value={value ?? ''}
+                    onChange={onChange}
+                    disabled={disabled}
+                    className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none appearance-none cursor-pointer ${disabled
+                        ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800/50'
+                        : 'hover:border-slate-300 dark:hover:border-slate-700 text-slate-900 dark:text-white'
+                        }`}
+                >
+                    {placeholder && <option value="" disabled>{placeholder}</option>}
+                    {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <i className="fa-solid fa-chevron-down text-[10px]"></i>
+                </div>
+            </div>
         </div>
     );
 };

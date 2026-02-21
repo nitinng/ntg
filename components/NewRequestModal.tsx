@@ -1,46 +1,93 @@
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy } from '../types';
 import Input from './Input';
+import Select from './Select';
 
 interface NewRequestModalProps {
     onClose: () => void;
     onSubmit: (data: any) => void;
     currentUser: User;
+    policies: TravelModePolicy[];
+    meetupContext?: {
+        startDate: string;
+        endDate: string;
+    } | null;
 }
 
-const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProps) => {
+const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext }: NewRequestModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
+
+    // Helper to get YYYY-MM-DD string with offset
+    const getDateWithOffset = (baseDate: string, daysOffset: number) => {
+        const d = new Date(baseDate);
+        d.setDate(d.getDate() + daysOffset);
+        return d.toISOString().split('T')[0];
+    };
+
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const defaultMinDate = d.toISOString().split('T')[0];
+
+    const bloodGroupOptions = [
+        'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'
+    ].map(g => ({ label: g, value: g }));
 
     const [data, setData] = useState({
         requesterName: currentUser.name,
         requesterEmail: currentUser.email,
-        requesterPhone: '',
+        requesterPhone: currentUser.phone || '',
         requesterDepartment: currentUser.department || '',
         requesterCampus: currentUser.campus || '',
-        purpose: '',
+        purpose: meetupContext ? 'Igatpuri Meetup' : '',
         approvingManagerName: currentUser.managerName || '',
         approvingManagerEmail: currentUser.managerEmail || '',
         tripType: TripType.ONE_WAY,
         mode: TravelMode.FLIGHT,
-        from: '',
-        to: '',
+        from: meetupContext ? '' : '',
+        to: meetupContext ? 'Igatpuri' : '',
         dateOfTravel: '',
         preferredDepartureWindow: '',
         returnDate: '',
-        returnFrom: '',
+        returnFrom: meetupContext ? 'Igatpuri' : '',
         returnTo: '',
         returnPreferredDepartureWindow: '',
-        travellerNames: currentUser.name, // Default to self
-        contactNumbers: currentUser.phone || '',
+        travellerNames: currentUser.name,
         priority: Priority.MEDIUM,
         specialRequirements: '',
         emergencyContactName: currentUser.emergencyContactName || '',
         emergencyContactPhone: currentUser.emergencyContactPhone || '',
         emergencyContactRelation: currentUser.emergencyContactRelation || '',
         bloodGroup: currentUser.bloodGroup || '',
-        medicalConditions: currentUser.medicalConditions || ''
+        medicalConditions: currentUser.medicalConditions || '',
+        violationReason: ''
     });
+
+    // Meetup specific date logic
+    React.useEffect(() => {
+        if (meetupContext) {
+            const isAir = data.mode === TravelMode.FLIGHT;
+
+            // Departure logic
+            const depDefault = isAir ? meetupContext.startDate : getDateWithOffset(meetupContext.startDate, -1);
+
+            // Return logic
+            const retDefault = isAir ? meetupContext.endDate : getDateWithOffset(meetupContext.endDate, -1);
+
+            setData(prev => ({
+                ...prev,
+                dateOfTravel: depDefault,
+                returnDate: retDefault
+            }));
+        }
+    }, [data.mode, meetupContext]);
+
+    // Calendar constraints
+    const depMin = meetupContext ? getDateWithOffset(meetupContext.startDate, -2) : defaultMinDate;
+    const depMax = meetupContext ? meetupContext.startDate : undefined;
+
+    const retMin = meetupContext ? getDateWithOffset(meetupContext.endDate, -2) : undefined;
+    const retMax = meetupContext ? getDateWithOffset(meetupContext.endDate, 1) : undefined;
 
     const handleInputChange = (field: string, value: any) => {
         setData(prev => ({ ...prev, [field]: value }));
@@ -50,6 +97,18 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
     const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
     const progress = (step / totalSteps) * 100;
+
+    const isViolated = React.useMemo(() => {
+        if (!data.dateOfTravel || !data.mode) return false;
+        const policy = policies.find(p => p.travelMode === data.mode);
+        if (!policy) return false;
+
+        const requestDate = new Date();
+        const travelDate = new Date(data.dateOfTravel);
+        const daysDifference = Math.floor((travelDate.getTime() - requestDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        return daysDifference < policy.minAdvanceDays;
+    }, [data.dateOfTravel, data.mode, policies]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -115,11 +174,28 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                                     />
                                 </div>
 
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <Input
+                                        label="Phone Number"
+                                        required
+                                        type="tel"
+                                        placeholder="10-digit mobile number"
+                                        value={data.requesterPhone}
+                                        onChange={(e: any) => handleInputChange('requesterPhone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                    />
+                                    <Input
+                                        label="Department"
+                                        value={data.requesterDepartment}
+                                        onChange={(e: any) => handleInputChange('requesterDepartment', e.target.value)}
+                                    />
+                                </div>
+
                                 <Input
                                     label="Purpose of Travel"
                                     required
                                     placeholder="e.g., Client meeting, conference attendance, site visit..."
                                     value={data.purpose}
+                                    disabled={!!meetupContext}
                                     onChange={(e: any) => handleInputChange('purpose', e.target.value)}
                                 />
 
@@ -214,6 +290,8 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                                             label="Departure Date"
                                             required
                                             type="date"
+                                            min={depMin}
+                                            max={depMax}
                                             value={data.dateOfTravel}
                                             onChange={(e: any) => handleInputChange('dateOfTravel', e.target.value)}
                                         />
@@ -234,6 +312,30 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                                             </select>
                                         </div>
                                     </div>
+
+                                    {isViolated && (
+                                        <div className="mt-6 p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 rounded-xl animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex gap-3">
+                                                <i className="fa-solid fa-triangle-exclamation text-rose-500 mt-1"></i>
+                                                <div className="flex-1 space-y-3">
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-rose-700 dark:text-rose-400">Policy Violation Detected</h4>
+                                                        <p className="text-xs text-rose-600/80 dark:text-rose-400/80 mt-1">
+                                                            This trip is being booked on short notice (less than {policies.find(p => p.travelMode === data.mode)?.minAdvanceDays} days in advance).
+                                                            Please provide a reason strictly for auditing purposes.
+                                                        </p>
+                                                    </div>
+                                                    <textarea
+                                                        className="w-full p-3 text-sm bg-white dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition-all placeholder:text-rose-300 dark:placeholder:text-rose-700"
+                                                        placeholder="e.g., Client scheduled urgent meeting..."
+                                                        rows={2}
+                                                        value={data.violationReason}
+                                                        onChange={(e) => handleInputChange('violationReason', e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Return Journey */}
@@ -263,6 +365,8 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                                                 label="Return Date"
                                                 required
                                                 type="date"
+                                                min={retMin || data.dateOfTravel || defaultMinDate}
+                                                max={retMax}
                                                 value={data.returnDate}
                                                 onChange={(e: any) => handleInputChange('returnDate', e.target.value)}
                                             />
@@ -292,17 +396,11 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                         {step === 3 && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <Input
-                                        label="Your Contact Number"
-                                        required
-                                        placeholder="+91 98765 43210"
-                                        value={data.contactNumbers}
-                                        onChange={(e: any) => handleInputChange('contactNumbers', e.target.value)}
-                                    />
-                                    <Input
+                                    <Select
                                         label="Blood Group"
-                                        placeholder="e.g., O+, A-"
+                                        placeholder="Select Blood Group"
                                         value={data.bloodGroup}
+                                        options={bloodGroupOptions}
                                         onChange={(e: any) => handleInputChange('bloodGroup', e.target.value)}
                                     />
                                 </div>
@@ -330,7 +428,7 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                                                 label="Emergency contact phone"
                                                 required
                                                 value={data.emergencyContactPhone}
-                                                onChange={(e: any) => handleInputChange('emergencyContactPhone', e.target.value)}
+                                                onChange={(e: any) => handleInputChange('emergencyContactPhone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                                             />
                                         </div>
                                     </div>
@@ -370,7 +468,8 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                     {step < totalSteps ? (
                         <button
                             onClick={nextStep}
-                            className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/30 active:scale-[0.98] transition-all"
+                            disabled={step === 2 && isViolated && !data.violationReason.trim()}
+                            className={`px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             Continue
                             <i className="fa-solid fa-arrow-right ml-2"></i>
@@ -386,7 +485,7 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser }: NewRequestModalProp
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

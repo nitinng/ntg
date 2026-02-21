@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface InputProps {
-    label: string;
+    label?: string;
     value: string | number;
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     type?: string;
@@ -10,6 +10,8 @@ interface InputProps {
     required?: boolean;
     min?: string;
     max?: string;
+    readOnly?: boolean;
+    className?: string;
 }
 
 const Input = ({
@@ -21,24 +23,29 @@ const Input = ({
     disabled = false,
     required = false,
     min,
-    max
+    max,
+    readOnly = false,
+    className = ''
 }: InputProps) => {
     return (
-        <div className="space-y-2.5">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {label} {required && <span className="text-red-500">*</span>}
-            </label>
+        <div className={`space-y-2 ${className}`}>
+            {label && (
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">
+                    {label} {required && <span className="text-rose-500">*</span>}
+                </label>
+            )}
             <input
                 type={type}
-                value={value}
+                value={value ?? ''}
                 onChange={onChange}
                 placeholder={placeholder}
                 disabled={disabled}
+                readOnly={readOnly}
                 min={min}
                 max={max}
-                className={`w-full px-4 py-2.5 border rounded-lg text-base transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${disabled
-                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500'
+                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 ${disabled || readOnly
+                    ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800/50'
+                    : 'hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
             />
         </div>

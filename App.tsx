@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument
+  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest
 } from './types';
 import { mockUsers, initialRequests } from './mockData';
 import StatusBadge from './components/StatusBadge';
@@ -10,6 +10,9 @@ import NewRequestModal from './components/NewRequestModal';
 import AuthView from './components/AuthView';
 import Select from './components/Select';
 import TextArea from './components/TextArea';
+
+import MailTemplatesView from './components/MailTemplatesView';
+import PNCBookingModal from './components/PNCBookingModal';
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
 
@@ -17,8 +20,8 @@ import { Toaster, toast } from 'sonner';
 
 // --- UI Utility Components ---
 
-const Card = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
-  <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${className}`}>
+const Card = ({ children, className = "", ...props }: { children: React.ReactNode, className?: string, [key: string]: any }) => (
+  <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${className}`} {...props}>
     {children}
   </div>
 );
@@ -46,21 +49,21 @@ const StatCard = ({ title, value, icon, description, trend, trendUp }: any) => (
 // --- Chart Components (CSS based) ---
 
 const BarChart = ({ data, color = 'bg-indigo-500' }: { data: { label: string, value: number }[], color?: string }) => {
-  const max = Math.max(...data.map(d => d.value));
+  const max = Math.max(...data.map(d => d.value), 1);
   return (
-    <div className="flex items-end justify-between h-32 gap-2 pt-4">
+    <div className="flex justify-between h-40 gap-2 pt-4 items-stretch">
       {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center group">
-          <div className="relative w-full flex justify-center">
+        <div key={i} className="flex-1 flex flex-col items-center justify-end group">
+          <div className="relative w-full flex-1 flex items-end justify-center px-1">
             <div
               className={`w-full max-w-[2rem] rounded-t-sm transition-all duration-500 group-hover:opacity-80 ${color}`}
-              style={{ height: `${(d.value / max) * 100}%` }}
+              style={{ height: `${Math.max((d.value / max) * 100, 1)}%` }}
             ></div>
-            <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold bg-slate-800 text-white px-1.5 py-0.5 rounded pointer-events-none">
+            <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold bg-slate-800 text-white px-2 py-1 rounded pointer-events-none whitespace-nowrap z-10">
               {d.value}
             </div>
           </div>
-          <span className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-tight truncate w-full text-center">{d.label}</span>
+          <span className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-tight truncate w-full text-center block h-4">{d.label}</span>
         </div>
       ))}
     </div>
@@ -129,11 +132,11 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile }: { curren
   );
 };
 
-const SidebarLink = ({ icon, label, active, onClick, badge }: any) => (
+const SidebarLink = ({ icon, label, active, onClick, badge, badgeColor }: any) => (
   <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
     <i className={`fa-solid ${icon} w-5 ${active ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'}`}></i>
-    <span className="flex-1 text-left">{label}</span>
-    {badge && <span className="text-2xs bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-bold">{badge}</span>}
+    <span className="flex-1 text-left whitespace-nowrap">{label}</span>
+    {badge && <span className={`text-2xs ${badgeColor || 'bg-rose-500 px-1.5 py-0.5'} text-white rounded-full font-bold`}>{badge}</span>}
   </button>
 );
 
@@ -195,43 +198,411 @@ const AdminDashboard = ({ requests, users, onTabChange }: any) => {
   );
 };
 
-const PNCDashboard = ({ requests, onTabChange }: any) => {
-  const processing = requests.filter((r: TravelRequest) => r.pncStatus === PNCStatus.PROCESSING).length;
-  const newReqs = requests.filter((r: TravelRequest) => r.pncStatus === PNCStatus.NOT_STARTED).length;
+const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => {
+  const [timeFilter, setTimeFilter] = useState<'24h' | '7d' | '30d' | 'thisMonth' | 'lastMonth'>('7d');
+  const [selectedStage, setSelectedStage] = useState<PNCStatus | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  // Filter requests based on time period
+  const getFilteredRequests = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return requests.filter((r: TravelRequest) => {
+      const requestDate = new Date(r.timestamp);
+
+      switch (timeFilter) {
+        case '24h':
+          const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          return requestDate >= yesterday;
+
+        case '7d':
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return requestDate >= sevenDaysAgo;
+
+        case '30d':
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return requestDate >= thirtyDaysAgo;
+
+        case 'thisMonth':
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          return requestDate >= thisMonthStart;
+
+        case 'lastMonth':
+          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+          return requestDate >= lastMonthStart && requestDate <= lastMonthEnd;
+
+        default:
+          return true;
+      }
+    });
+  };
+
+  const filteredRequests = getFilteredRequests();
+
+  // Count requests by status
+  const statusCounts = {
+    [PNCStatus.NOT_STARTED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.NOT_STARTED).length,
+    [PNCStatus.APPROVAL_PENDING]: filteredRequests.filter(r => r.pncStatus === PNCStatus.APPROVAL_PENDING).length,
+    [PNCStatus.REJECTED_BY_MANAGER]: filteredRequests.filter(r => r.pncStatus === PNCStatus.REJECTED_BY_MANAGER).length,
+    [PNCStatus.APPROVED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.APPROVED).length,
+    [PNCStatus.PROCESSING]: filteredRequests.filter(r => r.pncStatus === PNCStatus.PROCESSING).length,
+    [PNCStatus.BOOKED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.BOOKED).length,
+    [PNCStatus.REJECTED_BY_PNC]: filteredRequests.filter(r => r.pncStatus === PNCStatus.REJECTED_BY_PNC).length,
+    [PNCStatus.CLOSED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.CLOSED).length,
+  };
+
+  const timeFilterOptions = [
+    { value: '24h', label: 'Last 24 Hours' },
+    { value: '7d', label: 'Last 7 Days' },
+    { value: '30d', label: 'Last 30 Days' },
+    { value: 'thisMonth', label: 'This Month' },
+    { value: 'lastMonth', label: 'Last Month' },
+  ];
+
+  const StageCard = ({ status, count, icon, color, onClick }: any) => (
+    <div
+      onClick={onClick}
+      className={`bg-white dark:bg-slate-900 border-2 ${color.border} rounded-2xl p-6 transition-all hover:shadow-lg hover:-translate-y-1 cursor-pointer group`}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className={`w-12 h-12 ${color.bg} ${color.text} rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition-transform`}>
+          {icon}
+        </div>
+        <div className={`px-5 py-2 ${color.bg} ${color.text} rounded-full text-xl font-black min-w-[3.5rem] text-center`}>
+          {count}
+        </div>
+      </div>
+      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{status}</h3>
+      <p className="text-xs text-slate-500 mt-1 font-medium">
+        {count === 0 ? 'No requests' : count === 1 ? '1 request' : `${count} requests`}
+      </p>
+    </div>
+  );
+
+  // Get requests for selected stage
+  const getStageRequests = () => {
+    if (!selectedStage) return [];
+    const filtered = filteredRequests.filter(r => r.pncStatus === selectedStage);
+
+    // Sort by timestamp
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.timestamp).getTime();
+      const dateB = new Date(b.timestamp).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+  };
+
+  const stageRequests = getStageRequests();
+  const totalPages = Math.ceil(stageRequests.length / itemsPerPage);
+  const paginatedRequests = stageRequests.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handleStageClick = (stage: PNCStatus) => {
+    setSelectedStage(stage);
+    setCurrentPage(1);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedStage(null);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">PNC Operations</h2>
           <p className="text-slate-500 text-sm mt-1">Manage transport bookings and fulfillment steps.</p>
         </div>
+
+        {/* Time Filter Buttons */}
+        <div className="flex flex-wrap gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl">
+          {timeFilterOptions.map(option => (
+            <button
+              key={option.value}
+              onClick={() => setTimeFilter(option.value as any)}
+              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${timeFilter === option.value
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
+                }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="New Requests" value={newReqs} icon={<i className="fa-solid fa-bell"></i>} trend="+2" trendUp={true} />
-        <StatCard title="Processing" value={processing} icon={<i className="fa-solid fa-spinner"></i>} />
-        <StatCard title="Completed (M)" value={requests.filter((r: TravelRequest) => r.pncStatus === PNCStatus.BOOKED_AND_CLOSED).length} icon={<i className="fa-solid fa-check-double"></i>} />
-        <StatCard title="Avg Turnaround" value="4h" icon={<i className="fa-solid fa-stopwatch"></i>} />
+
+      {/* Stage Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <StageCard
+          status={PNCStatus.NOT_STARTED}
+          count={statusCounts[PNCStatus.NOT_STARTED]}
+          icon={<i className="fa-solid fa-circle-dot"></i>}
+          onClick={() => handleStageClick(PNCStatus.NOT_STARTED)}
+          color={{
+            bg: 'bg-slate-100 dark:bg-slate-800',
+            text: 'text-slate-600 dark:text-slate-400',
+            border: 'border-slate-200 dark:border-slate-700'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.APPROVAL_PENDING}
+          count={statusCounts[PNCStatus.APPROVAL_PENDING]}
+          icon={<i className="fa-solid fa-clock"></i>}
+          onClick={() => handleStageClick(PNCStatus.APPROVAL_PENDING)}
+          color={{
+            bg: 'bg-amber-100 dark:bg-amber-900/30',
+            text: 'text-amber-700 dark:text-amber-400',
+            border: 'border-amber-200 dark:border-amber-800/50'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.PROCESSING}
+          count={statusCounts[PNCStatus.PROCESSING]}
+          icon={<i className="fa-solid fa-spinner fa-spin"></i>}
+          onClick={() => handleStageClick(PNCStatus.PROCESSING)}
+          color={{
+            bg: 'bg-indigo-100 dark:bg-indigo-900/30',
+            text: 'text-indigo-700 dark:text-indigo-400',
+            border: 'border-indigo-200 dark:border-indigo-800/50'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.BOOKED}
+          count={statusCounts[PNCStatus.BOOKED]}
+          icon={<i className="fa-solid fa-ticket"></i>}
+          onClick={() => handleStageClick(PNCStatus.BOOKED)}
+          color={{
+            bg: 'bg-blue-100 dark:bg-blue-900/30',
+            text: 'text-blue-700 dark:text-blue-400',
+            border: 'border-blue-200 dark:border-blue-800/50'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.REJECTED_BY_MANAGER}
+          count={statusCounts[PNCStatus.REJECTED_BY_MANAGER]}
+          icon={<i className="fa-solid fa-user-xmark"></i>}
+          onClick={() => handleStageClick(PNCStatus.REJECTED_BY_MANAGER)}
+          color={{
+            bg: 'bg-rose-100 dark:bg-rose-900/30',
+            text: 'text-rose-700 dark:text-rose-400',
+            border: 'border-rose-200 dark:border-rose-800/50'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.APPROVED}
+          count={statusCounts[PNCStatus.APPROVED]}
+          icon={<i className="fa-solid fa-circle-check"></i>}
+          onClick={() => handleStageClick(PNCStatus.APPROVED)}
+          color={{
+            bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+            text: 'text-emerald-700 dark:text-emerald-400',
+            border: 'border-emerald-200 dark:border-emerald-800/50'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.REJECTED_BY_PNC}
+          count={statusCounts[PNCStatus.REJECTED_BY_PNC]}
+          icon={<i className="fa-solid fa-ban"></i>}
+          onClick={() => handleStageClick(PNCStatus.REJECTED_BY_PNC)}
+          color={{
+            bg: 'bg-red-100 dark:bg-red-900/30',
+            text: 'text-red-700 dark:text-red-400',
+            border: 'border-red-200 dark:border-red-800/50'
+          }}
+        />
+        <StageCard
+          status={PNCStatus.CLOSED}
+          count={statusCounts[PNCStatus.CLOSED]}
+          icon={<i className="fa-solid fa-flag-checkered"></i>}
+          onClick={() => handleStageClick(PNCStatus.CLOSED)}
+          color={{
+            bg: 'bg-slate-500 dark:bg-slate-700',
+            text: 'text-white',
+            border: 'border-slate-600 dark:border-slate-600'
+          }}
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="p-6">
-          <h4 className="font-bold text-slate-800 dark:text-white mb-6">Queue Overview</h4>
-          <BarChart data={[
-            { label: 'New', value: newReqs },
-            { label: 'Processing', value: processing },
-            { label: 'Done', value: requests.filter((r: TravelRequest) => r.pncStatus === PNCStatus.BOOKED_AND_CLOSED).length }
-          ]} />
-        </Card>
-        <Card className="p-6 flex flex-col justify-center items-center text-center space-y-4">
-          <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-full flex items-center justify-center text-2xl"><i className="fa-solid fa-list-check"></i></div>
-          <div>
-            <h4 className="font-bold text-slate-800 dark:text-white">Process Queue</h4>
-            <p className="text-xs text-slate-500 mt-1">Start working on pending bookings</p>
+      {/* Quick Action Card */}
+      <Card className="p-8 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900 border-2 border-indigo-100 dark:border-indigo-900/30">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-indigo-600/20">
+            <i className="fa-solid fa-list-check"></i>
           </div>
-          <button onClick={() => onTabChange('requests')} className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-sm font-bold">Go to Queue</button>
-        </Card>
-      </div>
+          <div>
+            <h4 className="font-black text-slate-900 dark:text-white text-lg">Process Queue</h4>
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Start working on pending bookings</p>
+          </div>
+        </div>
+        <button
+          onClick={() => onTabChange('requests')}
+          className="bg-indigo-600 text-white px-8 py-3 rounded-xl text-sm font-black uppercase tracking-wide shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+        >
+          Go to Queue <i className="fa-solid fa-arrow-right ml-2"></i>
+        </button>
+      </Card>
+
+      {/* Stage Details Modal */}
+      {selectedStage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={handleCloseModal}></div>
+          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <div className="flex justify-between items-start gap-4 mb-4">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white">{selectedStage}</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Showing {paginatedRequests.length} of {stageRequests.length} requests
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseModal}
+                  className="w-10 h-10 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 flex items-center justify-center"
+                >
+                  <i className="fa-solid fa-xmark text-xl"></i>
+                </button>
+              </div>
+
+              {/* Sort Options */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Sort by:</span>
+                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                  <button
+                    onClick={() => setSortOrder('newest')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'newest'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    <i className="fa-solid fa-arrow-down-short-wide mr-1.5"></i>
+                    Newest
+                  </button>
+                  <button
+                    onClick={() => setSortOrder('oldest')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'oldest'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    <i className="fa-solid fa-arrow-up-short-wide mr-1.5"></i>
+                    Oldest
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {paginatedRequests.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i className="fa-solid fa-inbox text-2xl text-slate-400"></i>
+                  </div>
+                  <p className="text-slate-500 font-medium">No requests in this stage</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {paginatedRequests.map((req: TravelRequest) => {
+                    const isViolated = req.hasViolation || (policies.length > 0 ? checkPolicyViolation(req, policies) : false);
+                    return (
+                      <div
+                        key={req.id}
+                        className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="font-mono text-sm font-black text-indigo-600">{req.submissionId || req.id}</span>
+                              <StatusBadge type="priority" value={req.priority} />
+                              {isViolated && (
+                                <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
+                                  <i className="fa-solid fa-triangle-exclamation"></i>
+                                  Policy
+                                </div>
+                              )}
+                            </div>
+                            <h4 className="font-bold text-slate-900 dark:text-white mb-1">{req.requesterName}</h4>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                              <i className="fa-solid fa-route text-xs mr-2"></i>
+                              {req.from} → {req.to}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-2">
+                              <i className="fa-solid fa-calendar text-xs mr-2"></i>
+                              {new Date(req.dateOfTravel).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onView(req);
+                              handleCloseModal();
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700"
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer with Pagination */}
+            {stageRequests.length > 0 && (
+              <div className="px-8 py-5 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Items per page:</span>
+                  {[5, 10, 25].map(size => (
+                    <button
+                      key={size}
+                      onClick={() => {
+                        setItemsPerPage(size);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${itemsPerPage === size
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <i className="fa-solid fa-chevron-left"></i>
+                  </button>
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300 px-4">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <i className="fa-solid fa-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -261,9 +632,1162 @@ const FinanceDashboard = ({ requests }: any) => {
   );
 };
 
-const PolicyManagement = ({ policy, setPolicy }: any) => {
+const ManagerApprovalsView = ({ requests, onUpdate, currentUser }: any) => {
+  const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
+
   return (
-    <div className="max-w-2xl space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header>
+        <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Pending Approvals</h2>
+        <p className="text-slate-500 text-sm mt-1">Review and action travel requests from your team.</p>
+      </header>
+
+      {requests.length === 0 ? (
+        <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 text-2xl">
+            <i className="fa-solid fa-check-double"></i>
+          </div>
+          <h3 className="text-slate-900 dark:text-white font-bold">All Caught Up!</h3>
+          <p className="text-slate-500 text-sm mt-1">You have no pending approvals at the moment.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {requests.map((r: TravelRequest) => (
+            <div key={r.id} onClick={() => setSelectedRequest(r)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl hover:shadow-lg hover:border-indigo-500/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 -mr-6 -mt-6 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+
+              <div className="flex justify-between items-start mb-4 relative z-10">
+                <span className="text-[10px] font-black text-indigo-500/60 font-mono tracking-tighter uppercase">{r.submissionId || r.id}</span>
+                <div className="scale-90 origin-right">
+                  {r.hasViolation && (
+                    <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
+                      <i className="fa-solid fa-triangle-exclamation"></i>
+                      Policy
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <h4 className="font-black text-lg mb-0.5 text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors uppercase tracking-tight leading-tight">{r.requesterName}</h4>
+                <p className="text-xs text-slate-500 font-bold">{r.requesterDepartment}</p>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs font-bold text-slate-500 dark:text-slate-400 mb-6">
+                <span className="flex items-center gap-1"><i className="fa-solid fa-route text-indigo-400"></i> {r.from} → {r.to}</span>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center relative z-10">
+                <div className="flex items-center gap-1.5 text-slate-400 group-hover:text-indigo-500 transition-colors">
+                  <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-xs`}></i>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{r.mode}</span>
+                </div>
+                <span className="text-indigo-600 text-xs font-black uppercase tracking-wider group-hover:translate-x-1 transition-transform">Review <i className="fa-solid fa-arrow-right ml-1"></i></span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selectedRequest && (
+        <ManagerApprovalModal
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          onApprove={() => { onUpdate(selectedRequest, PNCStatus.APPROVED); setSelectedRequest(null); }}
+          onReject={() => { onUpdate(selectedRequest, PNCStatus.REJECTED_BY_MANAGER); setSelectedRequest(null); }}
+        />
+      )}
+    </div>
+  );
+};
+
+const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) => (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={onClose}></div>
+    <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col max-h-[90vh]">
+
+      <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-start">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-black text-slate-400 font-mono uppercase">{request.submissionId || request.id}</span>
+            {request.hasViolation && <span className="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded border border-rose-200">Policy Violation</span>}
+          </div>
+          <h3 className="text-2xl font-black text-slate-900 dark:text-white">Approval Request</h3>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
+        {/* Traveler Info */}
+        <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+          <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center text-xl font-bold">
+            {request.requesterName.charAt(0)}
+          </div>
+          <div>
+            <h4 className="font-bold text-slate-900 dark:text-white">{request.requesterName}</h4>
+            <p className="text-xs text-slate-500 font-medium">{request.requesterDepartment} • {request.requesterCampus}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{request.requesterEmail}</p>
+          </div>
+        </div>
+
+        {/* Trip Details */}
+        <div className="space-y-4">
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800 pb-2">Trip Details</h4>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Route</p>
+              <p className="font-bold text-slate-800 dark:text-white">{request.from} → {request.to}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Date</p>
+              <p className="font-bold text-slate-800 dark:text-white">{new Date(request.dateOfTravel).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Mode</p>
+              <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <i className={`fa-solid ${request.mode === 'Flight' ? 'fa-plane' : request.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-indigo-500`}></i>
+                {request.mode}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Trip Type</p>
+              <p className="font-bold text-slate-800 dark:text-white">{request.tripType}</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Purpose</p>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 italic">"{request.purpose}"</p>
+          </div>
+        </div>
+
+        {/* Policy Violation Warning */}
+        {request.hasViolation && (
+          <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/50 p-4 rounded-xl flex gap-3">
+            <i className="fa-solid fa-triangle-exclamation text-rose-500 mt-0.5"></i>
+            <div>
+              <h5 className="text-sm font-bold text-rose-700 dark:text-rose-400">Policy Violation Detected</h5>
+              <p className="text-xs text-rose-600 dark:text-rose-300 mt-1">
+                <span className="font-bold">Reason:</span> {request.violationDetails || 'Advance booking policy violation'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="p-6 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex gap-4">
+        <button onClick={onReject} className="flex-1 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-600 font-bold rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/10 hover:border-rose-200 transition-all uppercase tracking-wide text-xs">Reject</button>
+        <button onClick={onApprove} className="flex-[2] py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all uppercase tracking-wide text-xs">Approve Request</button>
+      </div>
+    </div>
+  </div>
+);
+
+const LocationCalendar = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const days = [];
+  const totalDays = daysInMonth(year, month);
+  const startDay = firstDayOfMonth(year, month);
+
+  for (let i = 0; i < startDay; i++) {
+    days.push(null);
+  }
+
+  for (let i = 1; i <= totalDays; i++) {
+    days.push(i);
+  }
+
+  const getStatus = (day: number | null) => {
+    if (!day) return null;
+    if (day >= 15 && day <= 18) return 'booked';
+    const date = new Date(year, month, day);
+    if (date.getDay() === 0 || date.getDay() === 6) return 'tentative';
+    return 'available';
+  };
+
+  return (
+    <Card className="p-6 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <i className="fa-solid fa-calendar-days text-violet-500"></i>
+            Availability Calendar
+          </h4>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Reference Only • Confirm with Approvers</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentDate(new Date(year, month - 1))}
+            className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all"
+          >
+            <i className="fa-solid fa-chevron-left text-[10px]"></i>
+          </button>
+          <span className="text-sm font-black text-slate-700 dark:text-slate-300 min-w-[120px] text-center">
+            {monthNames[month]} {year}
+          </span>
+          <button
+            onClick={() => setCurrentDate(new Date(year, month + 1))}
+            className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all"
+          >
+            <i className="fa-solid fa-chevron-right text-[10px]"></i>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+          <div key={d} className="text-[10px] font-black text-slate-400 text-center uppercase py-2">{d}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day, idx) => {
+          const status = getStatus(day);
+          return (
+            <div
+              key={idx}
+              className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all group ${!day ? 'opacity-0' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700'
+                }`}
+            >
+              {day && (
+                <>
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{day}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full mt-1 ${status === 'booked' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]' :
+                    status === 'tentative' ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`}></div>
+
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all scale-90 group-hover:scale-100 z-20 whitespace-nowrap">
+                    {status === 'booked' ? 'Confirmed Workshop' : status === 'tentative' ? 'Tentative' : 'Available'}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+        {[
+          { label: 'Available', color: 'bg-emerald-500' },
+          { label: 'Confirmed Meetup', color: 'bg-rose-500' },
+          { label: 'Tentative / Weekend', color: 'bg-amber-500' }
+        ].map(l => (
+          <div key={l.label} className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${l.color}`}></div>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{l.label}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+const IgathpuriMeetupView = ({
+  onNewRequest,
+  onCheckAvailability,
+  availabilityRequests,
+  currentUser,
+  onViewProfile,
+  requests,
+  onView
+}: {
+  onNewRequest: (context?: any) => void,
+  onCheckAvailability: () => void,
+  availabilityRequests: MeetupAvailabilityRequest[],
+  currentUser: User | null,
+  onViewProfile: () => void,
+  requests: TravelRequest[],
+  onView: (r: TravelRequest) => void
+}) => {
+  if (currentUser?.role === UserRole.PNC) {
+    const pending = availabilityRequests.filter(r => r.status === 'Pending');
+    const approved = availabilityRequests.filter(r => r.status === 'Approved');
+    const rejected = availabilityRequests.filter(r => r.status === 'Rejected');
+
+    const RequestList = ({ title, data, icon, colorClass }: any) => (
+      <div className="space-y-4">
+        <h3 className={`text-sm font-black uppercase tracking-[0.2em] flex items-center gap-2 ${colorClass}`}>
+          <i className={`fa-solid ${icon}`}></i>
+          {title} ({data.length})
+        </h3>
+        {data.length === 0 ? (
+          <div className="py-8 text-center bg-white/50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+            <p className="text-slate-400 text-xs font-bold italic tracking-wider">No requests in this category</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data.map((r: MeetupAvailabilityRequest) => (
+              <Card key={r.id} className="p-5 hover:border-indigo-500/30 transition-all group">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{r.fullName}</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{r.department}</p>
+                  </div>
+                  <div className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
+                    {r.teamSize} PAX
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <i className="fa-solid fa-calendar-days text-indigo-500 w-4"></i>
+                    <span>{new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 p-2 rounded-xl">
+                    <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
+                    <span className="truncate">{r.email}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">Created: {new Date(r.createdAt).toLocaleDateString()}</span>
+                  <div className={`w-2 h-2 rounded-full ${r.status === 'Approved' ? 'bg-emerald-500' : r.status === 'Pending' ? 'bg-amber-500' : 'bg-rose-500'}`}></div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <header className="relative py-8 px-10 bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-900/20">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 -mr-20 -mt-20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 -ml-16 -mb-16 rounded-full blur-3xl"></div>
+
+          <div className="relative z-10">
+            <span className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-indigo-500/30">
+              <i className="fa-solid fa-shield-halved"></i>
+              PNC Operational View
+            </span>
+            <h2 className="text-4xl font-black text-white tracking-tight uppercase leading-none">Meetup Availability Control</h2>
+            <p className="text-slate-400 text-sm mt-3 font-medium max-w-xl">
+              Monitoring all pending and historical location reservation requests for the Igatpuri campus. This is a read-only tracking view for PNC operations.
+            </p>
+          </div>
+        </header>
+
+        <div className="space-y-16 pb-12">
+          <RequestList
+            title="Pending Requests"
+            data={pending}
+            icon="fa-clock-rotate-left"
+            colorClass="text-amber-500"
+          />
+
+          <RequestList
+            title="Approved History"
+            data={approved}
+            icon="fa-circle-check"
+            colorClass="text-emerald-500"
+          />
+
+          <RequestList
+            title="Rejected History"
+            data={rejected}
+            icon="fa-circle-xmark"
+            colorClass="text-rose-500"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const [approvers, setApprovers] = useState<any[]>([]);
+  const [totalSeats, setTotalSeats] = useState<number>(0);
+  const [isCalendarEnabled, setIsCalendarEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [attendeeStats, setAttendeeStats] = useState({ filled: 0, booked: 0, total: 0 });
+  const [attendeeDetails, setAttendeeDetails] = useState<{ email: string, name?: string, status: string, isBooked: boolean }[]>([]);
+  const [activeStatModal, setActiveStatModal] = useState<'completion' | 'booking' | null>(null);
+
+  // New step-based state
+  const [attendeeEmails, setAttendeeEmails] = useState<string[]>([]);
+  const [isAttendeesConfirmed, setIsAttendeesConfirmed] = useState(false);
+  const [isRequestSubmitted, setIsRequestSubmitted] = useState(false);
+  const [isSavingAttendees, setIsSavingAttendees] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
+  // Find if there's an approved availability request for this user
+  const userRequests = availabilityRequests.filter(r => r.profileId === currentUser?.id);
+  const attendeeRequests = availabilityRequests.filter(r => r.isFinalized && r.attendeeEmails?.some(email => email.toLowerCase() === currentUser?.email?.toLowerCase()));
+
+  const approvedRequest = userRequests.find(r => r.status === 'Approved');
+  const pendingRequest = userRequests.find(r => r.status === 'Pending');
+  const isAvailabilityApproved = !!approvedRequest;
+  const isAvailabilityPending = !!pendingRequest;
+
+  // Check if user is an attendee of a finalized request
+  const isAttendeeOfConfirmedMeetup = attendeeRequests.length > 0;
+  const activeAttendeeRequest = attendeeRequests[0];
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [approversRes, settingsRes] = await Promise.all([
+          supabase
+            .from('meetup_approvers')
+            .select('*')
+            .eq('is_active', true)
+            .order('name', { ascending: true }),
+          supabase
+            .from('meetup_settings')
+            .select('*')
+            .in('setting_key', ['total_seats', 'is_calendar_enabled'])
+        ]);
+
+        if (approversRes.error) throw approversRes.error;
+        setApprovers(approversRes.data || []);
+
+        if (!settingsRes.error && settingsRes.data) {
+          const seats = settingsRes.data.find((s: any) => s.setting_key === 'total_seats');
+          const calendar = settingsRes.data.find((s: any) => s.setting_key === 'is_calendar_enabled');
+
+          if (seats) setTotalSeats(Number(seats.setting_value));
+          if (calendar) setIsCalendarEnabled(calendar.setting_value === true || calendar.setting_value === 'true');
+        }
+      } catch (err: any) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (isAvailabilityApproved && approvedRequest?.attendeeEmails?.length > 0) {
+      const fetchStats = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('travel_requests')
+            .select('requester_email, requester_name, pnc_status')
+            .in('requester_email', approvedRequest.attendeeEmails)
+            .eq('purpose', 'Igatpuri Meetup');
+
+          if (!error && data) {
+            const filledCount = data.length;
+            const bookedCount = data.filter((r: any) =>
+              r.pnc_status === PNCStatus.BOOKED || r.pnc_status === PNCStatus.CLOSED
+            ).length;
+            setAttendeeStats({ filled: filledCount, booked: bookedCount, total: approvedRequest.attendeeEmails.length });
+
+            // Generate detailed list
+            const details = approvedRequest.attendeeEmails.map(email => {
+              const req = data.find((r: any) => r.requester_email.toLowerCase() === email.toLowerCase());
+              return {
+                email,
+                name: req?.requester_name,
+                status: req ? 'Filled' : 'Pending',
+                isBooked: req ? (req.pnc_status === PNCStatus.BOOKED || req.pnc_status === PNCStatus.CLOSED) : false
+              };
+            });
+            setAttendeeDetails(details);
+          }
+        } catch (err) {
+          console.error('Error fetching attendee stats:', err);
+        }
+      };
+      fetchStats();
+    }
+  }, [isAvailabilityApproved, approvedRequest?.attendeeEmails, isRequestSubmitted]);
+
+  useEffect(() => {
+    if (approvedRequest) {
+      if (approvedRequest.attendeeEmails && approvedRequest.attendeeEmails.length > 0) {
+        setAttendeeEmails(approvedRequest.attendeeEmails);
+        setIsAttendeesConfirmed(true);
+      } else if (attendeeEmails.length !== approvedRequest.teamSize) {
+        setAttendeeEmails(new Array(approvedRequest.teamSize).fill(""));
+      }
+
+      if (approvedRequest.isFinalized) {
+        setIsRequestSubmitted(true);
+      }
+    }
+  }, [approvedRequest]);
+
+  const handleConfirmAttendees = async () => {
+    if (!approvedRequest) return;
+
+    // Validate all emails are provided
+    if (attendeeEmails.some(email => !email.trim())) {
+      toast.error("Please provide email addresses for all attendees");
+      return;
+    }
+
+    setIsSavingAttendees(true);
+    try {
+      const { error } = await supabase
+        .from('meetup_availability_requests')
+        .update({
+          attendee_emails: attendeeEmails,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', approvedRequest.id);
+
+      if (error) throw error;
+
+      setIsAttendeesConfirmed(true);
+      toast.success("Attendees confirmed successfully!");
+    } catch (err: any) {
+      toast.error("Failed to confirm attendees: " + err.message);
+    } finally {
+      setIsSavingAttendees(false);
+    }
+  };
+
+  const handleFinalizeRequest = async () => {
+    if (!approvedRequest) return;
+
+    setIsFinalizing(true);
+    try {
+      const { error } = await supabase
+        .from('meetup_availability_requests')
+        .update({
+          is_finalized: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', approvedRequest.id);
+
+      if (error) throw error;
+
+      setIsRequestSubmitted(true);
+      toast.success("Request finalized! Attendees will be notified.");
+    } catch (err: any) {
+      toast.error("Failed to finalize request: " + err.message);
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl space-y-8 animate-in fade-in duration-500">
+      <header className="flex items-center gap-4">
+        <div className="w-16 h-16 bg-violet-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-xl shadow-violet-600/20">
+          <i className="fa-solid fa-person-shelter"></i>
+        </div>
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 dark:text-white transition-all tracking-tight uppercase">Igathpuri Meetup</h2>
+          <p className="text-slate-500 font-medium tracking-tight">Navgurukul Team Hub & Meetup Location</p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-2 space-y-8">
+          {isAttendeeOfConfirmedMeetup && !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER) && (
+            <Card className="p-8 border-2 border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xl shadow-emerald-500/5">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                <div className="flex items-start gap-6">
+                  <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-[2rem] flex items-center justify-center text-3xl shadow-inner shrink-0">
+                    <i className="fa-solid fa-plane-circle-check"></i>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-lg">Participation Confirmed</span>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">Ready for your visit?</h3>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-md text-sm">
+                      A visit to Igatpuri has been finalized by <span className="text-slate-900 dark:text-white font-bold">{activeAttendeeRequest.fullName}</span>. Please ensure your profile is complete with ID proof so the travel desk can book your tickets.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 w-full md:w-auto">
+                  <button
+                    onClick={() => onNewRequest({ startDate: activeAttendeeRequest.startDate, endDate: activeAttendeeRequest.endDate })}
+                    className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all text-center whitespace-nowrap"
+                  >
+                    Book Now! <i className="fa-solid fa-plane-departure ml-2"></i>
+                  </button>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {isAvailabilityApproved && isRequestSubmitted && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <Card
+                onClick={() => setActiveStatModal('completion')}
+                className="p-6 bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900/50 border-2 border-indigo-100 dark:border-indigo-900/30 cursor-pointer hover:border-indigo-400 transition-all group"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
+                    <i className="fa-solid fa-file-invoice"></i>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Form Completion</h4>
+                    <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{attendeeStats.filled}/{attendeeStats.total}</p>
+                  </div>
+                </div>
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 transition-all duration-1000"
+                    style={{ width: `${(attendeeStats.filled / attendeeStats.total) * 100 || 0}%` }}
+                  ></div>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest flex justify-between">
+                  <span>{Math.round((attendeeStats.filled / attendeeStats.total) * 100) || 0}% attendees filled form</span>
+                  <span className="text-indigo-400 group-hover:translate-x-1 transition-transform">View Details <i className="fa-solid fa-chevron-right ml-1"></i></span>
+                </p>
+              </Card>
+
+              <Card
+                onClick={() => setActiveStatModal('booking')}
+                className="p-6 bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-900/50 border-2 border-emerald-100 dark:border-emerald-900/30 cursor-pointer hover:border-emerald-400 transition-all group"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
+                    <i className="fa-solid fa-ticket"></i>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Tickets Booked</h4>
+                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{attendeeStats.booked}/{attendeeStats.total}</p>
+                  </div>
+                </div>
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-1000"
+                    style={{ width: `${(attendeeStats.booked / attendeeStats.total) * 100 || 0}%` }}
+                  ></div>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest flex justify-between">
+                  <span>{Math.round((attendeeStats.booked / attendeeStats.total) * 100) || 0}% tickets issued</span>
+                  <span className="text-emerald-400 group-hover:translate-x-1 transition-transform">View Details <i className="fa-solid fa-chevron-right ml-1"></i></span>
+                </p>
+              </Card>
+            </div>
+          )}
+
+          {/* Stat Detail Modals */}
+          {activeStatModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+              <Card className="w-full max-w-lg bg-white dark:bg-slate-900 p-8 shadow-2xl relative overflow-visible">
+                <button
+                  onClick={() => setActiveStatModal(null)}
+                  className="absolute -top-3 -right-3 w-10 h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 shadow-lg transition-all z-50"
+                >
+                  <i className="fa-solid fa-times"></i>
+                </button>
+
+                <div className="space-y-6">
+                  <header>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeStatModal === 'completion' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        <i className={`fa-solid ${activeStatModal === 'completion' ? 'fa-file-invoice' : 'fa-ticket'}`}></i>
+                      </div>
+                      {activeStatModal === 'completion' ? 'Form Completion Status' : 'Ticket Booking Status'}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-bold mt-2 uppercase tracking-widest">
+                      Showing status for {approvedRequest?.teamSize || 0} attendees
+                    </p>
+                  </header>
+
+                  <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                    {attendeeDetails.map((attendee, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 group hover:border-slate-300 dark:hover:border-slate-600 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${(activeStatModal === 'completion' ? attendee.status === 'Filled' : attendee.isBooked)
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : 'bg-amber-100 text-amber-600'
+                            }`}>
+                            {attendee.name ? attendee.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800 dark:text-white truncate max-w-[180px]">
+                              {attendee.name || attendee.email.split('@')[0]}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-bold truncate">
+                              {attendee.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {activeStatModal === 'completion' ? (
+                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${attendee.status === 'Filled'
+                              ? 'bg-emerald-100 text-emerald-600'
+                              : 'bg-amber-50 text-amber-600 border border-amber-100'
+                              }`}>
+                              {attendee.status === 'Filled' ? 'Form Filled' : 'Pending'}
+                            </span>
+                          ) : (
+                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${attendee.isBooked
+                              ? 'bg-emerald-100 text-emerald-600'
+                              : attendee.status === 'Pending'
+                                ? 'bg-slate-100 text-slate-400'
+                                : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                              }`}>
+                              {attendee.isBooked ? 'Booked' : attendee.status === 'Pending' ? 'Form Pending' : 'Booking...'}
+                            </span>
+                          )}
+                          <div className={`w-2 h-2 rounded-full ${(activeStatModal === 'completion' ? attendee.status === 'Filled' : attendee.isBooked)
+                            ? 'bg-emerald-500 animate-pulse'
+                            : 'bg-amber-400'
+                            }`}></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setActiveStatModal(null)}
+                    className="w-full py-4 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-xl"
+                  >
+                    Close Details
+                  </button>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Your Meetup Travel Booking */}
+          {requests.filter(r =>
+            r.purpose === 'Igatpuri Meetup' &&
+            r.requesterEmail === currentUser?.email &&
+            r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
+            r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER
+          ).map(r => (
+            <div key={r.id} className="space-y-4 pt-4">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                <i className="fa-solid fa-plane-departure text-emerald-500"></i>
+                Your Travel Booking
+              </h4>
+              <div onClick={() => onView(r)} className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 p-6 rounded-3xl hover:shadow-xl hover:border-emerald-500/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden max-w-md bg-gradient-to-br from-emerald-50/10 to-transparent">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 -mr-10 -mt-10 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="flex justify-between items-start mb-4 relative z-10">
+                  <span className="text-[10px] font-black text-emerald-500/60 font-mono tracking-tighter uppercase">{r.submissionId || r.id}</span>
+                  <StatusBadge type="pnc" value={r.pncStatus} />
+                </div>
+                <h4 className="font-black text-2xl mb-1 text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors uppercase tracking-tight leading-tight">{r.from} → {r.to}</h4>
+                <p className="text-sm text-slate-500 mb-6 font-bold flex items-center gap-2">
+                  <i className="fa-solid fa-calendar-day text-slate-300"></i>
+                  {new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                </p>
+                <div className="pt-4 border-t border-emerald-100 dark:border-emerald-800 flex justify-between items-center relative z-10">
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane-departure' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-base`}></i>
+                    <span className="text-xs font-black uppercase tracking-widest">{r.mode}</span>
+                  </div>
+                  <div className="w-8 h-8 bg-emerald-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:scale-110 transition-all"><i className="fa-solid fa-arrow-right text-xs"></i></div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Show Guidelines and Process if the user is the requester OR if there is no confirmed meetup yet */}
+          {(isAvailabilityApproved || isAvailabilityPending || !isAttendeeOfConfirmedMeetup) && (
+            <div className="space-y-8">
+              <Card className="p-8 space-y-6">
+                <header className="flex items-center gap-3 border-b dark:border-slate-800 pb-6">
+                  <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600">
+                    <i className="fa-solid fa-book-open text-sm"></i>
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white">Booking Guidelines</h3>
+                </header>
+
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                      About the Meetup
+                    </h4>
+                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
+                      The Navgurukul Igathpuri campus serves as a central hub for team meetups, workshops, and offsites.
+                      Coordinate and confirm venue availability before finalizing travel plans.
+                    </p>
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800 p-4 rounded-2xl flex gap-4">
+                      <i className="fa-solid fa-triangle-exclamation text-amber-600 dark:text-amber-500 mt-1"></i>
+                      <p className="text-xs text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+                        <strong className="uppercase tracking-wide text-[10px]">Mandatory Step:</strong> Before submitting any travel request, you must get written confirmation of location availability.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                      Booking Process
+                    </h4>
+                    <div className="space-y-8 border-l-2 border-slate-100 dark:border-slate-800 ml-2 pl-6">
+                      {/* Step 1 */}
+                      <div className="relative">
+                        <div className={`absolute -left-[33px] top-0 w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-2 ${isAvailabilityApproved ? 'border-emerald-500 bg-emerald-500' : 'border-violet-500'} flex items-center justify-center transition-all`}>
+                          {isAvailabilityApproved ? <i className="fa-solid fa-check text-[8px] text-white"></i> : <span className="text-[8px] font-black text-violet-600">1</span>}
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <div className="max-w-[70%]">
+                            <h5 className="font-bold text-slate-800 dark:text-white text-sm">Check Availability</h5>
+                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">Verify if the Igathpuri campus is available for your proposed dates.</p>
+                          </div>
+                          <button
+                            onClick={onCheckAvailability}
+                            disabled={isAvailabilityApproved || isAvailabilityPending}
+                            className={`px-4 py-2 border-2 ${isAvailabilityApproved
+                              ? 'border-emerald-500 text-emerald-600 bg-emerald-50'
+                              : isAvailabilityPending
+                                ? 'border-amber-500 text-amber-600 bg-amber-50'
+                                : 'border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white'
+                              } rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:cursor-default`}
+                          >
+                            {isAvailabilityApproved ? 'Approved' : isAvailabilityPending ? 'Verifying Availability' : 'Check Now'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className="relative">
+                        <div className={`absolute -left-[33px] top-0 w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-2 ${isAttendeesConfirmed ? 'border-emerald-500 bg-emerald-500' : 'border-violet-500'} flex items-center justify-center transition-all`}>
+                          {isAttendeesConfirmed ? <i className="fa-solid fa-check text-[8px] text-white"></i> : <span className="text-[8px] font-black text-violet-600">2</span>}
+                        </div>
+                        <h5 className="font-bold text-slate-800 dark:text-white text-sm">Confirm Attendees</h5>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">Ensure you have the final count of team members traveling.</p>
+
+                        {!isAttendeesConfirmed ? (
+                          <div className="mt-4 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                              {attendeeEmails.map((email, idx) => (
+                                <div key={idx}>
+                                  <Input
+                                    label={`Attendee ${idx + 1}`}
+                                    value={email}
+                                    onChange={(e) => {
+                                      const newEmails = [...attendeeEmails];
+                                      newEmails[idx] = e.target.value;
+                                      setAttendeeEmails(newEmails);
+                                    }}
+                                    placeholder="Enter email..."
+                                    disabled={!isAvailabilityApproved || isSavingAttendees}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <button
+                              onClick={handleConfirmAttendees}
+                              disabled={!isAvailabilityApproved || isSavingAttendees || attendeeEmails.some(e => !e.trim())}
+                              className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 active:scale-95 transition-all disabled:opacity-50"
+                            >
+                              {isSavingAttendees ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : null}
+                              Confirm {approvedRequest?.teamSize || ''} Attendees
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl">
+                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2">Confirmed Attendees ({attendeeEmails.length})</p>
+                            <div className="flex flex-wrap gap-2">
+                              {attendeeEmails.map((email, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/50 rounded-lg text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                                  {email}
+                                </span>
+                              ))}
+                            </div>
+                            {!isRequestSubmitted && (
+                              <button
+                                onClick={() => setIsAttendeesConfirmed(false)}
+                                className="text-[10px] text-slate-400 font-bold hover:text-violet-600 mt-3 hover:underline transition-all block"
+                              >
+                                <i className="fa-solid fa-pen-to-square mr-1"></i>
+                                Change Attendees
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Step 3 */}
+                      <div className="relative">
+                        <div className={`absolute -left-[33px] top-0 w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-2 ${isRequestSubmitted ? 'border-emerald-500 bg-emerald-500' : 'border-violet-500'} flex items-center justify-center transition-all`}>
+                          {isRequestSubmitted ? <i className="fa-solid fa-check text-[8px] text-white"></i> : <span className="text-[8px] font-black text-violet-600">3</span>}
+                        </div>
+                        <h5 className="font-bold text-slate-800 dark:text-white text-sm">Submit Request</h5>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">Finalize your booking and add it to your travel requests.</p>
+                        <button
+                          onClick={handleFinalizeRequest}
+                          disabled={!isAttendeesConfirmed || isRequestSubmitted || isFinalizing}
+                          className="mt-4 w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400"
+                        >
+                          {isFinalizing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : null}
+                          {isRequestSubmitted ? <><i className="fa-solid fa-circle-check mr-2 text-emerald-400"></i>Submitted to active requests</> : 'Submit Request'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {isCalendarEnabled && <LocationCalendar />}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <Card className="p-6 border-2 border-indigo-100 dark:border-indigo-900/30 bg-white dark:bg-slate-900 shadow-xl shadow-indigo-600/5 relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-50 dark:bg-indigo-900/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+            <h3 className="font-bold mb-4 flex items-center gap-2 relative z-10 text-indigo-600 dark:text-indigo-400">
+              <i className="fa-solid fa-headset"></i>
+              Need Assistance?
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-bold leading-relaxed mb-6 block relative z-10">
+              If you have queries regarding the <span className="text-slate-900 dark:text-white border-b-2 border-indigo-100 dark:border-indigo-800">Igathpuri meetup</span> logistics or coordination, please reach out to the PNC team on Slack.
+            </p>
+            <button className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white transition-all rounded-xl text-sm font-black shadow-lg shadow-indigo-600/20 relative z-10">
+              Contact PNC Team
+            </button>
+          </Card>
+
+          <div className="space-y-3">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Authorized Approvers</h4>
+            {loading ? (
+              <div className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl animate-pulse">
+                <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 mb-2"></div>
+                <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-3/4"></div>
+              </div>
+            ) : approvers.length === 0 ? (
+              <div className="p-6 text-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl border-dashed">
+                <p className="text-xs text-slate-400 font-bold">No approvers listed</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {approvers.map(a => (
+                  <div key={a.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm hover:shadow-md transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xs font-bold">
+                        {a.name ? a.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{a.name || 'Admin'}</p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate">{a.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users }: any) => {
+  const handleUpdateMinAdvanceDays = async (mode: string, days: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('travel_mode_policies')
+        .update({ min_advance_days: days, updated_at: new Date().toISOString() })
+        .eq('travel_mode', mode)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTravelModePolicies(travelModePolicies.map((p: any) =>
+        p.travelMode === mode ? { ...p, minAdvanceDays: days } : p
+      ));
+      toast.success(`${mode} policy updated`);
+    } catch (err: any) {
+      toast.error("Failed to update policy: " + err.message);
+    }
+  };
+
+  // --- Meetup Approver State ---
+  const [meetupApprovers, setMeetupApprovers] = useState<any[]>([]);
+  const [pncSearch, setPncSearch] = useState('');
+  const [isAddingApprover, setIsAddingApprover] = useState(false);
+  const [approversLoading, setApproversLoading] = useState(true);
+  const [totalSeats, setTotalSeats] = useState<number>(0);
+  const [isCapacityEnabled, setIsCapacityEnabled] = useState(false);
+  const [isCalendarEnabled, setIsCalendarEnabled] = useState(true);
+
+  // Load approvers and settings from DB on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setApproversLoading(true);
+      try {
+        const [approversRes, settingsRes] = await Promise.all([
+          supabase
+            .from('meetup_approvers')
+            .select('*')
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('meetup_settings')
+            .select('*')
+            .in('setting_key', ['total_seats', 'is_capacity_enabled', 'is_calendar_enabled'])
+        ]);
+
+        if (approversRes.error) throw approversRes.error;
+        let finalApprovers = approversRes.data || [];
+
+        // Admin automatically gets added logic
+        const admins = users.filter((u: any) => u.role === UserRole.ADMIN);
+        const adminAddedPromises = admins.map(async (admin: any) => {
+          const exists = finalApprovers.some(a => a.email.toLowerCase() === admin.email.toLowerCase());
+          if (!exists) {
+            const { data: newAdmin, error: insertError } = await supabase
+              .from('meetup_approvers')
+              .insert({ email: admin.email.toLowerCase(), name: admin.name || null, is_active: true })
+              .select()
+              .single();
+            if (!insertError && newAdmin) {
+              return newAdmin;
+            }
+          }
+          return null;
+        });
+
+        const newAdmins = await Promise.all(adminAddedPromises);
+        finalApprovers = [...finalApprovers, ...newAdmins.filter(a => a !== null)];
+        setMeetupApprovers(finalApprovers);
+
+        if (!settingsRes.error && settingsRes.data) {
+          const seats = settingsRes.data.find((s: any) => s.setting_key === 'total_seats');
+          const enabled = settingsRes.data.find((s: any) => s.setting_key === 'is_capacity_enabled');
+          const calendar = settingsRes.data.find((s: any) => s.setting_key === 'is_calendar_enabled');
+
+          if (seats) setTotalSeats(Number(seats.setting_value));
+          if (enabled) setIsCapacityEnabled(enabled.setting_value === true || enabled.setting_value === 'true');
+          if (calendar) setIsCalendarEnabled(calendar.setting_value === true || calendar.setting_value === 'true');
+        }
+      } catch (err: any) {
+        toast.error('Failed to load data: ' + err.message);
+      } finally {
+        setApproversLoading(false);
+      }
+    };
+    fetchData();
+  }, [users]);
+
+  const handleUpdateSeats = async (val: number) => {
+    setTotalSeats(val);
+    try {
+      const { error } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'total_seats',
+          setting_value: val,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      toast.success("Total seats updated");
+    } catch (err: any) {
+      toast.error("Failed to update seats: " + err.message);
+    }
+  };
+
+  const handleToggleCapacity = async () => {
+    const newState = !isCapacityEnabled;
+    setIsCapacityEnabled(newState);
+    try {
+      const { error } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'is_capacity_enabled',
+          setting_value: newState,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      toast.success(`Capacity tracking ${newState ? 'enabled' : 'disabled'}`);
+    } catch (err: any) {
+      toast.error("Failed to update status: " + err.message);
+    }
+  };
+
+  const handleToggleCalendar = async () => {
+    const newState = !isCalendarEnabled;
+    setIsCalendarEnabled(newState);
+    try {
+      const { error } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'is_calendar_enabled',
+          setting_value: newState,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      toast.success(`Availability calendar ${newState ? 'enabled' : 'disabled'}`);
+    } catch (err: any) {
+      toast.error("Failed to update status: " + err.message);
+    }
+  };
+
+  const handleAddApprover = async (userToAdd: any) => {
+    setIsAddingApprover(true);
+    try {
+      const { data, error } = await supabase
+        .from('meetup_approvers')
+        .insert({ email: userToAdd.email.toLowerCase(), name: userToAdd.name || null })
+        .select()
+        .single();
+      if (error) throw error;
+      setMeetupApprovers(prev => [...prev, data]);
+      setPncSearch('');
+      toast.success('Meetup approver added');
+    } catch (err: any) {
+      if (err.code === '23505') {
+        toast.error('This user is already an approver');
+      } else {
+        toast.error('Failed to add approver: ' + err.message);
+      }
+    } finally {
+      setIsAddingApprover(false);
+    }
+  };
+
+  const handleToggleApprover = async (id: string, currentActive: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('meetup_approvers')
+        .update({ is_active: !currentActive, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      setMeetupApprovers(prev => prev.map(a => a.id === id ? { ...a, is_active: !currentActive } : a));
+      toast.success(`Approver ${!currentActive ? 'activated' : 'deactivated'}`);
+    } catch (err: any) {
+      toast.error('Failed to update approver: ' + err.message);
+    }
+  };
+
+  const handleDeleteApprover = async (id: string) => {
+    try {
+      const { error } = await supabase.from('meetup_approvers').delete().eq('id', id);
+      if (error) throw error;
+      setMeetupApprovers(prev => prev.filter(a => a.id !== id));
+      toast.success('Approver removed');
+    } catch (err: any) {
+      toast.error('Failed to remove approver: ' + err.message);
+    }
+  };
+
+  const pncUsers = useMemo(() => {
+    return users.filter((u: any) =>
+      u.role === UserRole.PNC &&
+      !meetupApprovers.some(a => a.email.toLowerCase() === u.email.toLowerCase())
+    );
+  }, [users, meetupApprovers]);
+
+  const filteredPncUsers = useMemo(() => {
+    if (!pncSearch.trim()) return [];
+    return pncUsers.filter((u: any) =>
+      u.name?.toLowerCase().includes(pncSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(pncSearch.toLowerCase())
+    );
+  }, [pncUsers, pncSearch]);
+
+  return (
+    <div className="max-w-4xl space-y-8 animate-in fade-in duration-500">
       <header>
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Policy Configuration</h2>
         <p className="text-slate-500 text-sm mt-1">Define global constraints and automated guardrails.</p>
@@ -271,11 +1795,39 @@ const PolicyManagement = ({ policy, setPolicy }: any) => {
 
       <Card className="p-8 space-y-8">
         <div className="space-y-6">
-          <h4 className="font-bold text-slate-800 dark:text-white border-b pb-2 dark:border-slate-800">Notice Periods (Days)</h4>
-          <div className="grid grid-cols-3 gap-4">
-            <Input label="Flight" type="number" value={policy.flightNoticeDays} onChange={(e: any) => setPolicy({ ...policy, flightNoticeDays: parseInt(e.target.value) })} />
-            <Input label="Train" type="number" value={policy.trainNoticeDays} onChange={(e: any) => setPolicy({ ...policy, trainNoticeDays: parseInt(e.target.value) })} />
-            <Input label="Bus" type="number" value={policy.busNoticeDays} onChange={(e: any) => setPolicy({ ...policy, busNoticeDays: parseInt(e.target.value) })} />
+          <h4 className="font-bold text-slate-800 dark:text-white border-b pb-2 dark:border-slate-800">Minimum Advance Booking (Days)</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            {travelModePolicies && travelModePolicies.length > 0 ? (
+              travelModePolicies.map((p: any) => (
+                <div key={p.id} className="bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500/30 transition-all duration-300 group">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-black text-sm text-slate-700 dark:text-slate-300 uppercase tracking-wider">{p.travelMode}</span>
+                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 shadow-sm">
+                      <i className={`fa-solid ${p.travelMode === 'Flight' ? 'fa-plane' :
+                        p.travelMode === 'Train' ? 'fa-train' : 'fa-bus'
+                        }`}></i>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Advance Days</label>
+                    <input
+                      type="number"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      value={p.minAdvanceDays}
+                      onChange={(e: any) => handleUpdateMinAdvanceDays(p.travelMode, parseInt(e.target.value) || 0)}
+                      min="0"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+                    {p.travelMode === 'Bus' ? 'Buses' : `${p.travelMode}s`} must be booked at least {p.minAdvanceDays} day{p.minAdvanceDays !== 1 ? 's' : ''} in advance
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-3 text-center py-10 text-slate-400">
+                Loading policies...
+              </div>
+            )}
           </div>
         </div>
 
@@ -312,11 +1864,223 @@ const PolicyManagement = ({ policy, setPolicy }: any) => {
           )}
         </div>
       </Card>
+
+      {/* Meetup Capacity Section */}
+      <Card className="p-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+              <i className="fa-solid fa-chair"></i>
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800 dark:text-white text-lg">Location Capacity</h4>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                Define and track the maximum number of people the Igatpuri location can accommodate.
+              </p>
+            </div>
+          </div>
+          <Toggle active={isCapacityEnabled} onChange={handleToggleCapacity} />
+        </div>
+
+        {isCapacityEnabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-end pt-4 animate-in slide-in-from-top-2 duration-300">
+            <div className="space-y-3">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Total Seats Available</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="0"
+                  className="w-32 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-lg font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                  value={totalSeats}
+                  onChange={(e) => handleUpdateSeats(Number(e.target.value))}
+                />
+                <span className="text-sm font-bold text-slate-400">Seats currently configured for the meetup location.</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Meetup Calendar Visibility Section */}
+      <Card className="p-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+              <i className="fa-solid fa-calendar-days"></i>
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800 dark:text-white text-lg">Availability Calendar</h4>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                Toggle the visibility of the interactive calendar on the Igathpuri Meetup tab.
+              </p>
+            </div>
+          </div>
+          <Toggle active={isCalendarEnabled} onChange={handleToggleCalendar} />
+        </div>
+      </Card>
+
+      {/* Meetup Approver Section */}
+      <Card className="p-8 space-y-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+            <i className="fa-solid fa-person-shelter"></i>
+          </div>
+          <div>
+            <h4 className="font-bold text-slate-800 dark:text-white text-lg">Meetup Approver</h4>
+            <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+              These individuals are responsible for approving <strong className="text-slate-700 dark:text-slate-300">Igatpuri meetup location availability</strong>.
+              When team members from different cities plan to travel to a meetup, the location availability must first be checked and approved by one of these approvers.
+            </p>
+          </div>
+        </div>
+
+        {/* Info Banner */}
+        <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800/50 rounded-xl p-4 flex gap-3">
+          <i className="fa-solid fa-circle-info text-violet-500 mt-0.5 flex-shrink-0"></i>
+          <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
+            <strong>How it works:</strong> Before any travel request to the Igatpuri meetup is processed, the PNC team must confirm location availability with an approver listed below. Add all persons who have authority to confirm the meetup venue is available.
+          </p>
+        </div>
+
+        {/* Add New Approver Search */}
+        <div className="space-y-4 relative">
+          <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Add New Approver (PNC Team)</h5>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <i className="fa-solid fa-search text-slate-400"></i>
+            </div>
+            <input
+              type="text"
+              placeholder="Search PNC users by name or email..."
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+              value={pncSearch}
+              onChange={e => setPncSearch(e.target.value)}
+            />
+
+            {/* Search Results Dropdown */}
+            {filteredPncUsers.length > 0 && (
+              <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+                {filteredPncUsers.map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleAddApprover(user)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all text-left border-b last:border-0 border-slate-100 dark:border-slate-800"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xs font-bold">
+                      {user.name ? user.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">{user.name || 'Unnamed User'}</p>
+                      <p className="text-xs text-slate-500">{user.email}</p>
+                    </div>
+                    <div className="ml-auto">
+                      <i className="fa-solid fa-plus text-violet-500 opacity-0 group-hover:opacity-100 transition-all"></i>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {pncSearch.trim() !== '' && filteredPncUsers.length === 0 && (
+              <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-4 text-center">
+                <p className="text-sm text-slate-500 font-medium tracking-wide">No PNC users found for "{pncSearch}"</p>
+                <p className="text-xs text-slate-400 mt-1">Ensure the user has the PNC role assigned.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Approvers List */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Current Approvers</h5>
+            <span className="text-xs font-bold text-slate-400">
+              {meetupApprovers.filter(a => a.is_active).length} active
+            </span>
+          </div>
+
+          {approversLoading ? (
+            <div className="py-10 flex items-center justify-center gap-3 text-slate-400">
+              <i className="fa-solid fa-circle-notch fa-spin"></i>
+              <span className="text-sm font-medium">Loading approvers...</span>
+            </div>
+          ) : meetupApprovers.length === 0 ? (
+            <div className="py-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+              <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400 text-xl">
+                <i className="fa-solid fa-person-shelter"></i>
+              </div>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No meetup approvers configured</p>
+              <p className="text-xs text-slate-400 mt-1">Search for PNC users above to add them as approvers.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {meetupApprovers.map((approver, idx) => (
+                <div
+                  key={approver.id}
+                  className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 group ${approver.is_active
+                    ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                    : 'bg-slate-50/50 dark:bg-slate-800/20 border-slate-100 dark:border-slate-800 opacity-60'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shadow-sm flex-shrink-0 ${approver.is_active
+                      ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                      }`}>
+                      {approver.name ? approver.name.charAt(0).toUpperCase() : <i className="fa-solid fa-envelope text-xs"></i>}
+                    </div>
+                    <div>
+                      {approver.name && (
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{approver.name}</p>
+                          {users.find((u: any) => u.email.toLowerCase() === approver.email.toLowerCase())?.role === UserRole.ADMIN && (
+                            <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-black tracking-widest uppercase">Admin</span>
+                          )}
+                        </div>
+                      )}
+                      <p className={`text-xs font-medium ${approver.name ? 'text-slate-500' : 'text-sm font-bold text-slate-800 dark:text-white'}`}>
+                        {approver.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${approver.is_active
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                      }`}>
+                      {approver.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    <button
+                      onClick={() => handleToggleApprover(approver.id, approver.is_active)}
+                      title={approver.is_active ? 'Deactivate' : 'Activate'}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs transition-all ${approver.is_active
+                        ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                        }`}
+                    >
+                      <i className={`fa-solid ${approver.is_active ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
+                    </button>
+                    {/* Admins cannot be removed from here if they are auto-added, but let's allow it if user wants to deactivate them */}
+                    <button
+                      onClick={() => handleDeleteApprover(approver.id)}
+                      title="Remove approver"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
+                    >
+                      <i className="fa-solid fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 };
 
-const UserRoleManagement = ({ users, onUpdateUser }: { users: User[], onUpdateUser: (u: User) => void }) => {
+const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[], onUpdateUser: (u: User) => void, currentUser: User }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -397,9 +2161,15 @@ const UserRoleManagement = ({ users, onUpdateUser }: { users: User[], onUpdateUs
                     <select
                       value={user.role}
                       onChange={(e) => onUpdateUser({ ...user, role: e.target.value as UserRole })}
-                      className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm hover:border-slate-300 transition-colors"
+                      className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={currentUser.role === UserRole.PNC && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.PNC}
                     >
-                      {Object.values(UserRole).map(role => (
+                      {Object.values(UserRole).filter(role => {
+                        if (currentUser.role === UserRole.PNC) {
+                          return role === UserRole.EMPLOYEE || role === UserRole.PNC;
+                        }
+                        return true;
+                      }).map(role => (
                         <option key={role} value={role}>{role}</option>
                       ))}
                     </select>
@@ -463,28 +2233,33 @@ const UserRoleManagement = ({ users, onUpdateUser }: { users: User[], onUpdateUs
   );
 };
 
+// --- Profile View Helpers ---
+const Section = ({ title, children, icon }: { title: string, children: React.ReactNode, icon?: string }) => (
+  <div className="space-y-6 pt-6 first:pt-0">
+    <div className="flex items-center gap-3 border-b dark:border-slate-800 pb-3">
+      {icon && <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center"><i className={`fa-solid ${icon}`}></i></div>}
+      <h4 className="font-bold text-slate-800 dark:text-white text-lg">{title}</h4>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {children}
+    </div>
+  </div>
+);
+
+const SubHeader = ({ title }: { title: string }) => (
+  <div className="md:col-span-2">
+    <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">{title}</h5>
+  </div>
+);
+
 const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip }: any) => {
   const [formData, setFormData] = useState(user);
 
-  // Profile Section Helper
-  const Section = ({ title, children, icon }: { title: string, children: React.ReactNode, icon?: string }) => (
-    <div className="space-y-6 pt-6 first:pt-0">
-      <div className="flex items-center gap-3 border-b dark:border-slate-800 pb-3">
-        {icon && <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center"><i className={`fa-solid ${icon}`}></i></div>}
-        <h4 className="font-bold text-slate-800 dark:text-white text-lg">{title}</h4>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {children}
-      </div>
-    </div>
-  );
+  // Sync internal state if prop changes (important for role toggles)
+  useEffect(() => {
+    setFormData(user);
+  }, [user]);
 
-  // Sub-section Header Helper
-  const SubHeader = ({ title }: { title: string }) => (
-    <div className="md:col-span-2">
-      <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">{title}</h5>
-    </div>
-  );
 
   // Calculate profile completeness (excluding email)
   const calculateCompleteness = () => {
@@ -687,26 +2462,25 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip }: any) => {
 
       <Card className="p-8 md:p-12 space-y-12">
         {/* Personal Details */}
-        <Section title="Personal Details" icon="fa-user-gear">
-          <Input label="Full Name" value={formData.name} onChange={(e: any) => setFormData({ ...formData, name: e.target.value })} />
-          <Input label="Email Address" value={formData.email} disabled placeholder="From authentication" />
-          <Input label="Contact Number" value={formData.phone || ''} placeholder="10 digit number" onChange={(e: any) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+        <Section title="Personal Information" icon="fa-user-gear">
+          <Input label="Full Name" value={formData.name || ''} onChange={(e: any) => setFormData({ ...formData, name: e.target.value })} />
+          <Input label="Email Address" value={formData.email || ''} disabled placeholder="From authentication" />
+          <Input label="Contact Number" value={formData.phone || ''} placeholder="10 digit mobile number" onChange={(e: any) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
         </Section>
 
         {/* Org Details */}
-        <Section title="Org Details" icon="fa-briefcase">
+        <Section title="Professional Details" icon="fa-briefcase">
           <Input label="Department" value={formData.department || ''} onChange={(e: any) => setFormData({ ...formData, department: e.target.value })} />
-          <Input label="Campus" value={formData.campus || ''} onChange={(e: any) => setFormData({ ...formData, campus: e.target.value })} />
+          <Input label="Campus / Location" value={formData.campus || ''} onChange={(e: any) => setFormData({ ...formData, campus: e.target.value })} />
           <Input label="Approving Manager Name" value={formData.managerName || ''} onChange={(e: any) => setFormData({ ...formData, managerName: e.target.value })} />
           <Input label="Approving Manager Email" value={formData.managerEmail || ''} onChange={(e: any) => setFormData({ ...formData, managerEmail: e.target.value })} />
         </Section>
 
         {/* Emergency & Medical Information */}
-        <Section title="Emergency & Medical Information" icon="fa-heart-pulse">
+        <Section title="Emergency & Health" icon="fa-heart-pulse">
           <Input label="Emergency Contact Name" value={formData.emergencyContactName || ''} onChange={(e: any) => setFormData({ ...formData, emergencyContactName: e.target.value })} />
-          <Input label="Emergency Contact Number" value={formData.emergencyContactPhone || ''} placeholder="10 digit number" onChange={(e: any) => setFormData({ ...formData, emergencyContactPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
           <Input label="Relationship" value={formData.emergencyContactRelation || ''} onChange={(e: any) => setFormData({ ...formData, emergencyContactRelation: e.target.value })} />
-
+          <Input label="Emergency Contact Number" value={formData.emergencyContactPhone || ''} placeholder="10 digit mobile number" onChange={(e: any) => setFormData({ ...formData, emergencyContactPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
           <Select
             label="Blood Group"
             value={formData.bloodGroup || ''}
@@ -844,11 +2618,46 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip }: any) => {
 
 // --- Analytics & Reporting Component ---
 
+// --- Chart Components (CSS based) ---
+const DonutChart = ({ data }: { data: { label: string, value: number, color: string }[] }) => {
+  const total = data.reduce((acc, d) => acc + d.value, 0);
+  let accumulatedDeg = 0;
+
+  const gradient = data.map(d => {
+    const deg = (d.value / total) * 360;
+    const str = `${d.color} ${accumulatedDeg}deg ${accumulatedDeg + deg}deg`;
+    accumulatedDeg += deg;
+    return str;
+  }).join(', ');
+
+  return (
+    <div className="flex items-center gap-8">
+      <div className="relative w-40 h-40 rounded-full" style={{ background: `conic-gradient(${gradient})` }}>
+        <div className="absolute inset-4 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center flex-col">
+          <span className="text-3xl font-bold text-slate-900 dark:text-white">{total}</span>
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Requests</span>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {data.map((d, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }}></span>
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{d.label}</span>
+            <span className="text-xs text-slate-500 font-mono">({Math.round((d.value / total) * 100)}%)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], currentUser: User }) => {
   const [filters, setFilters] = useState({
     campus: 'All',
     department: 'All',
-    period: 'All Time'
+    period: 'All Time', // 'All Time' | 'This Month' | 'Last Month' | 'Custom Date'
+    startDate: '',
+    endDate: ''
   });
   const [widgets, setWidgets] = useState({
     spend: true,
@@ -863,21 +2672,65 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     return requests.filter(r => {
       const matchCampus = filters.campus === 'All' || r.requesterCampus === filters.campus;
       const matchDept = filters.department === 'All' || r.requesterDepartment === filters.department;
-      return matchCampus && matchDept;
+
+      let matchDate = true;
+      const reqDate = new Date(r.timestamp);
+      const now = new Date();
+
+      if (filters.period === 'This Month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        matchDate = reqDate >= startOfMonth;
+      } else if (filters.period === 'Last Month') {
+        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        matchDate = reqDate >= startOfLastMonth && reqDate <= endOfLastMonth;
+      } else if (filters.period === 'Custom Date') {
+        if (filters.startDate) {
+          const start = new Date(filters.startDate);
+          matchDate = matchDate && reqDate >= start;
+        }
+        if (filters.endDate) {
+          const end = new Date(filters.endDate);
+          end.setHours(23, 59, 59, 999);
+          matchDate = matchDate && reqDate <= end;
+        }
+      }
+
+      return matchCampus && matchDept && matchDate;
     });
   }, [requests, filters]);
 
   // Aggregations
-  const totalSpend = filteredData.reduce((acc, r) => acc + (r.ticketCost || 0), 0);
-  const totalTrips = filteredData.length;
-  const avgCost = totalTrips > 0 ? Math.round(totalSpend / totalTrips) : 0;
+  const totalRequests = filteredData.length;
+  const totalBookings = filteredData.filter(r => r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED).length;
+  const openRequests = filteredData.filter(r => r.pncStatus !== PNCStatus.CLOSED && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER && r.pncStatus !== PNCStatus.BOOKED).length;
+
+  const avgProcessingTime = useMemo(() => {
+    const closedReqs = filteredData.filter(r => r.pncStatus === PNCStatus.CLOSED || r.pncStatus === PNCStatus.BOOKED);
+    if (closedReqs.length === 0) return 0;
+
+    const totalTime = closedReqs.reduce((acc, r) => {
+      // Find completion time from timeline or assume last update
+      const created = new Date(r.timestamp).getTime();
+      // Mock completion time spread over 1-3 days for demo if not real
+      // In real app, check timeline for 'Booked' or 'Closed' event
+      const completionEvent = r.timeline?.find(e => e.event === 'Status changed to: Closed' || e.event === 'Status changed to: Booked');
+      const completed = completionEvent ? new Date(completionEvent.timestamp).getTime() : new Date().getTime();
+      return acc + (completed - created);
+    }, 0);
+
+    return Math.round((totalTime / closedReqs.length) / (1000 * 60 * 60 * 24) * 10) / 10; // Days with 1 decimal
+  }, [filteredData]);
+
+  const totalSpend = Math.round(filteredData.reduce((acc, r) => acc + (r.ticketCost || 0), 0) * 100) / 100;
+
 
   // Charts Data Preparation
   const deptData = useMemo(() => {
     const counts: Record<string, number> = {};
     filteredData.forEach(r => {
       const d = r.requesterDepartment || 'Unknown';
-      counts[d] = (counts[d] || 0) + (currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN ? (r.ticketCost || 0) : 1);
+      counts[d] = Math.round(((counts[d] || 0) + (currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC ? (r.ticketCost || 0) : 1)) * 100) / 100;
     });
     return Object.entries(counts).map(([label, value]) => ({ label, value }));
   }, [filteredData, currentUser.role]);
@@ -887,13 +2740,31 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     filteredData.forEach(r => {
       counts[r.pncStatus] = (counts[r.pncStatus] || 0) + 1;
     });
-    return Object.entries(counts).map(([label, value]) => ({ label: label.replace('_', ' '), value }));
+
+    // Map status to colors
+    const colors: Record<string, string> = {
+      [PNCStatus.NOT_STARTED]: '#cbd5e1', // slate-300
+      [PNCStatus.APPROVAL_PENDING]: '#fcd34d', // amber-300
+      [PNCStatus.APPROVED]: '#34d399', // emerald-400
+      [PNCStatus.PROCESSING]: '#818cf8', // indigo-400
+      [PNCStatus.BOOKED]: '#60a5fa', // blue-400
+      [PNCStatus.REJECTED_BY_MANAGER]: '#fda4af', // rose-300
+      [PNCStatus.REJECTED_BY_PNC]: '#f87171', // red-400
+      [PNCStatus.CLOSED]: '#64748b', // slate-500
+    };
+
+    return Object.entries(counts).map(([label, value]) => ({
+      label: label.replace(/_/g, ' '),
+      value,
+      color: colors[label] || '#94a3b8'
+    }));
   }, [filteredData]);
 
   const uniqueCampuses = Array.from(new Set(requests.map(r => r.requesterCampus).filter(Boolean)));
   const uniqueDepts = Array.from(new Set(requests.map(r => r.requesterDepartment).filter(Boolean)));
 
-  const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN;
+  const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC;
+  const isPNCView = currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -910,7 +2781,33 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           <button onClick={() => setIsCustomizing(!isCustomizing)} className={`px-4 py-2.5 rounded-lg text-sm font-bold border transition-all ${isCustomizing ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700'}`}>
             <i className="fa-solid fa-wand-magic-sparkles mr-2"></i>Customize
           </button>
-          <button onClick={() => toast.success("Exporting CSV...")} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
+          <button onClick={() => {
+            const csvContent = [
+              ['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice URL'],
+              ...filteredData.map(r => [
+                r.submissionId || r.id,
+                r.requesterName,
+                r.requesterDepartment,
+                r.requesterCampus,
+                `${r.from} -> ${r.to}`,
+                new Date(r.dateOfTravel).toLocaleDateString(),
+                r.pncStatus,
+                r.ticketCost || 0,
+                r.vendorName || '',
+                r.invoiceUrl || ''
+              ])
+            ].map(e => e.join(",")).join("\n");
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `travel_report_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success("CSV Export downloaded successfully!");
+          }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
             <i className="fa-solid fa-download mr-2"></i>Export Report
           </button>
         </div>
@@ -933,23 +2830,66 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         <select className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
           <option value="All Time">All Time</option>
           <option value="This Month">This Month</option>
-          <option value="Last Quarter">Last Quarter</option>
-          <option value="FY 24-25">FY 24-25</option>
+          <option value="Last Month">Last Month</option>
+          <option value="Custom Date">Custom Date</option>
         </select>
+
+        {filters.period === 'Custom Date' && (
+          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
+            <input
+              type="date"
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300"
+              value={filters.startDate}
+              onChange={e => setFilters({ ...filters, startDate: e.target.value })}
+            />
+            <span className="text-slate-400 font-bold">-</span>
+            <input
+              type="date"
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300"
+              value={filters.endDate}
+              onChange={e => setFilters({ ...filters, endDate: e.target.value })}
+            />
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Bookings" value={totalTrips} icon={<i className="fa-solid fa-ticket"></i>} trend="+5%" trendUp={true} description="Total requests in period" />
-        {isFinancialView && (
-          <StatCard title="Total Spend" value={`₹ ${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} trend="+12%" trendUp={false} description="Actual ticket cost" />
+        {isPNCView ? (
+          <>
+            <StatCard title="Total Requests" value={totalRequests} icon={<i className="fa-solid fa-inbox"></i>} trendUp={true} description="All time volume" />
+            <StatCard title="Total Tickets" value={totalBookings} icon={<i className="fa-solid fa-check-double"></i>} trendUp={true} description="Successfully closed" />
+            <StatCard title="Open Requests" value={openRequests} icon={<i className="fa-solid fa-clock"></i>} trendUp={false} description="Pending action" />
+            <StatCard title="Avg Processing" value={`${avgProcessingTime} Days`} icon={<i className="fa-solid fa-stopwatch"></i>} description="Request to Close" />
+          </>
+        ) : (
+          <>
+            <StatCard title="Total Bookings" value={totalRequests} icon={<i className="fa-solid fa-ticket"></i>} trend="+5%" trendUp={true} description="Total requests in period" />
+            {isFinancialView && (
+              <StatCard title="Total Spend" value={`₹ ${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} trend="+12%" trendUp={false} description="Actual ticket cost" />
+            )}
+            <StatCard title="Avg Processing" value="1.2 Days" icon={<i className="fa-solid fa-stopwatch"></i>} description="Submit to Issue" />
+            <StatCard title="Compliance Rate" value="94%" icon={<i className="fa-solid fa-check-circle"></i>} trend="-2%" trendUp={false} description="Adherence to policy" />
+          </>
         )}
-        <StatCard title="Avg Processing" value="1.2 Days" icon={<i className="fa-solid fa-stopwatch"></i>} description="Submit to Issue" />
-        <StatCard title="Compliance Rate" value="94%" icon={<i className="fa-solid fa-check-circle"></i>} trend="-2%" trendUp={false} description="Adherence to policy" />
       </div>
 
       {/* Widget Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {widgets.status && (
+          <Card className={`p-6 ${isCustomizing ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
+            <div className="flex justify-between items-center mb-6">
+              <h4 className="font-bold text-slate-800 dark:text-white">Request Status Breakdown</h4>
+              {isCustomizing && <button onClick={() => setWidgets({ ...widgets, status: false })} className="text-rose-500 text-xs font-bold uppercase"><i className="fa-solid fa-trash mr-1"></i> Remove</button>}
+            </div>
+            {isPNCView ? (
+              <DonutChart data={statusData} />
+            ) : (
+              <BarChart data={statusData} color="bg-amber-400" />
+            )}
+          </Card>
+        )}
+
         {widgets.volume && (
           <Card className={`p-6 ${isCustomizing ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
             <div className="flex justify-between items-center mb-6">
@@ -959,16 +2899,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
               {isCustomizing && <button onClick={() => setWidgets({ ...widgets, volume: false })} className="text-rose-500 text-xs font-bold uppercase"><i className="fa-solid fa-trash mr-1"></i> Remove</button>}
             </div>
             <BarChart data={deptData} color={isFinancialView ? 'bg-emerald-500' : 'bg-indigo-500'} />
-          </Card>
-        )}
-
-        {widgets.status && (
-          <Card className={`p-6 ${isCustomizing ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
-            <div className="flex justify-between items-center mb-6">
-              <h4 className="font-bold text-slate-800 dark:text-white">Request Status Breakdown</h4>
-              {isCustomizing && <button onClick={() => setWidgets({ ...widgets, status: false })} className="text-rose-500 text-xs font-bold uppercase"><i className="fa-solid fa-trash mr-1"></i> Remove</button>}
-            </div>
-            <BarChart data={statusData} color="bg-amber-400" />
           </Card>
         )}
       </div>
@@ -984,7 +2914,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
             <table className="w-full text-sm text-left whitespace-nowrap">
               <thead className="bg-white dark:bg-slate-900 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
                 <tr>
-                  <th className="px-6 py-4">Submission ID</th>
+                  <th className="px-6 py-4">Request ID</th>
                   <th className="px-6 py-4">Traveler</th>
                   <th className="px-6 py-4">Dept / Campus</th>
                   <th className="px-6 py-4">Route</th>
@@ -992,7 +2922,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                   <th className="px-6 py-4">Status</th>
                   {isFinancialView && <th className="px-6 py-4">Cost</th>}
                   {isFinancialView && <th className="px-6 py-4">Vendor</th>}
-                  {isFinancialView && <th className="px-6 py-4">Invoice</th>}
+                  {isFinancialView && <th className="px-6 py-4">Ticket</th>}
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-800">
@@ -1008,7 +2938,13 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                     <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
                     {isFinancialView && <td className="px-6 py-4 font-mono text-slate-700 dark:text-slate-300">₹ {r.ticketCost || 0}</td>}
                     {isFinancialView && <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.vendorName || '-'}</td>}
-                    {isFinancialView && <td className="px-6 py-4 text-xs font-mono text-slate-500">{r.invoiceNumber || '-'}</td>}
+                    {isFinancialView && (
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                        <a href={r.invoiceUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">
+                          View Ticket <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -1020,15 +2956,289 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
       {/* Customization Hint */}
       {isCustomizing && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-4">
-          <span className="text-sm font-bold">Editing Dashboard Layout</span>
-          <button onClick={() => setIsCustomizing(false)} className="bg-white text-slate-900 px-3 py-1 rounded-lg text-xs font-black uppercase hover:bg-slate-100">Done</button>
+          <span className="text-xs font-bold">Customize your dashboard view</span>
+          <button onClick={() => setIsCustomizing(false)} className="bg-white text-slate-900 px-3 py-1 rounded-full text-xs font-bold hover:bg-indigo-50 transition-colors">Done</button>
         </div>
       )}
     </div>
   );
 };
 
-// --- Main App Implementation ---
+
+
+const IgathpuriAvailabilityModal = ({ onClose, currentUser, onSubmit }: { onClose: () => void, currentUser: User, onSubmit: (data: any) => void }) => {
+  const [formData, setFormData] = useState({
+    fullName: currentUser.name || '',
+    email: currentUser.email || '',
+    phone: currentUser.phone || '',
+    department: currentUser.department || '',
+    teamSize: '',
+    startDate: '',
+    endDate: ''
+  });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minStartDate = tomorrow.toISOString().split('T')[0];
+
+  const minEndDate = formData.startDate
+    ? new Date(new Date(formData.startDate).getTime() + 86400000).toISOString().split('T')[0]
+    : minStartDate;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.teamSize || !formData.startDate || !formData.endDate) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await onSubmit(formData);
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={onClose}></div>
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
+        <header className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white">Check Availability</h3>
+            <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Igathpuri Campus Request</p>
+          </div>
+          <button onClick={onClose} className="w-10 h-10 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </header>
+
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 gap-4">
+            <Input
+              label="Full Name"
+              value={formData.fullName}
+              readOnly
+              className="bg-slate-50 dark:bg-slate-800/50 opacity-70"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Email Address"
+                value={formData.email}
+                readOnly
+                className="bg-slate-50 dark:bg-slate-800/50 opacity-70"
+              />
+              <Input
+                label="Phone Number"
+                value={formData.phone}
+                readOnly
+                className="bg-slate-50 dark:bg-slate-800/50 opacity-70"
+              />
+            </div>
+            <Input
+              label="Department"
+              value={formData.department}
+              readOnly
+              className="bg-slate-50 dark:bg-slate-800/50 opacity-70"
+            />
+
+            <div className="h-px bg-slate-100 dark:border-slate-800 my-2"></div>
+
+            <Input
+              label="Team Members Expected"
+              type="number"
+              placeholder="e.g. 10"
+              value={formData.teamSize}
+              onChange={(e) => setFormData({ ...formData, teamSize: e.target.value })}
+              required
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Start Date</label>
+                <input
+                  type="date"
+                  required
+                  min={minStartDate}
+                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value, endDate: e.target.value > formData.endDate ? '' : formData.endDate })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">End Date</label>
+                <input
+                  type="date"
+                  required
+                  min={minEndDate}
+                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-violet-50 dark:bg-violet-900/10 p-4 rounded-2xl border border-violet-100 dark:border-violet-800/30 flex gap-3">
+            <i className="fa-solid fa-circle-info text-violet-600 mt-0.5"></i>
+            <p className="text-[10px] text-violet-700 dark:text-violet-400 leading-relaxed font-medium">
+              Your request will be sent to the Igathpuri meetup approvers. Once approved, you can proceed with your travel booking.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isSubmitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
+            Submit Request
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabilityRequest[], onUpdate: (req: MeetupAvailabilityRequest, status: 'Approved' | 'Rejected') => void }) => {
+  const pending = requests.filter(r => r.status === 'Pending');
+  const history = requests.filter(r => r.status !== 'Pending');
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header>
+        <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Meetup Approvals</h2>
+        <p className="text-slate-500 text-sm mt-1">Review and action Igathpuri location availability requests.</p>
+      </header>
+
+      <div className="space-y-6">
+        <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+          <i className="fa-solid fa-clock text-amber-500"></i>
+          Pending Requests ({pending.length})
+        </h3>
+
+        {pending.length === 0 ? (
+          <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+            <p className="text-slate-400 font-bold italic">No pending requests at the moment.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {pending.map(r => (
+              <Card key={r.id} className="p-6 space-y-4 hover:border-violet-500/50 transition-all group">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">{r.fullName}</h4>
+                    <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest">{r.department}</p>
+                  </div>
+                  <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-[10px] font-black text-slate-500 uppercase">
+                    {r.teamSize} Members
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Duration</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      {new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Contact</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{r.phone}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => onUpdate(r, 'Rejected')}
+                    className="flex-1 py-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-rose-600 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-rose-50 transition-all"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => onUpdate(r, 'Approved')}
+                    className="flex-[2] py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+                  >
+                    Approve Availability
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="space-y-6 pt-8">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <i className="fa-solid fa-history text-slate-400"></i>
+              Recent Actions
+            </h3>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] overflow-hidden shadow-sm">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-8 py-5">Requestor</th>
+                    <th className="px-8 py-5">Team Size</th>
+                    <th className="px-8 py-5">Dates</th>
+                    <th className="px-8 py-5">Status</th>
+                    <th className="px-8 py-5 text-right">Processed On</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {history.map(r => (
+                    <tr key={r.id}>
+                      <td className="px-8 py-5">
+                        <p className="text-sm font-bold text-slate-800 dark:text-white">{r.fullName}</p>
+                        <p className="text-[10px] text-slate-500 font-medium">{r.email}</p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">
+                          {r.teamSize} Members
+                        </span>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-400 italic">
+                          {new Date(r.startDate).toLocaleDateString()} → {new Date(r.endDate).toLocaleDateString()}
+                        </p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${r.status === 'Approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                          }`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5 text-right text-[10px] font-bold text-slate-400">
+                        {new Date(r.updatedAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Helper function to check if request violates advance booking policy
+const checkPolicyViolation = (request: TravelRequest, policies: TravelModePolicy[]): boolean => {
+  const policy = policies.find(p => p.travelMode === request.mode);
+  if (!policy) return false;
+
+  const requestDate = new Date(request.timestamp);
+  const travelDate = new Date(request.dateOfTravel);
+
+  const daysDifference = Math.floor((travelDate.getTime() - requestDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  return daysDifference < policy.minAdvanceDays;
+};
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -1039,8 +3249,10 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
+  const [isPNCBookingModalOpen, setIsPNCBookingModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [baseRole, setBaseRole] = useState<UserRole | null>(null);
+  const [meetupContext, setMeetupContext] = useState<any>(null);
 
   const [policy, setPolicy] = useState<PolicyConfig>({
     flightNoticeDays: 15,
@@ -1052,6 +3264,12 @@ const App: React.FC = () => {
     isEnforcementEnabled: true,
     temporaryUnlockDays: 7
   });
+
+  const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
+
+  const [meetupAvailabilityRequests, setMeetupAvailabilityRequests] = useState<MeetupAvailabilityRequest[]>([]);
+  const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
+  const [isMeetupApprover, setIsMeetupApprover] = useState(false);
 
   const [isResettingPassword, setIsResettingPassword] = useState(false);
 
@@ -1071,16 +3289,48 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Prevent page reload on tab visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ Tab became VISIBLE - maintaining state, NOT reloading');
+      } else {
+        console.log('🙈 Tab became HIDDEN');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Track the last session to prevent unnecessary fetches on tab visibility changes
+  const lastSessionRef = useRef<string | null>(null);
+
   // Fetch Profile and Data when session changes
   useEffect(() => {
     if (!session) {
       setCurrentUser(null);
       setRequests([]);
       setIsLoading(false);
+      lastSessionRef.current = null;
       return;
     }
 
+    // Check if this is actually a new session or just a tab visibility change
+    const sessionToken = session.access_token;
+    if (lastSessionRef.current === sessionToken) {
+      console.log('⏭️ Session unchanged - skipping fetchData (tab visibility change)');
+      return;
+    }
+
+    console.log('🆕 New session detected - fetching data');
+    lastSessionRef.current = sessionToken;
+
     const fetchData = async () => {
+      console.log('🔄 fetchData called - this should only happen on initial load or session change');
       setIsLoading(true);
       try {
         // 1. Fetch Profile
@@ -1118,9 +3368,9 @@ const App: React.FC = () => {
         // 2. Fetch Requests
         let query = supabase.from('travel_requests').select('*');
 
-        // Employees only see their own
+        // Employees see their own requests AND requests they need to approve
         if (mappedUser.role === UserRole.EMPLOYEE) {
-          query = query.eq('requester_id', mappedUser.id);
+          query = query.or(`requester_id.eq.${mappedUser.id},approving_manager_email.eq.${mappedUser.email}`);
         }
 
         const { data: reqs, error: reqsError } = await query.order('created_at', { ascending: false });
@@ -1150,19 +3400,22 @@ const App: React.FC = () => {
           returnPreferredDepartureWindow: r.return_preferred_departure_window,
           numberOfTravelers: r.number_of_travelers,
           travellerNames: r.traveller_names,
-          contactNumbers: r.contact_numbers,
           priority: r.priority,
           specialRequirements: r.special_requirements,
           approvalStatus: r.approval_status,
           pncStatus: r.pnc_status,
           ticketCost: r.ticket_cost,
           vendorName: r.vendor_name,
+          invoiceUrl: r.invoice_url,
           timeline: r.timeline || [],
           emergencyContactName: r.emergency_contact_name,
           emergencyContactPhone: r.emergency_contact_phone,
           emergencyContactRelation: r.emergency_contact_relation,
           bloodGroup: r.blood_group,
           medicalConditions: r.medical_conditions,
+          hasViolation: r.has_violation,
+          violationDetails: r.violation_reason,
+          bookedBy: r.booked_by, // 'PNC' or 'SELF'
         }));
 
         setRequests(mappedReqs);
@@ -1196,6 +3449,42 @@ const App: React.FC = () => {
         } else {
           // Non-admin only see themselves
           setUsers([mappedUser]);
+        }
+
+        // 5. Fetch Meetup Availability Requests
+        const { data: meetupApprovers, error: approverError } = await supabase
+          .from('meetup_approvers')
+          .select('email')
+          .eq('email', mappedUser.email.toLowerCase())
+          .eq('is_active', true);
+
+        const userIsApprover = !approverError && meetupApprovers && meetupApprovers.length > 0;
+        setIsMeetupApprover(!!userIsApprover);
+
+        let meetupQuery = supabase.from('meetup_availability_requests').select('*');
+        if (!userIsApprover && mappedUser.role !== UserRole.PNC && mappedUser.role !== UserRole.ADMIN) {
+          meetupQuery = meetupQuery.eq('profile_id', mappedUser.id);
+        }
+
+        const { data: mReqs, error: mReqsError } = await meetupQuery.order('created_at', { ascending: false });
+        if (!mReqsError && mReqs) {
+          setMeetupAvailabilityRequests(mReqs.map((r: any) => ({
+            id: r.id,
+            profileId: r.profile_id,
+            fullName: r.full_name,
+            email: r.email,
+            phone: r.phone,
+            department: r.department,
+            teamSize: r.team_size,
+            startDate: r.start_date,
+            endDate: r.end_date,
+            status: r.status as any,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            timeline: r.timeline || [],
+            attendeeEmails: r.attendee_emails || [],
+            isFinalized: r.is_finalized || false
+          })));
         }
 
       } catch (err: any) {
@@ -1248,9 +3537,7 @@ const App: React.FC = () => {
 
   const handleTabChange = (tab: string) => {
     if (tab === activeTab) return;
-    setIsLoading(true);
     setActiveTab(tab);
-    setTimeout(() => setIsLoading(false), 400);
   };
 
   // Calculate profile completeness (excluding email)
@@ -1353,8 +3640,93 @@ const App: React.FC = () => {
     }
   };
 
+  const handleMeetupAvailabilitySubmit = async (data: any) => {
+    try {
+      const { data: newReq, error } = await supabase
+        .from('meetup_availability_requests')
+        .insert({
+          profile_id: currentUser!.id,
+          full_name: data.fullName,
+          email: data.email,
+          phone: data.phone,
+          department: data.department,
+          team_size: parseInt(data.teamSize),
+          start_date: data.startDate,
+          end_date: data.endDate,
+          status: 'Pending',
+          timeline: [{
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            actor: currentUser!.name,
+            event: 'Availability Request Submitted',
+            details: `For ${data.teamSize} members`
+          }]
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const mapped: MeetupAvailabilityRequest = {
+        id: newReq.id,
+        profileId: newReq.profile_id,
+        fullName: newReq.full_name,
+        email: newReq.email,
+        phone: newReq.phone,
+        department: newReq.department,
+        teamSize: newReq.team_size,
+        startDate: newReq.start_date,
+        endDate: newReq.end_date,
+        status: newReq.status as any,
+        createdAt: newReq.created_at,
+        updatedAt: newReq.updated_at,
+        timeline: newReq.timeline || []
+      };
+
+      setMeetupAvailabilityRequests(prev => [mapped, ...prev]);
+      toast.success("Availability request submitted successfully!");
+    } catch (err: any) {
+      toast.error("Failed to submit request: " + err.message);
+      throw err;
+    }
+  };
+
+  const handleUpdateMeetupRequest = async (req: MeetupAvailabilityRequest, status: 'Approved' | 'Rejected') => {
+    try {
+      const { error } = await supabase
+        .from('meetup_availability_requests')
+        .update({
+          status,
+          timeline: [...req.timeline, {
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            actor: currentUser!.name,
+            event: `Request ${status}`,
+            details: 'Action by Approver'
+          }]
+        })
+        .eq('id', req.id);
+
+      if (error) throw error;
+
+      setMeetupAvailabilityRequests(prev => prev.map(r => r.id === req.id ? {
+        ...r, status, updatedAt: new Date().toISOString(), timeline: [...r.timeline, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          actor: currentUser!.name,
+          event: `Request ${status}`,
+          details: 'Action by Approver'
+        }]
+      } : r));
+
+      toast.success(`Request ${status} successfully`);
+    } catch (err: any) {
+      toast.error("Failed to update request: " + err.message);
+    }
+  };
+
   const renderContent = () => {
-    if (isLoading || !currentUser) return <SkeletonDashboard />;
+    if (isLoading || !currentUser) return <LoadingView />;
 
     // Helper to render the appropriate dashboard based on role
     const renderDashboard = () => {
@@ -1363,12 +3735,17 @@ const App: React.FC = () => {
         return (
           <EmployeeDashboard
             requests={requests.filter(r => r.requesterId === currentUser.id)}
-            onNewRequest={() => setIsNewRequestModalOpen(true)}
+            onNewRequest={(context?: any) => {
+              setMeetupContext(context);
+              setIsNewRequestModalOpen(true);
+            }}
             onView={setSelectedRequest}
             isWarningVisible={!isUserVerified(currentUser) && !policy.isEnforcementEnabled}
             completeness={completeness}
             onViewProfile={() => handleTabChange('profile')}
             user={currentUser}
+            meetupRequests={meetupAvailabilityRequests}
+            onNavigateToMeetup={() => handleTabChange('igathpuri-meetup')}
           />
         );
       }
@@ -1376,7 +3753,7 @@ const App: React.FC = () => {
         return <AdminDashboard requests={requests} users={users} onTabChange={handleTabChange} />;
       }
       if (currentUser.role === UserRole.PNC) {
-        return <PNCDashboard requests={requests} onTabChange={handleTabChange} />;
+        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
         return <FinanceDashboard requests={requests} />;
@@ -1393,18 +3770,35 @@ const App: React.FC = () => {
       case 'past-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <PastRequestsView requests={requests.filter(r => r.requesterId === currentUser.id)} onView={setSelectedRequest} />;
+      case 'mail-templates':
+        return <MailTemplatesView currentUserRole={currentUser.role} />;
       case 'requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <AdminQueueView requests={requests} onView={setSelectedRequest} />;
+        // Filter out rejected and closed requests from queue
+        const activeRequests = requests.filter((r: TravelRequest) =>
+          r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER &&
+          r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
+          r.pncStatus !== PNCStatus.CLOSED
+        );
+        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} />;
+      case 'all-requests':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} />;
       case 'verification':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VerificationQueue users={users} onUpdateUser={handleUpdateUser} />;
       case 'policies':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <PolicyManagement policy={policy} setPolicy={setPolicy} />;
+        return <PolicyManagement
+          policy={policy}
+          setPolicy={setPolicy}
+          travelModePolicies={travelModePolicies}
+          setTravelModePolicies={setTravelModePolicies}
+          users={users}
+        />;
       case 'role-management':
-        if (currentUser.role !== UserRole.ADMIN) return renderDashboard();
-        return <UserRoleManagement users={users} onUpdateUser={handleUpdateUser} />;
+        if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
+        return <UserRoleManagement users={users} onUpdateUser={handleUpdateUser} currentUser={currentUser} />;
       case 'profile':
         return (
           <div className="max-w-4xl mx-auto transition-all duration-300">
@@ -1413,6 +3807,72 @@ const App: React.FC = () => {
         );
       case 'settings':
         return <SettingsView isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />;
+      case 'approvals':
+        if (currentUser.role === UserRole.EMPLOYEE) {
+          const pendingApprovals = requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING);
+          return <ManagerApprovalsView
+            requests={pendingApprovals}
+            currentUser={currentUser}
+            onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus) => {
+              try {
+                const { error } = await supabase
+                  .from('travel_requests')
+                  .update({
+                    pnc_status: newStatus,
+                    timeline: [...updatedReq.timeline, {
+                      id: Date.now().toString(),
+                      timestamp: new Date().toISOString(),
+                      actor: currentUser.name,
+                      event: `Status changed to: ${newStatus}`,
+                      details: 'Manager Action'
+                    }]
+                  })
+                  .eq('id', updatedReq.id);
+
+                if (error) throw error;
+
+                const updated = {
+                  ...updatedReq,
+                  pncStatus: newStatus,
+                  timeline: [...updatedReq.timeline, {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    actor: currentUser.name,
+                    event: `Status changed to: ${newStatus}`,
+                    details: 'Manager Action'
+                  }]
+                };
+
+                setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
+                toast.success(`Request ${newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'}`);
+                if (pendingApprovals.length <= 1) handleTabChange('dashboard'); // Go back if no more
+              } catch (e: any) {
+                toast.error("Failed to update: " + e.message);
+              }
+            }}
+          />;
+        }
+        return renderDashboard();
+      case 'igathpuri-meetup':
+        return <IgathpuriMeetupView
+          onNewRequest={(context?: any) => {
+            setMeetupContext(context);
+            setIsNewRequestModalOpen(true);
+          }}
+          onCheckAvailability={() => setIsMeetupAvailabilityModalOpen(true)}
+          availabilityRequests={meetupAvailabilityRequests}
+          currentUser={currentUser}
+          onViewProfile={() => handleTabChange('profile')}
+          requests={requests}
+          onView={(r: TravelRequest) => {
+            setSelectedRequest(r);
+          }}
+        />;
+      case 'meetup-approvals':
+        return <MeetupApprovalsView
+          requests={meetupAvailabilityRequests}
+          onUpdate={handleUpdateMeetupRequest}
+        />;
       default:
         return null;
     }
@@ -1450,7 +3910,7 @@ const App: React.FC = () => {
     );
   }
 
-  if (isLoading) return <SkeletonDashboard />;
+  if (isLoading) return <LoadingView />;
 
   if (isLocked) {
     return (
@@ -1497,6 +3957,25 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">My Space</p>
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />
+                {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+                  <SidebarLink
+                    icon="fa-file-signature"
+                    label="Approvals"
+                    active={activeTab === 'approvals'}
+                    onClick={() => handleTabChange('approvals')}
+                    badge={requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                  />
+                )}
+                {isMeetupApprover && (
+                  <SidebarLink
+                    icon="fa-calendar-check"
+                    label="Meetup Approvals"
+                    active={activeTab === 'meetup-approvals'}
+                    onClick={() => handleTabChange('meetup-approvals')}
+                    badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
+                  />
+                )}
               </div>
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">Account</p>
@@ -1509,12 +3988,34 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">Operations</p>
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                <SidebarLink
+                  icon="fa-calendar-plus"
+                  label="Self Booking"
+                  active={false}
+                  onClick={() => setIsPNCBookingModalOpen(true)}
+                  badge={<i className="fa-solid fa-plus text-xs"></i>}
+                  badgeColor="bg-blue-600 w-5 h-5 flex items-center justify-center !p-0"
+                />
                 <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
+                <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
+                <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />
+                {isMeetupApprover && (
+                  <SidebarLink
+                    icon="fa-calendar-check"
+                    label="Meetup Approvals"
+                    active={activeTab === 'meetup-approvals'}
+                    onClick={() => handleTabChange('meetup-approvals')}
+                    badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
+                  />
+                )}
+                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC) && (
+                  <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
+                )}
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC) && (
                   <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 )}
-                {currentUser.role === UserRole.ADMIN && (
+                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC) && (
                   <>
                     <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                     <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
@@ -1535,12 +4036,39 @@ const App: React.FC = () => {
         </main>
       </div>
 
+      {isMeetupAvailabilityModalOpen && (
+        <IgathpuriAvailabilityModal
+          onClose={() => setIsMeetupAvailabilityModalOpen(false)}
+          currentUser={currentUser!}
+          onSubmit={handleMeetupAvailabilitySubmit}
+        />
+      )}
+
       {isNewRequestModalOpen && (
         <NewRequestModal
-          onClose={() => setIsNewRequestModalOpen(false)}
+          onClose={() => {
+            setIsNewRequestModalOpen(false);
+            setMeetupContext(null);
+          }}
           currentUser={currentUser!}
+          policies={travelModePolicies}
+          meetupContext={meetupContext}
           onSubmit={async (data: any) => {
             try {
+              // Create temporary request object to check for violations
+              const tempRequest: TravelRequest = {
+                ...data,
+                id: 'temp',
+                timestamp: new Date().toISOString(),
+                tripType: data.tripType,
+                mode: data.mode,
+                from: data.from,
+                to: data.to,
+                dateOfTravel: data.dateOfTravel,
+              } as TravelRequest;
+
+              const isViolated = checkPolicyViolation(tempRequest, travelModePolicies);
+
               const newRequest = {
                 requester_id: currentUser!.id,
                 requester_name: data.requesterName || currentUser!.name,
@@ -1555,13 +4083,12 @@ const App: React.FC = () => {
                 travel_mode: data.mode,
                 from_location: data.from,
                 to_location: data.to,
-                date_of_travel: data.dateOfTravel,
+                date_of_travel: data.dateOfTravel || null,
                 preferred_departure_window: data.preferredDepartureWindow,
-                return_date: data.returnDate,
+                return_date: data.returnDate || null,
                 return_preferred_departure_window: data.returnPreferredDepartureWindow,
                 number_of_travelers: data.numberOfTravelers,
                 traveller_names: data.travellerNames,
-                contact_numbers: data.contactNumbers,
                 priority: data.priority || Priority.MEDIUM,
                 special_requirements: data.specialRequirements,
                 emergency_contact_name: data.emergencyContactName,
@@ -1571,7 +4098,10 @@ const App: React.FC = () => {
                 medical_conditions: data.medicalConditions,
                 approval_status: ApprovalStatus.PENDING,
                 pnc_status: PNCStatus.NOT_STARTED,
-                timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }]
+                timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }],
+                has_violation: isViolated,
+                violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                booked_by: 'PNC' // Standard requests are processed by PNC
               };
 
               const { data: inserted, error } = await supabase
@@ -1584,8 +4114,8 @@ const App: React.FC = () => {
 
               // Re-fetch or add to state
               setRequests(prev => [{
-                ...data,
                 id: inserted.id,
+                submissionId: inserted.submission_id,
                 timestamp: inserted.created_at,
                 requesterId: inserted.requester_id,
                 requesterName: inserted.requester_name,
@@ -1606,7 +4136,6 @@ const App: React.FC = () => {
                 returnPreferredDepartureWindow: inserted.return_preferred_departure_window,
                 numberOfTravelers: inserted.number_of_travelers,
                 travellerNames: inserted.traveller_names,
-                contactNumbers: inserted.contact_numbers,
                 priority: inserted.priority,
                 specialRequirements: inserted.special_requirements,
                 approvalStatus: inserted.approval_status,
@@ -1629,10 +4158,161 @@ const App: React.FC = () => {
       )}
 
       {selectedRequest && (
-        <RequestDetailOverlay request={selectedRequest} role={currentUser.role} onClose={() => setSelectedRequest(null)} onUpdate={(updated: any) => {
-          setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
-          toast.success("Request updated");
-        }} />
+        <RequestDetailOverlay
+          request={selectedRequest}
+          role={currentUser.role}
+          policies={travelModePolicies}
+          onClose={() => setSelectedRequest(null)}
+          onUpdate={async (updated: any) => {
+            try {
+              // Check if status actually changed
+              const statusChanged = updated.pncStatus !== selectedRequest.pncStatus;
+
+              // Create new timeline entry if status changed
+              const newTimeline = statusChanged
+                ? [
+                  ...updated.timeline,
+                  {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    actor: currentUser.name,
+                    event: `Status changed to: ${updated.pncStatus}`,
+                    details: updated.statusChangeReason || undefined
+                  }
+                ]
+                : updated.timeline;
+
+              // Update in database
+              const { error } = await supabase
+                .from('travel_requests')
+                .update({
+                  pnc_status: updated.pncStatus,
+                  timeline: newTimeline,
+                  ticket_cost: updated.ticketCost,
+                  vendor_name: updated.vendorName,
+                  invoice_url: updated.invoiceUrl
+                })
+                .eq('id', updated.id);
+
+              if (error) throw error;
+
+              // Update local state
+              const updatedRequest = { ...updated, timeline: newTimeline };
+              setRequests(prev => prev.map(r => r.id === updated.id ? updatedRequest : r));
+              setSelectedRequest(updatedRequest);
+
+              toast.success(statusChanged ? "Status updated and logged to timeline" : "Request updated");
+            } catch (error: any) {
+              console.error('Error updating request:', error);
+              toast.error("Failed to update request: " + error.message);
+            }
+          }}
+        />
+      )}
+
+      {isPNCBookingModalOpen && (
+        <PNCBookingModal
+          onClose={() => setIsPNCBookingModalOpen(false)}
+          currentUser={currentUser!}
+          employees={users} // Pass all users for selection
+          policies={travelModePolicies}
+          onSubmit={async (data: any) => {
+            try {
+              let invoiceUrl = null;
+
+              // Upload Ticket First
+              if (data.invoiceFile) {
+                const fileExt = data.invoiceFile.name.split('.').pop();
+                const fileName = `pnc_self_booking_${Date.now()}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage
+                  .from('invoices')
+                  .upload(fileName, data.invoiceFile);
+
+                if (uploadError) throw uploadError;
+                const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(fileName);
+                invoiceUrl = urlData.publicUrl;
+              }
+
+              const newRequest = {
+                requester_id: data.requesterId,
+                requester_name: data.requesterName,
+                requester_email: data.requesterEmail,
+                requester_phone: data.requesterPhone,
+                requester_department: data.requesterDepartment,
+                requester_campus: data.requesterCampus,
+
+                purpose: data.purpose,
+                approving_manager_name: data.approvingManagerName,
+                approving_manager_email: data.approvingManagerEmail,
+
+                trip_type: data.tripType,
+                travel_mode: data.mode,
+                from_location: data.from,
+                to_location: data.to,
+                date_of_travel: data.dateOfTravel,
+                // preferred_departure_window is removed in this flow
+
+                return_date: data.returnDate || null,
+
+                number_of_travelers: 1,
+                traveller_names: data.travellerNames,
+                priority: Priority.MEDIUM, // Default
+
+                approval_status: ApprovalStatus.APPROVED, // Auto-approved since PNC is booking
+                pnc_status: PNCStatus.CLOSED, // Closed immediately as details are entered
+
+                ticket_cost: parseFloat(data.ticketCost),
+                vendor_name: data.vendorName,
+                invoice_url: invoiceUrl,
+                booked_by: 'SELF', // Booking handled by employee directly
+
+                timeline: [
+                  { id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Travel Recorded (Self Booking)' },
+                  { id: '2', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Booking Details Uploaded' }
+                ]
+              };
+
+              const { data: inserted, error } = await supabase
+                .from('travel_requests')
+                .insert(newRequest)
+                .select()
+                .single();
+
+              if (error) throw error;
+
+              toast.success("Past booking recorded successfully!");
+              setIsPNCBookingModalOpen(false);
+
+              // Refresh requests
+              setRequests(prev => [
+                // Map inserted record to local format (simplified mapping for immediate UI update)
+                {
+                  ...newRequest,
+                  id: inserted.id,
+                  submissionId: inserted.submission_id,
+                  timestamp: inserted.created_at,
+                  requesterId: newRequest.requester_id,
+                  requesterName: newRequest.requester_name,
+                  requesterEmail: newRequest.requester_email,
+                  tripType: newRequest.trip_type,
+                  mode: newRequest.travel_mode,
+                  from: newRequest.from_location,
+                  to: newRequest.to_location,
+                  dateOfTravel: newRequest.date_of_travel,
+                  pncStatus: PNCStatus.CLOSED,
+                  ticketCost: newRequest.ticket_cost,
+                  vendorName: newRequest.vendor_name,
+                  invoiceUrl: newRequest.invoice_url
+                } as any,
+                ...prev
+              ]);
+
+            } catch (err: any) {
+              console.error(err);
+              toast.error("Failed to record booking: " + err.message);
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -1640,10 +4320,20 @@ const App: React.FC = () => {
 
 // --- Shared Display Sub-components ---
 
-const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, completeness, onViewProfile, user }: any) => {
+const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, completeness, onViewProfile, user, meetupRequests = [], onNavigateToMeetup }: { requests: TravelRequest[], onNewRequest: (context?: any) => void, onView: (r: TravelRequest) => void, isWarningVisible: boolean, completeness: number, onViewProfile: () => void, user: User, meetupRequests: MeetupAvailabilityRequest[], onNavigateToMeetup: () => void }) => {
   const welcomeNote = useMemo(() => WELCOME_NOTES[Math.floor(Math.random() * WELCOME_NOTES.length)], []);
-  const activeRequests = requests.filter((r: TravelRequest) => r.pncStatus !== PNCStatus.BOOKED_AND_CLOSED && r.pncStatus !== PNCStatus.REJECTED_PNC);
-  const closedRequests = requests.filter((r: TravelRequest) => r.pncStatus === PNCStatus.BOOKED_AND_CLOSED || r.pncStatus === PNCStatus.REJECTED_PNC);
+  const activeRequests = requests.filter((r: TravelRequest) =>
+    r.pncStatus !== PNCStatus.BOOKED &&
+    r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
+    r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER &&
+    r.pncStatus !== PNCStatus.CLOSED
+  );
+  const closedRequests = requests.filter((r: TravelRequest) =>
+    r.pncStatus === PNCStatus.BOOKED ||
+    r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
+    r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+    r.pncStatus === PNCStatus.CLOSED
+  );
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 transition-all">
@@ -1666,7 +4356,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
       </header>
 
       {completeness < 100 && (
-        <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-8 rounded-[2rem] shadow-2xl shadow-indigo-200 dark:shadow-none relative overflow-hidden group border border-white/10">
+        <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-8 rounded-2xl shadow-2xl shadow-indigo-200 dark:shadow-none relative overflow-hidden group border border-white/10">
           <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-125 group-hover:rotate-12 transition-all duration-700 pointer-events-none">
             <i className="fa-solid fa-user-astronaut text-9xl"></i>
           </div>
@@ -1690,6 +4380,44 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
         </div>
       )}
 
+      {/* Meetup Notification Card */}
+      {meetupRequests.filter((mr: MeetupAvailabilityRequest) =>
+        mr.isFinalized &&
+        mr.attendeeEmails?.some(email => email.toLowerCase() === user?.email?.toLowerCase()) &&
+        !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER)
+      ).map((mr: MeetupAvailabilityRequest) => (
+        <div key={mr.id} className="bg-gradient-to-r from-emerald-500 to-teal-600 p-1 rounded-3xl shadow-xl shadow-emerald-500/20 animate-in slide-in-from-top-4 duration-500">
+          <div className="bg-white dark:bg-slate-900 rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center text-2xl shadow-inner">
+                <i className="fa-solid fa-map-location-dot"></i>
+              </div>
+              <div>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Igatpuri Meetup Visit</h4>
+                <p className="text-sm text-slate-500 font-bold mt-1">
+                  You have been added to a meetup request from <span className="text-emerald-600 underline">{mr.fullName}</span>
+                </p>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                    <i className="fa-solid fa-calendar-day text-[10px] text-emerald-500"></i>
+                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase">{new Date(mr.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(mr.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2 text-right">
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full mb-1">Fill in your details for your Igatpuri visit</p>
+              <button
+                onClick={() => onNewRequest({ startDate: mr.startDate, endDate: mr.endDate })}
+                className="bg-emerald-600 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all w-full md:w-auto"
+              >
+                Book Now! <i className="fa-solid fa-plane-departure ml-2"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
       <div className="space-y-6">
         <div className="flex items-center gap-3 px-1">
           <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center"><i className="fa-solid fa-calendar-check"></i></div>
@@ -1698,27 +4426,35 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
 
         {activeRequests.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 transition-all">
-            {activeRequests.map((r: TravelRequest) => (
-              <div key={r.id} onClick={() => onView(r)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-7 rounded-[1.8rem] hover:shadow-2xl hover:border-indigo-500/50 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 -mr-8 -mt-8 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
-                <div className="flex justify-between items-start mb-6 relative z-10">
-                  <span className="text-xs font-black text-indigo-500/60 font-mono tracking-tighter uppercase">{r.id}</span>
-                  <StatusBadge type="pnc" value={r.pncStatus} />
+            {activeRequests.map((r: TravelRequest) => {
+              const isMeetup = r.purpose === 'Igatpuri Meetup';
+              return (
+                <div key={r.id} onClick={() => onView(r)} className={`bg-white dark:bg-slate-900 border ${isMeetup ? 'border-emerald-200 dark:border-emerald-800 shadow-sm' : 'border-slate-200 dark:border-slate-800'} p-4 rounded-2xl hover:shadow-lg ${isMeetup ? 'hover:border-emerald-500/50' : 'hover:border-indigo-500/50'} hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden`}>
+                  <div className={`absolute top-0 right-0 w-20 h-20 ${isMeetup ? 'bg-emerald-500/5' : 'bg-indigo-500/5'} -mr-6 -mt-6 rounded-full group-hover:scale-150 transition-transform duration-700`}></div>
+                  <div className="flex justify-between items-start mb-2 relative z-10">
+                    <span className={`text-[10px] font-black ${isMeetup ? 'text-emerald-500/60' : 'text-indigo-500/60'} font-mono tracking-tighter uppercase`}>{r.submissionId || r.id}</span>
+                    <div className="scale-90 origin-right">
+                      <StatusBadge type="pnc" value={r.pncStatus} />
+                    </div>
+                  </div>
+                  <h4 className={`font-black text-lg mb-0.5 text-slate-900 dark:text-white ${isMeetup ? 'group-hover:text-emerald-600' : 'group-hover:text-indigo-600'} transition-colors uppercase tracking-tight leading-tight`}>{r.from} → {r.to}</h4>
+                  <p className="text-xs text-slate-500 mb-3 font-bold flex items-center gap-1.5">
+                    <i className="fa-solid fa-calendar-day text-[10px] text-slate-300"></i>
+                    {new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center relative z-10">
+                    <div className={`flex items-center gap-1.5 text-slate-400 ${isMeetup ? 'group-hover:text-emerald-500' : 'group-hover:text-indigo-500'} transition-colors`}>
+                      <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane-departure' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-xs`}></i>
+                      <span className="text-[10px] font-bold uppercase tracking-wider">{r.mode}</span>
+                    </div>
+                    <div className={`w-6 h-6 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-300 ${isMeetup ? 'group-hover:bg-emerald-600' : 'group-hover:bg-indigo-600'} group-hover:text-white transition-all`}><i className="fa-solid fa-arrow-right text-[10px]"></i></div>
+                  </div>
                 </div>
-                <h4 className="font-black text-xl mb-1 text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{r.from} → {r.to}</h4>
-                <p className="text-sm text-slate-500 mb-6 font-bold flex items-center gap-2">
-                  <i className="fa-solid fa-calendar-day text-xs text-slate-300"></i>
-                  {new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                </p>
-                <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center relative z-10">
-                  <StatusBadge type="priority" value={r.priority} />
-                  <div className="w-8 h-8 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-300 group-hover:bg-indigo-600 group-hover:text-white transition-all"><i className="fa-solid fa-arrow-right text-xs"></i></div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div className="py-20 text-center space-y-5 bg-white/50 dark:bg-slate-900/30 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] transition-colors">
+          <div className="py-20 text-center space-y-5 bg-white/50 dark:bg-slate-900/30 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl transition-colors">
             <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto text-slate-300 text-3xl shadow-inner"><i className="fa-solid fa-passport"></i></div>
             <div>
               <h3 className="font-black text-slate-500 dark:text-slate-400 text-lg">No active travel requests</h3>
@@ -1734,12 +4470,12 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
           <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg flex items-center justify-center"><i className="fa-solid fa-history"></i></div>
           <h3 className="text-xl font-bold text-slate-800 dark:text-white">Past Requests</h3>
         </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] overflow-hidden shadow-sm transition-all">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-all">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b dark:border-slate-800">
-                  <th className="px-8 py-6">Trip ID</th>
+                  <th className="px-8 py-6">Request ID</th>
                   <th className="px-8 py-6">Destination</th>
                   <th className="px-8 py-6">Travel Date</th>
                   <th className="px-8 py-6">Status</th>
@@ -1747,22 +4483,28 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-800">
-                {closedRequests.map((r: any) => (
-                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                    <td className="px-8 py-5 font-mono text-xs font-black text-indigo-500 group-hover:scale-105 transition-transform origin-left">{r.id}</td>
-                    <td className="px-8 py-5">
-                      <p className="font-bold text-slate-800 dark:text-white">{r.to}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{r.mode}</p>
-                    </td>
-                    <td className="px-8 py-5 text-sm font-bold text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
-                    <td className="px-8 py-5"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                    <td className="px-8 py-5 text-right">
-                      <button onClick={() => onView(r)} className="w-10 h-10 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all text-slate-300 hover:text-indigo-600 shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-slate-100 dark:hover:border-slate-600">
-                        <i className="fa-solid fa-arrow-right-long text-sm"></i>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {closedRequests.map((r: any) => {
+                  const isMeetup = r.purpose === 'Igatpuri Meetup';
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                      <td className={`px-8 py-5 font-mono text-xs font-black ${isMeetup ? 'text-emerald-500' : 'text-indigo-500'} group-hover:scale-105 transition-transform origin-left flex items-center gap-2`}>
+                        {isMeetup && <i className="fa-solid fa-star text-[8px] animate-pulse"></i>}
+                        {r.submissionId || r.id}
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className={`font-bold ${isMeetup ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}`}>{r.to}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{r.mode}</p>
+                      </td>
+                      <td className="px-8 py-5 text-sm font-bold text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
+                      <td className="px-8 py-5"><StatusBadge type="pnc" value={r.pncStatus} /></td>
+                      <td className="px-8 py-5 text-right">
+                        <button onClick={() => onView(r)} className={`w-10 h-10 ${isMeetup ? 'hover:bg-emerald-50 text-emerald-300 hover:text-emerald-600' : 'hover:bg-white dark:hover:bg-slate-700 text-slate-300 hover:text-indigo-600'} rounded-full transition-all shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-slate-100 dark:hover:border-slate-600`}>
+                          <i className="fa-solid fa-arrow-right-long text-sm"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1990,52 +4732,312 @@ const SettingsView = ({ isDarkMode, onToggleTheme }: any) => (
 
 // --- Simplified Skeletons/Wizards ---
 
-const SkeletonDashboard = () => (
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all duration-300">
-    {[1, 2, 3, 4, 5, 6].map(i => (
-      <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl animate-pulse space-y-4 transition-colors duration-300">
-        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/3 transition-colors duration-300"></div>
-        <div className="h-8 bg-slate-100 dark:bg-slate-800 rounded w-full transition-colors duration-300"></div>
-        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-2/3 transition-colors duration-300"></div>
-      </div>
-    ))}
-  </div>
-);
+const LoadingView = () => {
+  const [slideIndex, setSlideIndex] = useState(0);
 
-const AdminQueueView = ({ requests, onView }: any) => (
-  <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
-    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Booking Queue</h2>
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors duration-300">
-      <table className="w-full text-left">
-        <thead className="bg-slate-50 dark:bg-slate-800 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">ID</th><th className="px-6 py-5">Traveler</th><th className="px-6 py-5">Route</th><th className="px-6 py-5">Status</th></tr></thead>
-        <tbody className="divide-y dark:divide-slate-800 transition-colors duration-300">
-          {requests.map((r: any) => (
-            <tr key={r.id} onClick={() => onView(r)} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors duration-300 group">
-              <td className="px-6 py-4 font-mono text-xs font-bold text-indigo-600 transition-colors duration-300">{r.id}</td>
-              <td className="px-6 py-4 font-bold text-slate-800 dark:text-white transition-colors duration-300">{r.requesterName}</td>
-              <td className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors duration-300">{r.from} → {r.to}</td>
-              <td className="px-6 py-4 transition-colors duration-300"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % 5);
+    }, 750);
+    return () => clearInterval(timer);
+  }, []);
+
+  const renderContent = () => {
+    switch (slideIndex) {
+      case 0:
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-rose-500 text-white animate-in slide-in-from-right duration-500">
+            <i className="fa-solid fa-heart text-2xl"></i>
+          </div>
+        );
+      case 1:
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-indigo-600 text-white animate-in slide-in-from-right duration-500">
+            <span className="font-black text-2xl">N</span>
+          </div>
+        );
+      case 2:
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-sky-500 text-white animate-in slide-in-from-right duration-500">
+            <i className="fa-solid fa-plane text-2xl"></i>
+          </div>
+        );
+      case 3:
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-emerald-500 text-white animate-in slide-in-from-right duration-500">
+            <i className="fa-solid fa-train text-2xl"></i>
+          </div>
+        );
+      case 4:
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white animate-in slide-in-from-right duration-500">
+            <i className="fa-solid fa-bus text-2xl"></i>
+          </div>
+        );
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950 animate-in fade-in duration-500">
+      <div className="flex flex-col items-center gap-8">
+        <div className="relative">
+          {/* Spinning Rings */}
+          <div className="absolute -inset-4 rounded-full border-4 border-slate-200 dark:border-slate-800"></div>
+          <div className={`absolute -inset-4 rounded-full border-4 border-t-transparent animate-spin transition-colors duration-500 ${slideIndex === 0 ? 'border-rose-500' :
+            slideIndex === 1 ? 'border-indigo-600' :
+              slideIndex === 2 ? 'border-sky-500' :
+                slideIndex === 3 ? 'border-emerald-500' :
+                  'border-amber-500'
+            }`}></div>
+
+          {/* Icon Slider Window */}
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-2xl shadow-indigo-600/30 relative z-10 bg-white dark:bg-slate-900">
+            {renderContent()}
+          </div>
+        </div>
+
+        <div className="text-center space-y-2">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Navgurukul Travel Desk</h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading...</p>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+const AdminQueueView = ({ requests, onView, showAll = false, policies = [] }: any) => {
+  const [selectedFilter, setSelectedFilter] = useState<PNCStatus | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  // Filter requests based on selected stage
+  const filteredRequests = (selectedFilter === 'all'
+    ? requests
+    : requests.filter((r: TravelRequest) => r.pncStatus === selectedFilter)
+  ).sort((a, b) => {
+    const dateA = new Date(a.timestamp).getTime();
+    const dateB = new Date(b.timestamp).getTime();
+    return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const paginatedRequests = filteredRequests.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to page 1 when filter changes
+  const handleFilterChange = (filter: PNCStatus | 'all') => {
+    setSelectedFilter(filter);
+    setCurrentPage(1);
+  };
+
+  // Get available stages (only active ones for queue, all for all-requests)
+  const availableStages = showAll
+    ? [
+      { status: PNCStatus.NOT_STARTED, label: 'Not Started', color: 'slate' },
+      { status: PNCStatus.APPROVAL_PENDING, label: 'Pending Approval', color: 'amber' },
+      { status: PNCStatus.APPROVED, label: 'Approved', color: 'emerald' },
+      { status: PNCStatus.PROCESSING, label: 'Processing', color: 'indigo' },
+      { status: PNCStatus.BOOKED, label: 'Booked', color: 'blue' },
+      { status: PNCStatus.REJECTED_BY_MANAGER, label: 'Rejected (Mgr)', color: 'rose' },
+      { status: PNCStatus.REJECTED_BY_PNC, label: 'Rejected (PNC)', color: 'red' },
+      { status: PNCStatus.CLOSED, label: 'Closed', color: 'slate' },
+    ]
+    : [
+      { status: PNCStatus.NOT_STARTED, label: 'Not Started', color: 'slate' },
+      { status: PNCStatus.APPROVAL_PENDING, label: 'Pending Approval', color: 'amber' },
+      { status: PNCStatus.APPROVED, label: 'Approved', color: 'emerald' },
+      { status: PNCStatus.PROCESSING, label: 'Processing', color: 'indigo' },
+      { status: PNCStatus.BOOKED, label: 'Booked', color: 'blue' },
+    ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">{showAll ? 'All Requests' : 'Booking Queue'}</h2>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Stage Filter - Dropdown for All Requests, Buttons for Queue */}
+          {showAll ? (
+            <div className="relative">
+              <select
+                value={selectedFilter}
+                onChange={(e) => handleFilterChange(e.target.value as PNCStatus | 'all')}
+                className="px-4 py-2 pr-10 rounded-lg text-xs font-bold uppercase tracking-wide bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-600 focus:border-indigo-600 focus:outline-none transition-all cursor-pointer appearance-none"
+              >
+                <option value="all">All Requests ({requests.length})</option>
+                {availableStages.map(stage => {
+                  const count = requests.filter((r: TravelRequest) => r.pncStatus === stage.status).length;
+                  return (
+                    <option key={stage.status} value={stage.status}>
+                      {stage.label} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleFilterChange('all')}
+                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${selectedFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+              >
+                All ({requests.length})
+              </button>
+              {availableStages.map(stage => {
+                const count = requests.filter((r: TravelRequest) => r.pncStatus === stage.status).length;
+                return (
+                  <button
+                    key={stage.status}
+                    onClick={() => handleFilterChange(stage.status)}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${selectedFilter === stage.status
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                  >
+                    {stage.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Sort Buttons */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            <button
+              onClick={() => setSortOrder('newest')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'newest'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
+                }`}
+            >
+              <i className="fa-solid fa-arrow-down-short-wide mr-1.5"></i>
+              Newest
+            </button>
+            <button
+              onClick={() => setSortOrder('oldest')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'oldest'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
+                }`}
+            >
+              <i className="fa-solid fa-arrow-up-short-wide mr-1.5"></i>
+              Oldest
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors duration-300">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Request ID</th><th className="px-6 py-5">Traveler</th><th className="px-6 py-5">Route</th><th className="px-6 py-5">Status</th></tr></thead>
+          <tbody className="divide-y dark:divide-slate-800 transition-colors duration-300">
+            {paginatedRequests.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-16 text-center text-slate-400 font-medium">
+                  No requests found for this filter.
+                </td>
+              </tr>
+            ) : (
+              paginatedRequests.map((r: any) => {
+                const isViolated = r.hasViolation || (policies.length > 0 ? checkPolicyViolation(r, policies) : false);
+                return (
+                  <tr key={r.id} onClick={() => onView(r)} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors duration-300 group">
+                    <td className="px-6 py-4 font-mono text-xs font-bold text-indigo-600 transition-colors duration-300">{r.submissionId || r.id}</td>
+                    <td className="px-6 py-4 font-bold text-slate-800 dark:text-white transition-colors duration-300">{r.requesterName}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors duration-300">{r.from} → {r.to}</td>
+                    <td className="px-6 py-4 transition-colors duration-300 flex items-center gap-2">
+                      <StatusBadge type="pnc" value={r.pncStatus} />
+                      {isViolated && (
+                        <div className="group/violation relative">
+                          <i className="fa-solid fa-triangle-exclamation text-rose-500 animate-pulse"></i>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover/violation:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                            Policy Violation
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+
+        {/* Pagination Controls */}
+        {filteredRequests.length > 0 && (
+          <div className="px-6 py-4 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Items per page:</span>
+              {[5, 10, 25].map(size => (
+                <button
+                  key={size}
+                  onClick={() => {
+                    setItemsPerPage(size);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${itemsPerPage === size
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <i className="fa-solid fa-chevron-left"></i>
+              </button>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-300 px-4">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <i className="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const PastRequestsView = ({ requests, onView }: any) => {
-  const closedRequests = requests.filter((r: any) => r.pncStatus === PNCStatus.BOOKED_AND_CLOSED || r.pncStatus === PNCStatus.REJECTED_PNC);
+  const closedRequests = requests.filter((r: any) =>
+    r.pncStatus === PNCStatus.BOOKED ||
+    r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
+    r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+    r.pncStatus === PNCStatus.CLOSED
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
       <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Past Requests</h2>
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors duration-300">
         <table className="w-full text-left">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Trip ID</th><th className="px-6 py-5">Destination</th><th className="px-6 py-5 text-right">Action</th></tr></thead>
+          <thead className="bg-slate-50 dark:bg-slate-800 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Request ID</th><th className="px-6 py-5">Destination</th><th className="px-6 py-5 text-right">Action</th></tr></thead>
           <tbody className="divide-y dark:divide-slate-800 transition-colors duration-300">
             {closedRequests.map((r: any) => (
               <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-300">
-                <td className="px-6 py-4 font-mono text-xs font-bold text-indigo-600 transition-colors duration-300">{r.id}</td>
+                <td className="px-6 py-4 font-mono text-xs font-bold text-indigo-600 transition-colors duration-300">{r.submissionId || r.id}</td>
                 <td className="px-6 py-4 font-bold text-slate-800 dark:text-white transition-colors duration-300">{r.to}</td>
                 <td className="px-6 py-4 text-right pr-6 transition-colors duration-300"><button onClick={() => onView(r)} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors duration-300 text-slate-300 hover:text-indigo-600"><i className="fa-solid fa-circle-info text-lg"></i></button></td>
               </tr>
@@ -2052,59 +5054,346 @@ const PastRequestsView = ({ requests, onView }: any) => {
 
 
 
-const RequestDetailOverlay = ({ request, role, onClose, onUpdate }: any) => {
+const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] }: any) => {
+  const isPolicyViolated = request.hasViolation || (policies.length > 0 ? checkPolicyViolation(request, policies) : false);
   const [status, setStatus] = useState(request.pncStatus);
+  const [statusChangeReason, setStatusChangeReason] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
+
+  // Booking Details State
+  const [ticketCost, setTicketCost] = useState(request.ticketCost || '');
+  const [vendorName, setVendorName] = useState(request.vendorName || '');
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Helper for file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setInvoiceFile(e.target.files[0]);
+    }
+  };
+
+  const handleUpdate = async () => {
+    try {
+      let finalStatus = status;
+
+
+
+      setIsUploading(true);
+      let invoiceUrl = request.invoiceUrl;
+
+      if (invoiceFile && status === PNCStatus.BOOKED) {
+        const fileExt = invoiceFile.name.split('.').pop();
+        const fileName = `${request.id}_invoice_${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('invoices')
+          .upload(fileName, invoiceFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('invoices').getPublicUrl(fileName);
+        invoiceUrl = data.publicUrl;
+      }
+
+      // Auto-close if all details are present
+      if (status === PNCStatus.BOOKED && ticketCost && vendorName && invoiceUrl) {
+        finalStatus = PNCStatus.CLOSED;
+        toast.success("All booking details verified. Request automatically closed!");
+      }
+
+      await onUpdate({
+        ...request,
+        pncStatus: finalStatus,
+        statusChangeReason: finalStatus === PNCStatus.CLOSED ? (statusChangeReason || 'Auto-closed after booking details completed') : statusChangeReason,
+        ticketCost: status === PNCStatus.BOOKED ? parseFloat(ticketCost) : request.ticketCost,
+        vendorName: status === PNCStatus.BOOKED ? vendorName : request.vendorName,
+        invoiceUrl: status === PNCStatus.BOOKED ? invoiceUrl : request.invoiceUrl
+      });
+
+      setIsUploading(false);
+    } catch (error: any) {
+      setIsUploading(false);
+      console.error("Update failed:", error);
+      toast.error("Failed to update request: " + error.message);
+    }
+  };
+
+  const InfoRow = ({ label, value, icon, fullWidth = false }: any) => (
+    <div className={`${fullWidth ? 'col-span-2' : ''} space-y-1`}>
+      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+        {icon && <span className="opacity-50">{icon}</span>}
+        {label}
+      </p>
+      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate-none h-auto min-h-[1.25rem]">
+        {value || '—'}
+      </p>
+    </div>
+  );
+
+  const SectionHeader = ({ title, icon }: any) => (
+    <div className="flex items-center gap-2 pb-2 border-b dark:border-slate-800 mb-4 mt-6 first:mt-0">
+      <span className="text-indigo-600 dark:text-indigo-400">{icon}</span>
+      <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">{title}</h4>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end transition-all duration-300">
       <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-all duration-300" onClick={onClose}></div>
-      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 h-full p-10 flex flex-col space-y-10 animate-in slide-in-from-right transition-all duration-300 shadow-2xl overflow-y-auto custom-scrollbar border-l border-white/10">
-        <header className="flex justify-between items-center transition-colors duration-300">
-          <div className="flex items-center gap-3 transition-colors duration-300">
-            <span className="w-3 h-3 rounded-full bg-indigo-600 animate-pulse"></span>
-            <h3 className="text-2xl font-black font-mono text-indigo-600 tracking-tighter transition-colors duration-300">{request.id}</h3>
+      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full flex flex-col animate-in slide-in-from-right transition-all duration-300 shadow-2xl border-l border-white/10">
+
+        {/* Header */}
+        <header className="px-6 py-4 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
+            <h3 className="text-lg font-black font-mono text-indigo-600 tracking-tight">{request.submissionId || request.id}</h3>
+            <StatusBadge type="pnc" value={request.pncStatus} />
+            <StatusBadge type="priority" value={request.priority} />
+            {isPolicyViolated && (
+              <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-3 py-1 rounded-full text-xs font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
+                <i className="fa-solid fa-triangle-exclamation"></i>
+                Policy Violation
+              </div>
+            )}
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors duration-300"><i className="fa-solid fa-xmark text-slate-400 text-xl"></i></button>
+          <button onClick={onClose} className="w-9 h-9 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
         </header>
 
-        <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl space-y-8 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors duration-300">
-          <div className="flex items-center gap-5 transition-colors duration-300">
-            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center font-bold text-indigo-600 shadow-sm border dark:border-slate-700 text-2xl transition-all duration-300">
-              {request.requesterName?.charAt(0) || 'U'}
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors duration-300">Traveler</p>
-              <p className="font-bold text-2xl text-slate-900 dark:text-white transition-all">{request.requesterName}</p>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 md:p-10 custom-scrollbar space-y-10">
+
+          {/* Main Stats Header */}
+          <div className="bg-indigo-600 rounded-2xl p-5 text-white shadow-lg shadow-indigo-600/20 relative overflow-hidden">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-wide mb-1 opacity-75">{request.mode}</p>
+                <h4 className="text-xl font-black tracking-tight">{request.from} → {request.to}</h4>
+              </div>
+              <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
+                <p className="text-indigo-100 text-[9px] font-bold uppercase tracking-wider mb-0.5">Departure</p>
+                <p className="text-sm font-black">{new Date(request.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-10 pt-4 transition-all duration-300 border-t dark:border-slate-700/50">
-            <div><p className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors duration-300">Origin</p><p className="font-bold text-xl text-slate-700 dark:text-slate-300 transition-all">{request.from}</p></div>
-            <div><p className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors duration-300">Destination</p><p className="font-bold text-xl text-slate-700 dark:text-slate-300 transition-all">{request.to}</p></div>
-          </div>
-          <div className="pt-4 transition-colors duration-300 border-t dark:border-slate-700/50">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors duration-300">Travel Purpose</p>
-            <p className="text-base font-medium leading-relaxed text-slate-600 dark:text-slate-300 mt-3 p-5 bg-white dark:bg-slate-900 rounded-xl italic border border-slate-100 dark:border-slate-800 transition-all shadow-sm">"{request.purpose}"</p>
+
+          <div className="grid grid-cols-2 gap-x-8 gap-y-8">
+            {/* Traveler & Org Details */}
+            <div className="col-span-2">
+              <SectionHeader title="Traveler Details" icon={<i className="fa-solid fa-user-circle"></i>} />
+              <div className="grid grid-cols-2 gap-y-6">
+                <InfoRow label="Full Name" value={request.requesterName} icon={<i className="fa-solid fa-signature"></i>} />
+                <InfoRow label="Email Address" value={request.requesterEmail} icon={<i className="fa-solid fa-envelope"></i>} />
+                <InfoRow label="Phone Number" value={request.requesterPhone} icon={<i className="fa-solid fa-phone"></i>} />
+                <InfoRow label="Dept / Campus" value={`${request.requesterDepartment || '—'} / ${request.requesterCampus || '—'}`} icon={<i className="fa-solid fa-building"></i>} />
+              </div>
+            </div>
+
+            {/* Trip Specifics */}
+            <div className="col-span-2">
+              <SectionHeader title="Logistics & Preferences" icon={<i className="fa-solid fa-route"></i>} />
+              <div className="grid grid-cols-2 gap-y-6">
+                <InfoRow label="Trip Type" value={request.tripType} icon={<i className="fa-solid fa-arrows-left-right"></i>} />
+                <InfoRow label="Travel Mode" value={request.mode} icon={<i className="fa-solid fa-train"></i>} />
+                <InfoRow label="Preferred Window" value={request.preferredDepartureWindow} icon={<i className="fa-solid fa-clock"></i>} />
+                <InfoRow label="Traveling Staff" value={request.travellerNames} icon={<i className="fa-solid fa-users"></i>} />
+
+                {request.tripType === TripType.ROUND_TRIP && (
+                  <>
+                    <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
+                    <InfoRow label="Return Date" value={request.returnDate ? new Date(request.returnDate).toLocaleDateString() : '—'} icon={<i className="fa-solid fa-calendar"></i>} />
+                    <InfoRow label="Return Window" value={request.returnPreferredDepartureWindow} icon={<i className="fa-solid fa-clock"></i>} />
+                  </>
+                )}
+
+                <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
+                <InfoRow label="Travel Purpose" value={request.purpose} fullWidth icon={<i className="fa-solid fa-bullseye"></i>} />
+                <InfoRow label="Special Requirements" value={request.specialRequirements} fullWidth icon={<i className="fa-solid fa-hand-holding-heart"></i>} />
+
+                <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
+                <div className="col-span-2 space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <i className={`fa-solid ${isPolicyViolated ? 'fa-triangle-exclamation text-rose-500' : 'fa-check-circle text-emerald-500'} opacity-70`}></i>
+                    Policy Compliance
+                  </p>
+                  <p className={`text-sm font-bold ${isPolicyViolated ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {isPolicyViolated ? (request.violationDetails || 'Advance booking policy violation') : 'No Violation'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Booking Details (If Booked) */}
+            {(request.pncStatus === PNCStatus.BOOKED || request.pncStatus === PNCStatus.CLOSED) && (
+              <div className="col-span-2">
+                <SectionHeader title="Booking Confirmation" icon={<i className="fa-solid fa-check-circle"></i>} />
+                <div className="grid grid-cols-2 gap-y-6 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800/20">
+                  <InfoRow label="Ticket Cost" value={`₹ ${request.ticketCost}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} />
+                  <InfoRow label="Vendor" value={request.vendorName} icon={<i className="fa-solid fa-shop"></i>} />
+                  {request.invoiceUrl ? (
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
+                        <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
+                      </p>
+                      <a href={request.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                        View Ticket <i className="fa-solid fa-external-link-alt text-[10px]"></i>
+                      </a>
+                    </div>
+                  ) : (
+                    <InfoRow label="Ticket" value="Not Uploaded" icon={<i className="fa-solid fa-file-invoice"></i>} />
+                  )}
+                </div>
+              </div>
+            )}
+
+
+            {/* Manager Details */}
+            <div className="col-span-2">
+              <SectionHeader title="Professional Oversight" icon={<i className="fa-solid fa-user-tie"></i>} />
+              <div className="grid grid-cols-2 gap-y-6">
+                <InfoRow label="Approving Manager" value={request.approvingManagerName} icon={<i className="fa-solid fa-id-badge"></i>} />
+                <InfoRow label="Manager Email" value={request.approvingManagerEmail} icon={<i className="fa-solid fa-at"></i>} />
+              </div>
+            </div>
+
+            {/* Emergency & Medical */}
+            <div className="col-span-2">
+              <SectionHeader title="Emergency & Health" icon={<i className="fa-solid fa-heart-pulse"></i>} />
+              <div className="grid grid-cols-2 gap-y-6">
+                <InfoRow label="Emergency Contact" value={`${request.emergencyContactName || '—'} (${request.emergencyContactRelation || '—'})`} icon={<i className="fa-solid fa-contact-book"></i>} />
+                <InfoRow label="Contact Phone" value={request.emergencyContactPhone} icon={<i className="fa-solid fa-mobile-screen"></i>} />
+                <InfoRow label="Blood Group" value={request.bloodGroup} icon={<i className="fa-solid fa-droplet"></i>} />
+                <InfoRow label="Medical Conditions" value={request.medicalConditions} icon={<i className="fa-solid fa-notes-medical"></i>} />
+              </div>
+            </div>
+
+            {/* Timeline / History */}
+            <div className="col-span-2 pt-6">
+              <SectionHeader title="Process Timeline" icon={<i className="fa-solid fa-clock-rotate-left"></i>} />
+              <div className="space-y-6 ml-1 flex flex-col">
+                {request.timeline?.map((event: any, idx: number) => (
+                  <div key={idx} className="flex gap-4 group">
+                    <div className="flex flex-col items-center">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-indigo-500/10 z-10"></div>
+                      {idx !== request.timeline.length - 1 && <div className="w-0.5 flex-1 bg-slate-100 dark:bg-slate-800"></div>}
+                    </div>
+                    <div className="pb-6">
+                      <p className="text-xs font-black text-slate-900 dark:text-white mb-1 uppercase tracking-tight">{event.event}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-indigo-500/60 font-mono tracking-tighter">{new Date(event.timestamp).toLocaleString()}</span>
+                        <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">by {event.actor}</span>
+                      </div>
+                      {event.details && <p className="text-xs text-slate-500 mt-2 font-medium">{event.details}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {role === UserRole.PNC ? (
-          <div className="space-y-6 pt-10 border-t dark:border-slate-800 mt-auto transition-colors duration-300">
-            <div className="space-y-3 transition-colors duration-300">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1 transition-colors duration-300">Update Booking Status</label>
+        {/* Footer Actions */}
+        <div className="p-8 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20">
+          {role === UserRole.PNC ? (
+            <div className="space-y-3">
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
+
               <div className="relative">
-                <select className="w-full border-2 border-slate-100 dark:border-slate-800 dark:bg-slate-800 p-4 rounded-xl font-bold focus:border-indigo-600 outline-none transition-all appearance-none cursor-pointer text-base text-slate-800 dark:text-white shadow-sm" value={status} onChange={e => setStatus(e.target.value as any)}>
+                <select
+                  className="w-full h-11 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all appearance-none cursor-pointer shadow-sm"
+                  value={status}
+                  onChange={e => setStatus(e.target.value as any)}
+                >
                   {Object.values(PNCStatus).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><i className="fa-solid fa-chevron-down"></i></div>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                  <i className="fa-solid fa-chevron-down text-xs"></i>
+                </div>
               </div>
+
+              {/* Conditional Inputs for Booked Status */}
+              {status === PNCStatus.BOOKED && (
+                <div className="space-y-3 animate-in slide-in-from-top-2 pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Ticket Cost (₹)</label>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm focus:border-indigo-600 outline-none"
+                        value={ticketCost}
+                        onChange={e => setTicketCost(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Vendor Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Indigo"
+                        className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm focus:border-indigo-600 outline-none"
+                        value={vendorName}
+                        onChange={e => setVendorName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Upload Ticket</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.png,.jpeg"
+                      onChange={handleFileChange}
+                      className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowNotes(!showNotes)}
+                className="w-full text-left px-4 py-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
+              >
+                <i className={`fa-solid fa-chevron-${showNotes ? 'up' : 'down'} text-[10px]`}></i>
+                {showNotes ? 'Hide' : 'Add'} Notes / Reason (Optional)
+              </button>
+
+              {showNotes && (
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <textarea
+                    className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
+                    rows={3}
+                    placeholder="Add context for this status change (e.g., reason for rejection, booking details, etc.)"
+                    value={statusChangeReason}
+                    onChange={e => setStatusChangeReason(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={handleUpdate}
+                disabled={isUploading}
+                className="w-full bg-indigo-600 text-white h-11 rounded-xl font-bold uppercase tracking-wide text-[11px] shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploading ? (
+                  <>
+                    <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> Processing...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-check mr-2"></i> Update & Log
+                  </>
+                )}
+              </button>
             </div>
-            <button onClick={() => onUpdate({ ...request, pncStatus: status })} className="w-full bg-indigo-600 text-white py-5 rounded-xl font-bold shadow-2xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all text-sm uppercase tracking-widest">Apply Booking Update</button>
-          </div>
-        ) : (
-          <div className="mt-auto p-8 bg-slate-50 dark:bg-slate-800/80 rounded-2xl text-center border border-slate-100 dark:border-slate-800 transition-colors duration-300">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 transition-colors duration-300">Request Status</p>
-            <StatusBadge type="pnc" value={request.pncStatus} />
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center justify-center gap-2 py-2">
+              <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
+              <StatusBadge type="pnc" value={request.pncStatus} />
+              <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

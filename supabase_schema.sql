@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- 2. Travel Requests Table
 CREATE TABLE IF NOT EXISTS public.travel_requests (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  submission_id TEXT,
+  submission_id TEXT UNIQUE, -- Automatically generated via trigger
   requester_id UUID REFERENCES public.profiles(id),
   requester_name TEXT,
   requester_email TEXT,
@@ -62,6 +62,54 @@ CREATE TABLE IF NOT EXISTS public.travel_requests (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 2b. Request Counters for Readable IDs
+CREATE TABLE IF NOT EXISTS public.request_counters (
+  date_code TEXT, -- YYMMDD
+  trip_type TEXT, -- O or R
+  last_seq INT DEFAULT 0,
+  PRIMARY KEY (date_code, trip_type)
+);
+
+-- 2c. Function to generate readable Submission ID (TRV-[TripType]-[YYMMDD]-[Sequence])
+CREATE OR REPLACE FUNCTION generate_submission_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    trip_code TEXT;
+    date_str TEXT;
+    seq_num INT;
+BEGIN
+    -- 1. Determine Trip Code
+    IF NEW.trip_type = 'One-way' THEN
+        trip_code := 'O';
+    ELSIF NEW.trip_type = 'Round-trip' THEN
+        trip_code := 'R';
+    ELSE
+        trip_code := 'X'; -- Fallback
+    END IF;
+
+    -- 2. Get Date String (YYMMDD) - System Date
+    date_str := to_char(CURRENT_DATE, 'YYMMDD');
+
+    -- 3. Get Atomic Sequence (daily reset per trip type)
+    INSERT INTO public.request_counters (date_code, trip_type, last_seq)
+    VALUES (date_str, trip_code, 1)
+    ON CONFLICT (date_code, trip_type)
+    DO UPDATE SET last_seq = request_counters.last_seq + 1
+    RETURNING last_seq INTO seq_num;
+
+    -- 4. Format the final ID: TRV-[Type]-[YYMMDD]-[00Seq]
+    NEW.submission_id := 'TRV-' || trip_code || '-' || date_str || '-' || LPAD(seq_num::TEXT, 3, '0');
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- 2d. Trigger to auto-generate submission_id before insert
+CREATE OR REPLACE TRIGGER trg_generate_submission_id
+BEFORE INSERT ON public.travel_requests
+FOR EACH ROW
+EXECUTE FUNCTION generate_submission_id();
+
 -- 3. Trigger for new auth users to create a profile
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -80,14 +128,18 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.travel_requests ENABLE ROW LEVEL SECURITY;
 
--- Profiles: Users can see/update their own; Admins see/update all
+-- Profiles: Users can see/update their own; Staff can view all; Admins/PNC update all
 CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins view all profiles" ON public.profiles FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
+
+-- Staff (Admin/PNC) can view all profiles
+CREATE POLICY "Staff view all profiles" ON public.profiles FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC'))
 );
-CREATE POLICY "Admins update all profiles" ON public.profiles FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
+
+-- Admin can update anything, PNC can update profiles (checks role in UI)
+CREATE POLICY "Staff update all profiles" ON public.profiles FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC'))
 );
 
 -- Requests: Employee sees own, Admin/PNC/Finance see all

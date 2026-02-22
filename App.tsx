@@ -119,13 +119,6 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile }: { curren
               currentUser.name.charAt(0)
             )}
           </button>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-rose-600 transition-colors"
-            title="Sign Out"
-          >
-            <i className="fa-solid fa-right-from-bracket text-lg"></i>
-          </button>
         </div>
       </div>
     </nav >
@@ -2252,7 +2245,7 @@ const SubHeader = ({ title }: { title: string }) => (
   </div>
 );
 
-const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip }: any) => {
+const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, onToggleTheme, onLogout }: any) => {
   const [formData, setFormData] = useState(user);
 
   // Sync internal state if prop changes (important for role toggles)
@@ -2396,8 +2389,30 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip }: any) => {
         </div>
 
         <div className="flex-1 text-center md:text-left space-y-2">
-          <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{isLock ? 'Getting Started' : 'Account Profile'}</h2>
-          <p className="text-slate-500 text-sm font-medium">{isLock ? 'Please complete your profile to enable travel booking features.' : 'Maintain your personal, professional and identity information.'}</p>
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{isLock ? 'Getting Started' : 'Account Profile'}</h2>
+              <p className="text-slate-500 text-sm font-medium">{isLock ? 'Please complete your profile to enable travel booking features.' : 'Maintain your personal, professional and identity information.'}</p>
+            </div>
+            {!isLock && (
+              <div className="flex items-center gap-3 self-center md:self-start">
+                <button
+                  onClick={onToggleTheme}
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-200 dark:hover:border-indigo-800 rounded-xl transition-all shadow-sm active:scale-95"
+                  title="Toggle Theme"
+                >
+                  {isDarkMode ? <i className="fa-solid fa-sun text-lg"></i> : <i className="fa-solid fa-moon text-lg"></i>}
+                </button>
+                <button
+                  onClick={onLogout}
+                  className="px-5 py-2.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                >
+                  <i className="fa-solid fa-right-from-bracket"></i>
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="mt-6">
             <div className="flex justify-between items-end mb-2">
@@ -2606,6 +2621,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip }: any) => {
             </div>
           </div>
         </div>
+
 
         <div className="pt-8 border-t dark:border-slate-800">
           <button onClick={handleSave} className="w-full bg-indigo-600 text-white py-4 rounded-[1.25rem] font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:translate-y-0 active:scale-95 transition-all">Save Profile Changes</button>
@@ -3812,7 +3828,7 @@ const App: React.FC = () => {
       case 'profile':
         return (
           <div className="max-w-4xl mx-auto transition-all duration-300">
-            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} />
+            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => supabase.auth.signOut()} />
           </div>
         );
       case 'settings':
@@ -3987,11 +4003,7 @@ const App: React.FC = () => {
                   />
                 )}
               </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
-                <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
-                <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
-              </div>
+
             </>
           )}
 
@@ -4032,11 +4044,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
               </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
-                <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
-                <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
-              </div>
+
             </>
           )}
 
@@ -4048,11 +4056,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
               </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
-                <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
-                <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
-              </div>
+
             </>
           )}
 
@@ -4070,11 +4074,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
               </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">ACCOUNT</p>
-                <SidebarLink icon="fa-sliders" label="Settings" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
-                <SidebarLink icon="fa-user-pen" label="Edit Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
-              </div>
+
             </>
           )}
         </aside>

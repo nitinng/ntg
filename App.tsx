@@ -3311,7 +3311,12 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [requests, setRequests] = useState<TravelRequest[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('activeTab') || 'dashboard');
+
+  useEffect(() => {
+    sessionStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
@@ -3420,7 +3425,7 @@ const App: React.FC = () => {
           id: profile.id,
           name: profile.name || session.user.email?.split('@')[0],
           email: profile.email,
-          role: profile.role || UserRole.EMPLOYEE,
+          role: (sessionStorage.getItem('currentRole') as UserRole) || UserRole.EMPLOYEE,
           department: profile.department,
           campus: profile.campus,
           managerName: profile.manager_name,
@@ -3892,7 +3897,7 @@ const App: React.FC = () => {
       case 'profile':
         return (
           <div className="max-w-4xl mx-auto transition-all duration-300">
-            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => supabase.auth.signOut()} />
+            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} />
           </div>
         );
       case 'settings':
@@ -3993,7 +3998,7 @@ const App: React.FC = () => {
           <p className="text-slate-500 font-medium">We couldn't load your profile. This might be due to a database sync issue or incorrect permissions.</p>
           <div className="flex flex-col gap-3 pt-4">
             <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all">Retry Connection</button>
-            <button onClick={() => supabase.auth.signOut()} className="text-slate-400 hover:text-slate-600 text-xs font-bold uppercase tracking-widest transition-all">Sign Out & Try Again</button>
+            <button onClick={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); supabase.auth.signOut(); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold uppercase tracking-widest transition-all">Sign Out & Try Again</button>
           </div>
         </div>
       </div>
@@ -4012,7 +4017,7 @@ const App: React.FC = () => {
             <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">Navgurukul Travel Desk</h1>
           </div>
           <button
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); supabase.auth.signOut(); }}
             className="text-xs font-bold text-slate-400 hover:text-rose-600 uppercase tracking-widest transition-all duration-300 px-3 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg"
           >
             Sign Out
@@ -4036,6 +4041,7 @@ const App: React.FC = () => {
       <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
       <Navbar currentUser={currentUser!} baseRole={baseRole} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onToggleRole={(r) => {
         // Mock role toggle for demo, usually role is static from DB
+        sessionStorage.setItem('currentRole', r);
         setCurrentUser(prev => prev ? { ...prev, role: r } : null);
         handleTabChange('dashboard');
       }} onOpenProfile={() => handleTabChange('profile')} />

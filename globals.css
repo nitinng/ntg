@@ -51,6 +51,10 @@
 }
 
 
+html {
+    font-size: 90%;
+}
+
 body {
     font-size: var(--text-base);
     line-height: var(--leading-relaxed);
@@ -191,4 +195,56 @@ small,
 
 .slide-in-from-bottom-4 {
     animation: slide-in-from-bottom 0.4s ease-out;
+}
+
+/* --- Responsive Media Queries --- */
+
+@media (max-width: 768px) {
+
+    /* Top navigation bar should remain fixed and not overflow */
+    .app-navbar {
+        position: fixed !important;
+        top: 0 !important;
+        width: 100% !important;
+        z-index: 50 !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Fixed top nav pushes content down */
+    .flex-1.flex.flex-col.md\:flex-row {
+        margin-top: 4rem !important;
+        /* Height of the navbar */
+    }
+
+    /* Sidebar navigation collapse into a hamburger menu */
+    .app-sidebar {
+        position: fixed !important;
+        top: 4rem !important;
+        /* Below navbar */
+        left: -100% !important;
+        width: 250px !important;
+        height: calc(100vh - 4rem) !important;
+        z-index: 45 !important;
+        display: block !important;
+        transition: left 0.3s ease-in-out !important;
+        margin: 0 !important;
+    }
+
+    .app-sidebar.sidebar-open {
+        left: 0 !important;
+        box-shadow: 10px 0 20px rgba(0, 0, 0, 0.1);
+    }
+}
+
+@media (max-width: 480px) {
+
+    /* Dashboard content area should have appropriate padding on smaller screens */
+    .app-main {
+        padding: 1.25rem 1rem !important;
+    }
+
+    /* All booking cards should stack vertically in a single column on mobile instead of the current 3-column grid */
+    .app-main .grid {
+        grid-template-columns: 1fr !important;
+    }
 }

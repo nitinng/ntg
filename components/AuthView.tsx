@@ -19,6 +19,51 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
     const [isSocialLoading, setIsSocialLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [slideIndex, setSlideIndex] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setSlideIndex((prev) => (prev + 1) % 5);
+        }, 750);
+        return () => clearInterval(timer);
+    }, []);
+
+    const renderIconContent = () => {
+        switch (slideIndex) {
+            case 0:
+                return (
+                    <div className="w-full h-full flex items-center justify-center bg-rose-500 text-white animate-in slide-in-from-right duration-500">
+                        <i className="fa-solid fa-heart text-2xl"></i>
+                    </div>
+                );
+            case 1:
+                return (
+                    <div className="w-full h-full flex items-center justify-center bg-indigo-600 text-white animate-in slide-in-from-right duration-500">
+                        <span className="font-black text-2xl">N</span>
+                    </div>
+                );
+            case 2:
+                return (
+                    <div className="w-full h-full flex items-center justify-center bg-sky-500 text-white animate-in slide-in-from-right duration-500">
+                        <i className="fa-solid fa-plane text-2xl"></i>
+                    </div>
+                );
+            case 3:
+                return (
+                    <div className="w-full h-full flex items-center justify-center bg-emerald-500 text-white animate-in slide-in-from-right duration-500">
+                        <i className="fa-solid fa-train text-2xl"></i>
+                    </div>
+                );
+            case 4:
+                return (
+                    <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white animate-in slide-in-from-right duration-500">
+                        <i className="fa-solid fa-bus text-2xl"></i>
+                    </div>
+                );
+            default: return null;
+        }
+    };
+
     // Sync mode if initialMode changes externally (e.g. from App.tsx recovery event)
     useEffect(() => {
         setMode(initialMode);
@@ -98,7 +143,9 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
             <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-500">
                 <div className="p-8 md:p-10">
                     <header className="text-center mb-8">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-indigo-600/30 mb-6 transition-transform hover:scale-105">N</div>
+                        <div className="w-16 h-16 rounded-2xl mx-auto overflow-hidden shadow-xl shadow-indigo-600/30 mb-6 transition-transform hover:scale-105 bg-white dark:bg-slate-900">
+                            {renderIconContent()}
+                        </div>
                         <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                             {mode === 'login' && 'Welcome Back'}
                             {mode === 'signup' && 'Create Account'}

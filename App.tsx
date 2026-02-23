@@ -1075,16 +1075,18 @@ const IgathpuriMeetupView = ({
 
   // Find if there's an approved availability request for this user
   const userRequests = availabilityRequests.filter(r => r.profileId === currentUser?.id);
-  const attendeeRequests = availabilityRequests.filter(r => r.isFinalized && r.attendeeEmails?.some(email => email.toLowerCase() === currentUser?.email?.toLowerCase()));
 
-  const approvedRequest = userRequests.find(r => r.status === 'Approved');
+  // Ongoing request for the stepper (not yet finalized)
+  const ongoingRequest = userRequests.find(r => r.status === 'Approved' && !r.isFinalized);
+
+  // Active meetup (finalized for requester OR you are an attendee)
+  const activeMeetup = userRequests.find(r => r.status === 'Approved' && r.isFinalized) ||
+    availabilityRequests.find(r => r.isFinalized && r.attendeeEmails?.some(email => email.toLowerCase() === currentUser?.email?.toLowerCase()));
+
+  const approvedRequest = ongoingRequest; // Stepper uses this
   const pendingRequest = userRequests.find(r => r.status === 'Pending');
   const isAvailabilityApproved = !!approvedRequest;
   const isAvailabilityPending = !!pendingRequest;
-
-  // Check if user is an attendee of a finalized request
-  const isAttendeeOfConfirmedMeetup = attendeeRequests.length > 0;
-  const activeAttendeeRequest = attendeeRequests[0];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1122,13 +1124,13 @@ const IgathpuriMeetupView = ({
   }, []);
 
   useEffect(() => {
-    if (isAvailabilityApproved && approvedRequest?.attendeeEmails?.length > 0) {
+    if (activeMeetup?.attendeeEmails?.length > 0) {
       const fetchStats = async () => {
         try {
           const { data, error } = await supabase
             .from('travel_requests')
             .select('requester_email, requester_name, pnc_status')
-            .in('requester_email', approvedRequest.attendeeEmails)
+            .in('requester_email', activeMeetup.attendeeEmails)
             .eq('purpose', 'Igatpuri Meetup');
 
           if (!error && data) {
@@ -1136,10 +1138,10 @@ const IgathpuriMeetupView = ({
             const bookedCount = data.filter((r: any) =>
               r.pnc_status === PNCStatus.BOOKED || r.pnc_status === PNCStatus.CLOSED
             ).length;
-            setAttendeeStats({ filled: filledCount, booked: bookedCount, total: approvedRequest.attendeeEmails.length });
+            setAttendeeStats({ filled: filledCount, booked: bookedCount, total: activeMeetup.attendeeEmails.length });
 
             // Generate detailed list
-            const details = approvedRequest.attendeeEmails.map(email => {
+            const details = activeMeetup.attendeeEmails.map(email => {
               const req = data.find((r: any) => r.requester_email.toLowerCase() === email.toLowerCase());
               return {
                 email,
@@ -1155,23 +1157,27 @@ const IgathpuriMeetupView = ({
         }
       };
       fetchStats();
+    } else {
+      setAttendeeStats({ filled: 0, booked: 0, total: 0 });
+      setAttendeeDetails([]);
     }
-  }, [isAvailabilityApproved, approvedRequest?.attendeeEmails, isRequestSubmitted]);
+  }, [activeMeetup?.id, activeMeetup?.attendeeEmails, isRequestSubmitted]);
 
   useEffect(() => {
     if (approvedRequest) {
       if (approvedRequest.attendeeEmails && approvedRequest.attendeeEmails.length > 0) {
         setAttendeeEmails(approvedRequest.attendeeEmails);
         setIsAttendeesConfirmed(true);
-      } else if (attendeeEmails.length !== approvedRequest.teamSize) {
-        setAttendeeEmails(new Array(approvedRequest.teamSize).fill(""));
+      } else if (attendeeEmails.length !== (approvedRequest.teamSize || 0)) {
+        setAttendeeEmails(new Array(approvedRequest.teamSize || 0).fill(""));
       }
-
-      if (approvedRequest.isFinalized) {
-        setIsRequestSubmitted(true);
-      }
+    } else {
+      // Reset stepper local state if no ongoing request
+      setIsAttendeesConfirmed(false);
+      setIsRequestSubmitted(false);
+      setAttendeeEmails([]);
     }
-  }, [approvedRequest]);
+  }, [approvedRequest?.id]);
 
   const handleConfirmAttendees = async () => {
     if (!approvedRequest) return;
@@ -1241,87 +1247,53 @@ const IgathpuriMeetupView = ({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-8">
-          {isAttendeeOfConfirmedMeetup && !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER) && (
-            <Card className="p-8 border-2 border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xl shadow-emerald-500/5">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="flex items-start gap-6">
-                  <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-[2rem] flex items-center justify-center text-3xl shadow-inner shrink-0">
-                    <i className="fa-solid fa-plane-circle-check"></i>
+          {/* Active Meetup Booking Card */}
+          {activeMeetup && (
+            <Card className="p-8 border-2 border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xl shadow-emerald-500/5 relative group overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 -mr-20 -mt-20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
+
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                <div className="flex items-center gap-6">
+                  <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-3xl flex items-center justify-center text-3xl shadow-inner group-hover:rotate-6 transition-transform">
+                    <i className="fa-solid fa-hotel"></i>
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-lg">Participation Confirmed</span>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 bg-emerald-200 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg">Active Booking</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">• {activeMeetup.teamSize} PAX</span>
                     </div>
-                    <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">Ready for your visit?</h3>
-                    <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-md text-sm">
-                      A visit to Igatpuri has been finalized by <span className="text-slate-900 dark:text-white font-bold">{activeAttendeeRequest.fullName}</span>. Please ensure your profile is complete with ID proof so the travel desk can book your tickets.
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight uppercase tracking-tight">Igathpuri Campus Visit</h3>
+                    <p className="text-sm font-bold text-slate-500 mt-1 flex items-center gap-2">
+                      <i className="fa-solid fa-calendar-days text-emerald-500/50"></i>
+                      {new Date(activeMeetup.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(activeMeetup.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-col gap-3 w-full md:w-auto">
-                  <button
-                    onClick={() => onNewRequest({ startDate: activeAttendeeRequest.startDate, endDate: activeAttendeeRequest.endDate })}
-                    className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all text-center whitespace-nowrap"
-                  >
-                    Book Now! <i className="fa-solid fa-plane-departure ml-2"></i>
-                  </button>
-                </div>
+
+                {/* Requester Stats or Participant CTA */}
+                {activeMeetup.profileId === currentUser?.id ? (
+                  <div className="flex gap-4 w-full md:w-auto">
+                    <div onClick={() => setActiveStatModal('completion')} className="flex-1 md:flex-initial px-6 py-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 cursor-pointer hover:border-emerald-400 transition-all text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Forms</p>
+                      <p className="text-xl font-black text-emerald-600">{attendeeStats.filled}/{attendeeStats.total}</p>
+                    </div>
+                    <div onClick={() => setActiveStatModal('booking')} className="flex-1 md:flex-initial px-6 py-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 cursor-pointer hover:border-emerald-400 transition-all text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tickets</p>
+                      <p className="text-xl font-black text-emerald-600">{attendeeStats.booked}/{attendeeStats.total}</p>
+                    </div>
+                  </div>
+                ) : (
+                  !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER) && (
+                    <button
+                      onClick={() => onNewRequest({ startDate: activeMeetup.startDate, endDate: activeMeetup.endDate })}
+                      className="w-full md:w-auto px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all text-center"
+                    >
+                      Complete Your Travel Request <i className="fa-solid fa-arrow-right ml-2"></i>
+                    </button>
+                  )
+                )}
               </div>
             </Card>
-          )}
-
-          {isAvailabilityApproved && isRequestSubmitted && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <Card
-                onClick={() => setActiveStatModal('completion')}
-                className="p-6 bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900/50 border-2 border-indigo-100 dark:border-indigo-900/30 cursor-pointer hover:border-indigo-400 transition-all group"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
-                    <i className="fa-solid fa-file-invoice"></i>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Form Completion</h4>
-                    <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{attendeeStats.filled}/{attendeeStats.total}</p>
-                  </div>
-                </div>
-                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 transition-all duration-1000"
-                    style={{ width: `${(attendeeStats.filled / attendeeStats.total) * 100 || 0}%` }}
-                  ></div>
-                </div>
-                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest flex justify-between">
-                  <span>{Math.round((attendeeStats.filled / attendeeStats.total) * 100) || 0}% attendees filled form</span>
-                  <span className="text-indigo-400 group-hover:translate-x-1 transition-transform">View Details <i className="fa-solid fa-chevron-right ml-1"></i></span>
-                </p>
-              </Card>
-
-              <Card
-                onClick={() => setActiveStatModal('booking')}
-                className="p-6 bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-900/50 border-2 border-emerald-100 dark:border-emerald-900/30 cursor-pointer hover:border-emerald-400 transition-all group"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
-                    <i className="fa-solid fa-ticket"></i>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Tickets Booked</h4>
-                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{attendeeStats.booked}/{attendeeStats.total}</p>
-                  </div>
-                </div>
-                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-1000"
-                    style={{ width: `${(attendeeStats.booked / attendeeStats.total) * 100 || 0}%` }}
-                  ></div>
-                </div>
-                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest flex justify-between">
-                  <span>{Math.round((attendeeStats.booked / attendeeStats.total) * 100) || 0}% tickets issued</span>
-                  <span className="text-emerald-400 group-hover:translate-x-1 transition-transform">View Details <i className="fa-solid fa-chevron-right ml-1"></i></span>
-                </p>
-              </Card>
-            </div>
           )}
 
           {/* Stat Detail Modals */}
@@ -1344,7 +1316,7 @@ const IgathpuriMeetupView = ({
                       {activeStatModal === 'completion' ? 'Form Completion Status' : 'Ticket Booking Status'}
                     </h3>
                     <p className="text-xs text-slate-500 font-bold mt-2 uppercase tracking-widest">
-                      Showing status for {approvedRequest?.teamSize || 0} attendees
+                      Showing status for {activeMeetup?.teamSize || 0} attendees
                     </p>
                   </header>
 
@@ -1440,8 +1412,8 @@ const IgathpuriMeetupView = ({
             </div>
           ))}
 
-          {/* Show Guidelines and Process if the user is the requester OR if there is no confirmed meetup yet */}
-          {(isAvailabilityApproved || isAvailabilityPending || !isAttendeeOfConfirmedMeetup) && (
+          {/* Show Guidelines and Process (Always shown, reset state derived from ongoingRequest) */}
+          <div className="space-y-8">
             <div className="space-y-8">
               <Card className="p-8 space-y-6">
                 <header className="flex items-center gap-3 border-b dark:border-slate-800 pb-6">
@@ -1582,7 +1554,7 @@ const IgathpuriMeetupView = ({
 
               {isCalendarEnabled && <LocationCalendar />}
             </div>
-          )}
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -2992,9 +2964,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                   <th className="px-6 py-4">Route</th>
                   <th className="px-6 py-4">Date</th>
                   <th className="px-6 py-4">Status</th>
-                  {isFinancialView && <th className="px-6 py-4">Cost</th>}
-                  {isFinancialView && <th className="px-6 py-4">Vendor</th>}
-                  {isFinancialView && <th className="px-6 py-4">Ticket</th>}
+                  <th className="px-6 py-4">Ticket</th>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-800">
@@ -3008,15 +2978,15 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
                     <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                    {isFinancialView && <td className="px-6 py-4 font-mono text-slate-700 dark:text-slate-300">₹ {r.ticketCost || 0}</td>}
-                    {isFinancialView && <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.vendorName || '-'}</td>}
-                    {isFinancialView && (
-                      <td className="px-6 py-4 text-xs font-mono text-slate-500">
-                        <a href={r.invoiceUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">
+                    <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                      {(r.invoiceUrl || r.ticketUrl) ? (
+                        <a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">
                           View Ticket <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                         </a>
-                      </td>
-                    )}
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

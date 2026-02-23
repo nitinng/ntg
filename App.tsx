@@ -1607,7 +1607,7 @@ const IgathpuriMeetupView = ({
   );
 };
 
-const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users }: any) => {
+const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled }: any) => {
   const handleUpdateMinAdvanceDays = async (mode: string, days: number) => {
     try {
       const { data, error } = await supabase
@@ -1650,7 +1650,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
           supabase
             .from('meetup_settings')
             .select('*')
-            .in('setting_key', ['total_seats', 'is_capacity_enabled', 'is_calendar_enabled'])
+            .in('setting_key', ['total_seats', 'is_capacity_enabled', 'is_calendar_enabled', 'is_igatpuri_enabled'])
         ]);
 
         if (approversRes.error) throw approversRes.error;
@@ -1681,10 +1681,12 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
           const seats = settingsRes.data.find((s: any) => s.setting_key === 'total_seats');
           const enabled = settingsRes.data.find((s: any) => s.setting_key === 'is_capacity_enabled');
           const calendar = settingsRes.data.find((s: any) => s.setting_key === 'is_calendar_enabled');
+          const igatpuri = settingsRes.data.find((s: any) => s.setting_key === 'is_igatpuri_enabled');
 
           if (seats) setTotalSeats(Number(seats.setting_value));
           if (enabled) setIsCapacityEnabled(enabled.setting_value === true || enabled.setting_value === 'true');
           if (calendar) setIsCalendarEnabled(calendar.setting_value === true || calendar.setting_value === 'true');
+          if (igatpuri) setIsIgatpuriEnabled(igatpuri.setting_value === true || igatpuri.setting_value === 'true');
         }
       } catch (err: any) {
         toast.error('Failed to load data: ' + err.message);
@@ -1751,6 +1753,26 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
     }
   };
 
+  const handleToggleIgatpuri = async () => {
+    const newState = !isIgatpuriEnabled;
+    setIsIgatpuriEnabled(newState);
+    try {
+      const { error } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'is_igatpuri_enabled',
+          setting_value: newState,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      toast.success(`Igatpuri Meetup ${newState ? 'enabled' : 'disabled'}`);
+    } catch (err: any) {
+      toast.error("Failed to update status: " + err.message);
+      setIsIgatpuriEnabled(!newState); // revert
+    }
+  };
+
   const handleAddApprover = async (userToAdd: any) => {
     setIsAddingApprover(true);
     try {
@@ -1801,7 +1823,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
 
   const pncUsers = useMemo(() => {
     return users.filter((u: any) =>
-      u.role === UserRole.PNC &&
+      (u.role === UserRole.PNC || u.role === UserRole.ADMIN) &&
       !meetupApprovers.some(a => a.email.toLowerCase() === u.email.toLowerCase())
     );
   }, [users, meetupApprovers]);
@@ -1815,295 +1837,309 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
   }, [pncUsers, pncSearch]);
 
   return (
-    <div className="max-w-4xl space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl space-y-12 animate-in fade-in duration-500 pb-20">
       <header>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Policy Configuration</h2>
-        <p className="text-slate-500 text-sm mt-1">Define global constraints and automated guardrails.</p>
+        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Policy Management</h2>
+        <p className="text-slate-500 text-sm mt-1 font-medium">Configure global system constraints and location-specific settings.</p>
       </header>
 
-      <Card className="p-8 space-y-8">
-        <div className="space-y-6">
-          <h4 className="font-bold text-slate-800 dark:text-white border-b pb-2 dark:border-slate-800">Minimum Advance Booking (Days)</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {travelModePolicies && travelModePolicies.length > 0 ? (
-              travelModePolicies.map((p: any) => (
-                <div key={p.id} className="bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500/30 transition-all duration-300 group">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="font-black text-sm text-slate-700 dark:text-slate-300 uppercase tracking-wider">{p.travelMode}</span>
-                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 shadow-sm">
-                      <i className={`fa-solid ${p.travelMode === 'Flight' ? 'fa-plane' :
-                        p.travelMode === 'Train' ? 'fa-train' : 'fa-bus'
-                        }`}></i>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Advance Days</label>
-                    <input
-                      type="number"
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      value={p.minAdvanceDays}
-                      onChange={(e: any) => handleUpdateMinAdvanceDays(p.travelMode, parseInt(e.target.value) || 0)}
-                      min="0"
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-3 leading-relaxed">
-                    {p.travelMode === 'Bus' ? 'Buses' : `${p.travelMode}s`} must be booked at least {p.minAdvanceDays} day{p.minAdvanceDays !== 1 ? 's' : ''} in advance
-                  </p>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-3 text-center py-10 text-slate-400">
-                Loading policies...
-              </div>
-            )}
+      {/* General Section */}
+      <section className="space-y-6">
+        <div className="flex items-center gap-3 border-b-2 border-slate-100 dark:border-slate-800 pb-3">
+          <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
+            <i className="fa-solid fa-gears"></i>
+          </div>
+          <div>
+            <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">General Policies</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Global travel constraints</p>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <h4 className="font-bold text-slate-800 dark:text-white border-b pb-2 dark:border-slate-800">Compliance & Limits</h4>
-          <Input label="Auto-approval Limit (₹)" type="number" value={policy.autoApproveBelowAmount} onChange={(e: any) => setPolicy({ ...policy, autoApproveBelowAmount: parseInt(e.target.value) })} />
+        <Card className="p-8 space-y-8">
+          <div className="space-y-6">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <i className="fa-solid fa-calendar-day text-indigo-500"></i>
+              Minimum Advance Booking (Days)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {travelModePolicies && travelModePolicies.length > 0 ? (
+                travelModePolicies.map((p: any) => (
+                  <div key={p.id} className="bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500/30 transition-all duration-300 group">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="font-black text-xs text-slate-700 dark:text-slate-300 uppercase tracking-widest">{p.travelMode}</span>
+                      <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 shadow-sm">
+                        <i className={`fa-solid ${p.travelMode === 'Flight' ? 'fa-plane' :
+                          p.travelMode === 'Train' ? 'fa-train' : 'fa-bus'
+                          }`}></i>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-black focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        value={p.minAdvanceDays}
+                        onChange={(e: any) => handleUpdateMinAdvanceDays(p.travelMode, parseInt(e.target.value) || 0)}
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-3 text-center py-10 text-slate-400 font-bold text-sm">
+                  <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> Loading policies...
+                </div>
+              )}
+            </div>
+          </div>
 
+          <div className="space-y-6 pt-6 border-t dark:border-slate-800">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <i className="fa-solid fa-shield-check text-indigo-500"></i>
+              Compliance & Limits
+            </h4>
+            <div className="max-w-xs">
+              <Input
+                label="Auto-approval Limit (₹)"
+                type="number"
+                value={policy.autoApproveBelowAmount}
+                onChange={(e: any) => setPolicy({ ...policy, autoApproveBelowAmount: parseInt(e.target.value) })}
+              />
+            </div>
+          </div>
+        </Card>
+      </section>
+
+      {/* User Profile Section */}
+      <section className="space-y-6">
+        <div className="flex items-center gap-3 border-b-2 border-slate-100 dark:border-slate-800 pb-3">
+          <div className="w-10 h-10 bg-violet-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/20">
+            <i className="fa-solid fa-user-shield"></i>
+          </div>
+          <div>
+            <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">User Profile Settings</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Identity & Verification rules</p>
+          </div>
+        </div>
+
+        <Card className="p-8 space-y-6">
           <div className="flex items-center justify-between py-2">
             <div>
               <p className="font-bold text-sm text-slate-700 dark:text-slate-300">Enforce Verification</p>
-              <p className="text-xs text-slate-500">Require documents before booking</p>
+              <p className="text-xs text-slate-500 mt-1">Require documents before allowing travel bookings.</p>
             </div>
             <Toggle active={policy.isEnforcementEnabled} onChange={() => setPolicy({ ...policy, isEnforcementEnabled: !policy.isEnforcementEnabled })} />
           </div>
 
           {policy.isEnforcementEnabled && (
-            <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-start gap-2">
-                <i className="fa-solid fa-unlock text-indigo-600 dark:text-indigo-400 mt-1"></i>
+            <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/50 rounded-2xl p-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-violet-600 shadow-sm flex-shrink-0">
+                  <i className="fa-solid fa-clock-rotate-left"></i>
+                </div>
                 <div className="flex-1">
                   <p className="font-bold text-sm text-slate-700 dark:text-slate-300">Temporary Unlock Duration</p>
-                  <p className="text-xs text-slate-500 mt-1">Allow access for a set number of days after document upload, even without approval. After this period, access is locked until documents are approved.</p>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Number of days a user can book travel after uploading documents but before they are approved by PNC.
+                  </p>
                 </div>
               </div>
-              <Input
-                label="Unlock Duration (Days)"
-                type="number"
-                min="1"
-                max="30"
-                value={policy.temporaryUnlockDays}
-                onChange={(e: any) => setPolicy({ ...policy, temporaryUnlockDays: parseInt(e.target.value) || 7 })}
-              />
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Meetup Capacity Section */}
-      <Card className="p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
-              <i className="fa-solid fa-chair"></i>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-800 dark:text-white text-lg">Location Capacity</h4>
-              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-                Define and track the maximum number of people the Igatpuri location can accommodate.
-              </p>
-            </div>
-          </div>
-          <Toggle active={isCapacityEnabled} onChange={handleToggleCapacity} />
-        </div>
-
-        {isCapacityEnabled && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-end pt-4 animate-in slide-in-from-top-2 duration-300">
-            <div className="space-y-3">
-              <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Total Seats Available</label>
-              <div className="flex items-center gap-4">
-                <input
+              <div className="max-w-[200px] ml-14">
+                <Input
+                  label="Days Duration"
                   type="number"
-                  min="0"
-                  className="w-32 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-lg font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                  value={totalSeats}
-                  onChange={(e) => handleUpdateSeats(Number(e.target.value))}
+                  min="1"
+                  max="30"
+                  value={policy.temporaryUnlockDays}
+                  onChange={(e: any) => setPolicy({ ...policy, temporaryUnlockDays: parseInt(e.target.value) || 7 })}
                 />
-                <span className="text-sm font-bold text-slate-400">Seats currently configured for the meetup location.</span>
               </div>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Meetup Calendar Visibility Section */}
-      <Card className="p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
-              <i className="fa-solid fa-calendar-days"></i>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-800 dark:text-white text-lg">Availability Calendar</h4>
-              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-                Toggle the visibility of the interactive calendar on the Igathpuri Meetup tab.
-              </p>
-            </div>
-          </div>
-          <Toggle active={isCalendarEnabled} onChange={handleToggleCalendar} />
-        </div>
-      </Card>
-
-      {/* Meetup Approver Section */}
-      <Card className="p-8 space-y-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
-            <i className="fa-solid fa-person-shelter"></i>
-          </div>
-          <div>
-            <h4 className="font-bold text-slate-800 dark:text-white text-lg">Meetup Approver</h4>
-            <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-              These individuals are responsible for approving <strong className="text-slate-700 dark:text-slate-300">Igatpuri meetup location availability</strong>.
-              When team members from different cities plan to travel to a meetup, the location availability must first be checked and approved by one of these approvers.
-            </p>
-          </div>
-        </div>
-
-        {/* Info Banner */}
-        <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800/50 rounded-xl p-4 flex gap-3">
-          <i className="fa-solid fa-circle-info text-violet-500 mt-0.5 flex-shrink-0"></i>
-          <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
-            <strong>How it works:</strong> Before any travel request to the Igatpuri meetup is processed, the PNC team must confirm location availability with an approver listed below. Add all persons who have authority to confirm the meetup venue is available.
-          </p>
-        </div>
-
-        {/* Add New Approver Search */}
-        <div className="space-y-4 relative">
-          <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Add New Approver (PNC Team)</h5>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <i className="fa-solid fa-search text-slate-400"></i>
-            </div>
-            <input
-              type="text"
-              placeholder="Search PNC users by name or email..."
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
-              value={pncSearch}
-              onChange={e => setPncSearch(e.target.value)}
-            />
-
-            {/* Search Results Dropdown */}
-            {filteredPncUsers.length > 0 && (
-              <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
-                {filteredPncUsers.map(user => (
-                  <button
-                    key={user.id}
-                    onClick={() => handleAddApprover(user)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all text-left border-b last:border-0 border-slate-100 dark:border-slate-800"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xs font-bold">
-                      {user.name ? user.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800 dark:text-white">{user.name || 'Unnamed User'}</p>
-                      <p className="text-xs text-slate-500">{user.email}</p>
-                    </div>
-                    <div className="ml-auto">
-                      <i className="fa-solid fa-plus text-violet-500 opacity-0 group-hover:opacity-100 transition-all"></i>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {pncSearch.trim() !== '' && filteredPncUsers.length === 0 && (
-              <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-4 text-center">
-                <p className="text-sm text-slate-500 font-medium tracking-wide">No PNC users found for "{pncSearch}"</p>
-                <p className="text-xs text-slate-400 mt-1">Ensure the user has the PNC role assigned.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Approvers List */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Current Approvers</h5>
-            <span className="text-xs font-bold text-slate-400">
-              {meetupApprovers.filter(a => a.is_active).length} active
-            </span>
-          </div>
-
-          {approversLoading ? (
-            <div className="py-10 flex items-center justify-center gap-3 text-slate-400">
-              <i className="fa-solid fa-circle-notch fa-spin"></i>
-              <span className="text-sm font-medium">Loading approvers...</span>
-            </div>
-          ) : meetupApprovers.length === 0 ? (
-            <div className="py-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
-              <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400 text-xl">
-                <i className="fa-solid fa-person-shelter"></i>
-              </div>
-              <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No meetup approvers configured</p>
-              <p className="text-xs text-slate-400 mt-1">Search for PNC users above to add them as approvers.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {meetupApprovers.map((approver, idx) => (
-                <div
-                  key={approver.id}
-                  className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 group ${approver.is_active
-                    ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
-                    : 'bg-slate-50/50 dark:bg-slate-800/20 border-slate-100 dark:border-slate-800 opacity-60'
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shadow-sm flex-shrink-0 ${approver.is_active
-                      ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                      }`}>
-                      {approver.name ? approver.name.charAt(0).toUpperCase() : <i className="fa-solid fa-envelope text-xs"></i>}
-                    </div>
-                    <div>
-                      {approver.name && (
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{approver.name}</p>
-                          {users.find((u: any) => u.email.toLowerCase() === approver.email.toLowerCase())?.role === UserRole.ADMIN && (
-                            <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-black tracking-widest uppercase">Admin</span>
-                          )}
-                        </div>
-                      )}
-                      <p className={`text-xs font-medium ${approver.name ? 'text-slate-500' : 'text-sm font-bold text-slate-800 dark:text-white'}`}>
-                        {approver.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${approver.is_active
-                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                      }`}>
-                      {approver.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                    <button
-                      onClick={() => handleToggleApprover(approver.id, approver.is_active)}
-                      title={approver.is_active ? 'Deactivate' : 'Activate'}
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs transition-all ${approver.is_active
-                        ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                        : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                        }`}
-                    >
-                      <i className={`fa-solid ${approver.is_active ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
-                    </button>
-                    {/* Admins cannot be removed from here if they are auto-added, but let's allow it if user wants to deactivate them */}
-                    <button
-                      onClick={() => handleDeleteApprover(approver.id)}
-                      title="Remove approver"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
-                    >
-                      <i className="fa-solid fa-trash"></i>
-                    </button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
+        </Card>
+      </section>
+
+      {/* Igatpuri Section */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between border-b-2 border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
+              <i className="fa-solid fa-campground"></i>
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">Igatpuri Meetup</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Location-specific logistics</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isIgatpuriEnabled ? 'Enabled' : 'Disabled'}</span>
+            <Toggle active={isIgatpuriEnabled} onChange={handleToggleIgatpuri} />
+          </div>
         </div>
-      </Card>
+
+        <div className={`space-y-8 transition-all duration-500 ${isIgatpuriEnabled ? 'opacity-100' : 'opacity-40 grayscale pointer-events-none'}`}>
+          {/* Capacity & Calendar */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
+                    <i className="fa-solid fa-chair"></i>
+                  </div>
+                  <h4 className="font-bold text-slate-800 dark:text-white">Location Capacity</h4>
+                </div>
+                <Toggle active={isCapacityEnabled} onChange={handleToggleCapacity} />
+              </div>
+              {isCapacityEnabled && (
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  <Input
+                    label="Total Seats Available"
+                    type="number"
+                    min="0"
+                    value={totalSeats}
+                    onChange={(e) => handleUpdateSeats(Number(e.target.value))}
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed">System will alert if concurrent bookings exceed this limit.</p>
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-xl flex items-center justify-center">
+                    <i className="fa-solid fa-calendar-days"></i>
+                  </div>
+                  <h4 className="font-bold text-slate-800 dark:text-white">Availability Calendar</h4>
+                </div>
+                <Toggle active={isCalendarEnabled} onChange={handleToggleCalendar} />
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">Toggle visibility of the interactive booking calendar for employees.</p>
+            </Card>
+          </div>
+
+          {/* Approvers List */}
+          <Card className="p-8 space-y-8">
+            <div className="flex items-start gap-4 pb-6 border-b dark:border-slate-800">
+              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center text-xl shadow-sm">
+                <i className="fa-solid fa-user-check"></i>
+              </div>
+              <div>
+                <h4 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">Meetup Approvers</h4>
+                <p className="text-sm text-slate-500 mt-1 font-medium">Individuals authorized to confirm location availability for groups.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              {/* Left: Add New */}
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Authorized Person</h5>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <i className="fa-solid fa-magnifying-glass text-slate-400"></i>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search PNC/Admin users by name or email..."
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                      value={pncSearch}
+                      onChange={e => setPncSearch(e.target.value)}
+                    />
+
+                    {/* Search Results Dropdown */}
+                    {pncSearch.trim() !== '' && filteredPncUsers.length > 0 && (
+                      <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+                        {filteredPncUsers.map(user => (
+                          <button
+                            key={user.id}
+                            onClick={() => handleAddApprover(user)}
+                            className="w-full flex items-center gap-4 p-4 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all border-b last:border-0 border-slate-100 dark:border-slate-800 group text-left"
+                          >
+                            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-black flex-shrink-0">
+                              {user.name ? user.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{user.name || 'Unnamed User'}</p>
+                              <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${user.role === UserRole.ADMIN
+                                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                                  : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                }`}>{user.role}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* No Results State */}
+                    {pncSearch.trim() !== '' && filteredPncUsers.length === 0 && (
+                      <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 text-center">
+                        <p className="text-sm text-slate-500 font-medium">No users found for "{pncSearch}"</p>
+                        <p className="text-xs text-slate-400 mt-1">Try a different name or email. Only PNC and Admin users can be added.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-5 bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-800/20 rounded-2xl flex gap-4">
+                  <i className="fa-solid fa-circle-info text-emerald-500 mt-1"></i>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400/80 leading-relaxed font-medium">
+                    Approvers will receive notifications for location availability checks and can approve or deny requests directly from their workspace.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right: Current List */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Approvers</h5>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-black">{meetupApprovers.filter(a => a.is_active).length} PERSONS</span>
+                </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {approversLoading ? (
+                    <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-4">
+                      <i className="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i>
+                      <span className="text-xs font-black uppercase tracking-widest">Loading List...</span>
+                    </div>
+                  ) : meetupApprovers.length === 0 ? (
+                    <div className="py-16 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] bg-slate-50/50 dark:bg-slate-900/50">
+                      <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">No approvers configured</p>
+                    </div>
+                  ) : (
+                    meetupApprovers.map((a) => (
+                      <div key={a.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 group ${a.is_active ? 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-800 opacity-60'}`}>
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${a.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+                            {a.name?.charAt(0) || <i className="fa-solid fa-user"></i>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800 dark:text-white leading-none">{a.name || 'Staff'}</p>
+                            <p className="text-xs text-slate-400 font-medium mt-1.5">{a.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleToggleApprover(a.id, a.is_active)}
+                            className={`p-2 rounded-lg transition-colors ${a.is_active ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                          >
+                            <i className={`fa-solid ${a.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-lg`}></i>
+                          </button>
+                          <button onClick={() => handleDeleteApprover(a.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </section>
     </div>
   );
 };
@@ -3311,6 +3347,7 @@ const App: React.FC = () => {
   const [meetupAvailabilityRequests, setMeetupAvailabilityRequests] = useState<MeetupAvailabilityRequest[]>([]);
   const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
   const [isMeetupApprover, setIsMeetupApprover] = useState(false);
+  const [isIgatpuriEnabled, setIsIgatpuriEnabled] = useState(true);
 
   const [isResettingPassword, setIsResettingPassword] = useState(false);
 
@@ -3550,6 +3587,19 @@ const App: React.FC = () => {
             createdAt: p.created_at,
             updatedAt: p.updated_at
           })));
+        }
+
+        // 7. Fetch Meetup Settings
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('meetup_settings')
+          .select('*')
+          .in('setting_key', ['is_igatpuri_enabled']);
+
+        if (!settingsError && settingsData) {
+          const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
+          if (igatpuriSetting) {
+            setIsIgatpuriEnabled(igatpuriSetting.setting_value === true || igatpuriSetting.setting_value === 'true');
+          }
         }
 
       } catch (err: any) {
@@ -3860,6 +3910,8 @@ const App: React.FC = () => {
           travelModePolicies={travelModePolicies}
           setTravelModePolicies={setTravelModePolicies}
           users={users}
+          isIgatpuriEnabled={isIgatpuriEnabled}
+          setIsIgatpuriEnabled={setIsIgatpuriEnabled}
         />;
       case 'role-management':
         if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
@@ -3919,6 +3971,7 @@ const App: React.FC = () => {
         }
         return renderDashboard();
       case 'igathpuri-meetup':
+        if (!isIgatpuriEnabled) return renderDashboard();
         return <IgathpuriMeetupView
           onNewRequest={(context?: any) => {
             setMeetupContext(context);
@@ -3934,6 +3987,7 @@ const App: React.FC = () => {
           }}
         />;
       case 'meetup-approvals':
+        if (!isIgatpuriEnabled) return renderDashboard();
         return <MeetupApprovalsView
           requests={meetupAvailabilityRequests}
           onUpdate={handleUpdateMeetupRequest}
@@ -4023,7 +4077,7 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">MY SPACE</p>
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
-                <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />
+                {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
                   <SidebarLink
                     icon="fa-file-signature"
@@ -4033,7 +4087,7 @@ const App: React.FC = () => {
                     badge={requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
                   />
                 )}
-                {isMeetupApprover && (
+                {isMeetupApprover && isIgatpuriEnabled && (
                   <SidebarLink
                     icon="fa-calendar-check"
                     label="Meetup Approvals"
@@ -4066,8 +4120,8 @@ const App: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">EVENTS</p>
-                <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />
-                {isMeetupApprover && (
+                {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
+                {isMeetupApprover && isIgatpuriEnabled && (
                   <SidebarLink
                     icon="fa-calendar-check"
                     label="Meetup Approvals"

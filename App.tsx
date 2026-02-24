@@ -664,8 +664,29 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
 };
 
 const FinanceDashboard = ({ requests }: any) => {
-  const totalSpend = requests.reduce((acc: number, r: TravelRequest) => acc + (r.ticketCost || 0), 0);
-  const pendingPayment = requests.filter((r: TravelRequest) => r.paymentStatus === PaymentStatus.PENDING).length;
+  const allBookedRequests = requests.filter((r: TravelRequest) => r.ticketCost && r.ticketCost > 0);
+  const totalSpend = allBookedRequests.reduce((acc: number, r: TravelRequest) => acc + (r.ticketCost || 0), 0);
+
+  const pendingRequests = allBookedRequests.filter((r: TravelRequest) => r.paymentStatus === PaymentStatus.PENDING);
+  const pendingAmount = pendingRequests.reduce((acc: number, r: TravelRequest) => acc + (r.ticketCost || 0), 0);
+  const pendingCount = pendingRequests.length;
+
+  const paidRequests = allBookedRequests.filter((r: TravelRequest) => r.paymentStatus === PaymentStatus.PAID);
+  const paidAmount = paidRequests.reduce((acc: number, r: TravelRequest) => acc + (r.ticketCost || 0), 0);
+
+  const avgCost = allBookedRequests.length > 0 ? Math.round(totalSpend / allBookedRequests.length) : 0;
+
+  // Department Spend for BarChart
+  const departmentSpend: Record<string, number> = {};
+  allBookedRequests.forEach((r: TravelRequest) => {
+    const dept = r.requesterDepartment || 'Unassigned';
+    departmentSpend[dept] = (departmentSpend[dept] || 0) + (r.ticketCost || 0);
+  });
+
+  const chartData = Object.entries(departmentSpend)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([label, value]) => ({ label, value }));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -673,17 +694,82 @@ const FinanceDashboard = ({ requests }: any) => {
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Financial Overview</h2>
         <p className="text-slate-500 text-sm mt-1">Monitor budget utilization and travel spend.</p>
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="Total Spend" value={`₹${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} />
-        <StatCard title="Pending Invoices" value={pendingPayment} icon={<i className="fa-solid fa-file-invoice-dollar"></i>} trendUp={false} trend="Needs Action" />
-        <StatCard title="Avg Ticket Cost" value={`₹${requests.length ? Math.round(totalSpend / requests.length) : 0}`} icon={<i className="fa-solid fa-calculator"></i>} />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Travel Spend"
+          value={`₹${totalSpend.toLocaleString()}`}
+          icon={<i className="fa-solid fa-indian-rupee-sign"></i>}
+          description="Total of all ticket costs"
+        />
+        <StatCard
+          title="Paid Amount"
+          value={`₹${paidAmount.toLocaleString()}`}
+          icon={<i className="fa-solid fa-check-double"></i>}
+          description="Total of cleared payments"
+          trendUp={true}
+          trend={`${paidRequests.length} invoices`}
+        />
+        <StatCard
+          title="Pending Payments"
+          value={`₹${pendingAmount.toLocaleString()}`}
+          icon={<i className="fa-solid fa-clock-rotate-left"></i>}
+          description={`${pendingCount} invoice(s) pending`}
+          trendUp={false}
+          trend="Needs Action"
+        />
+        <StatCard
+          title="Avg Ticket Cost"
+          value={`₹${avgCost.toLocaleString()}`}
+          icon={<i className="fa-solid fa-calculator"></i>}
+          description={`Across ${allBookedRequests.length} bookings`}
+        />
       </div>
-      <Card className="p-6">
-        <h4 className="font-bold text-slate-800 dark:text-white mb-4">Cost Center Allocation</h4>
-        <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 rounded-xl">
-          Chart placeholder: Spend distribution by department
-        </div>
-      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-6">
+          <h4 className="font-bold text-slate-800 dark:text-white mb-6">Spend by Department</h4>
+          {chartData.length > 0 ? (
+            <BarChart data={chartData} color="bg-emerald-500" />
+          ) : (
+            <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
+              No department spend data available yet.
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <h4 className="font-bold text-slate-800 dark:text-white mb-4">Recent Transactions</h4>
+          <div className="space-y-4">
+            {allBookedRequests.sort((a: TravelRequest, b: TravelRequest) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5).map((r: TravelRequest) => (
+              <div key={r.id} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-all hover:shadow-md">
+                <div>
+                  <p className="text-sm font-bold text-slate-800 dark:text-white">{r.requesterName}</p>
+                  <p className="text-xs text-slate-500">{r.from} → {r.to}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{r.requesterDepartment || 'General'} • {new Date(r.timestamp).toLocaleDateString()}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className="font-bold text-slate-900 dark:text-white">₹{r.ticketCost?.toLocaleString()}</span>
+                  {r.paymentStatus === PaymentStatus.PAID ? (
+                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded flex items-center gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><i className="fa-solid fa-check"></i> Paid</span>
+                  ) : r.paymentStatus === PaymentStatus.PENDING ? (
+                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded flex items-center gap-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><i className="fa-regular fa-clock"></i> Pending</span>
+                  ) : r.paymentStatus === PaymentStatus.REIMBURSED ? (
+                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded flex items-center gap-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"><i className="fa-solid fa-arrow-rotate-left"></i> Reimbursed</span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{r.paymentStatus || 'N/A'}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {allBookedRequests.length === 0 && (
+              <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
+                No recent transactions found.
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
@@ -2331,7 +2417,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
   );
 };
 
-const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[], onUpdateUser: (u: User) => void, currentUser: User }) => {
+const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[], onUpdateRole: (user: User, newRole: UserRole) => void, currentUser: User }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -2437,41 +2523,59 @@ const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[
               </tr>
             </thead>
             <tbody className="divide-y dark:divide-slate-800">
-              {paginatedUsers.map(user => (
-                <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-4">
-                      <div className="w-11 h-11 bg-indigo-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center font-black text-indigo-600 border border-slate-100 dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
-                        {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-2xl" /> : user.name?.charAt(0)}
+              {paginatedUsers.map(user => {
+                const isProtectedAdmin = user.email?.toLowerCase() === 'nitin@navgurukul.org';
+                return (
+                  <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 bg-indigo-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center font-black text-indigo-600 border border-slate-100 dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
+                          {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-2xl" /> : user.name?.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-800 dark:text-white leading-tight">{user.name}</p>
+                            {isProtectedAdmin && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 select-none">
+                                <i className="fa-solid fa-lock text-[9px]"></i>
+                                FIXED
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">{user.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-white leading-tight">{user.name}</p>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">{user.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5">
-                    <StatusBadge type="status" value={user.role} />
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    <select
-                      value={user.role}
-                      onChange={(e) => onUpdateUser({ ...user, role: e.target.value as UserRole })}
-                      className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={currentUser.role === UserRole.PNC && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.PNC}
-                    >
-                      {Object.values(UserRole).filter(role => {
-                        if (currentUser.role === UserRole.PNC) {
-                          return role === UserRole.EMPLOYEE || role === UserRole.PNC;
-                        }
-                        return true;
-                      }).map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-8 py-5">
+                      <StatusBadge type="status" value={user.role} />
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      {isProtectedAdmin ? (
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl text-xs font-black text-slate-400 dark:text-slate-500 select-none" title="This admin account is protected and cannot be changed">
+                          <i className="fa-solid fa-lock text-[10px]"></i>
+                          Protected Admin
+                        </div>
+                      ) : (
+                        <select
+                          value={user.role}
+                          onChange={(e) => onUpdateRole(user, e.target.value as UserRole)}
+                          className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={user.id === currentUser.id || (currentUser.role === UserRole.PNC && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.PNC)}
+                        >
+                          {Object.values(UserRole).filter(role => {
+                            if (currentUser.role === UserRole.PNC) {
+                              return role === UserRole.EMPLOYEE || role === UserRole.PNC;
+                            }
+                            return true;
+                          }).map(role => (
+                            <option key={role} value={role}>{role}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -3046,18 +3150,18 @@ const DonutChart = ({ data }: { data: { label: string, value: number, color: str
   }).join(', ');
 
   return (
-    <div className="flex items-center gap-8">
-      <div className="relative w-40 h-40 rounded-full" style={{ background: `conic-gradient(${gradient})` }}>
-        <div className="absolute inset-4 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center flex-col">
+    <div className="flex flex-col items-center gap-5 w-full">
+      <div className="relative w-44 h-44 rounded-full flex-shrink-0" style={{ background: `conic-gradient(${gradient})` }}>
+        <div className="absolute inset-5 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center flex-col">
           <span className="text-3xl font-bold text-slate-900 dark:text-white">{total}</span>
-          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Requests</span>
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Total</span>
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="flex flex-wrap justify-center gap-x-5 gap-y-2">
         {data.map((d, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }}></span>
-            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{d.label}</span>
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }}></span>
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{d.label}</span>
             <span className="text-xs text-slate-500 font-mono">({Math.round((d.value / total) * 100)}%)</span>
           </div>
         ))}
@@ -3066,119 +3170,402 @@ const DonutChart = ({ data }: { data: { label: string, value: number, color: str
   );
 };
 
+const PieChartInteractive = ({ data, isFinancial }: { data: { label: string, value: number, color: string }[], isFinancial?: boolean }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const total = data.reduce((acc, d) => acc + d.value, 0);
+  if (total === 0) return <div className="h-72 flex items-center justify-center text-slate-400 text-sm italic">No data available.</div>;
+
+  const cx = 140, cy = 140, outerR = 120, innerR = 60;
+  const W = 280, H = 280;
+
+  const fmtVal = (v: number) => isFinancial
+    ? (v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${(v / 1000).toFixed(0)}k` : `₹${v}`)
+    : `${v}`;
+
+  const slices: { d: string, color: string, label: string, value: number, pct: number, midAngle: number }[] = [];
+  let startAngle = -Math.PI / 2;
+  data.forEach((seg, i) => {
+    const angle = (seg.value / total) * 2 * Math.PI;
+    const endAngle = startAngle + angle;
+    const midAngle = startAngle + angle / 2;
+    const x1 = cx + outerR * Math.cos(startAngle), y1 = cy + outerR * Math.sin(startAngle);
+    const x2 = cx + outerR * Math.cos(endAngle), y2 = cy + outerR * Math.sin(endAngle);
+    const ix1 = cx + innerR * Math.cos(endAngle), iy1 = cy + innerR * Math.sin(endAngle);
+    const ix2 = cx + innerR * Math.cos(startAngle), iy2 = cy + innerR * Math.sin(startAngle);
+    const large = angle > Math.PI ? 1 : 0;
+    const d = `M ${x1} ${y1} A ${outerR} ${outerR} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerR} ${innerR} 0 ${large} 0 ${ix2} ${iy2} Z`;
+    slices.push({ d, color: seg.color, label: seg.label, value: seg.value, pct: Math.round((seg.value / total) * 100), midAngle });
+    startAngle = endAngle;
+  });
+
+  const hovered = hoveredIdx !== null ? slices[hoveredIdx] : null;
+
+  const handleMouseMove = (e: React.MouseEvent<SVGGElement>, idx: number) => {
+    const rect = (e.currentTarget.closest('svg') as SVGSVGElement).getBoundingClientRect();
+    setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setHoveredIdx(idx);
+  };
+
+  return (
+    <div className="relative flex items-center justify-center w-full h-72">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-72" onMouseLeave={() => setHoveredIdx(null)}>
+        {slices.map((s, i) => {
+          const isHov = hoveredIdx === i;
+          const scale = isHov ? 1.04 : 1;
+          const tX = cx + (cx - cx) * (scale - 1);
+          const tY = cy + (cy - cy) * (scale - 1);
+          return (
+            <g key={i}
+              style={{ cursor: 'pointer', transformOrigin: `${cx}px ${cy}px`, transform: `scale(${scale})`, transition: 'transform 0.18s ease' }}
+              onMouseMove={(e) => handleMouseMove(e, i)}
+              onMouseEnter={() => setHoveredIdx(i)}
+            >
+              <path d={s.d} fill={s.color} fillOpacity={isHov ? 1 : 0.82} stroke="white" strokeWidth="2" />
+            </g>
+          );
+        })}
+        {/* Center label */}
+        <text x={cx} y={cy - 10} textAnchor="middle" fill="currentColor" fontSize="22" fontWeight="800" className="text-slate-900 dark:text-white" style={{ fill: hoveredIdx !== null ? slices[hoveredIdx].color : '#1e293b' }}>
+          {hoveredIdx !== null ? fmtVal(slices[hoveredIdx].value) : fmtVal(total)}
+        </text>
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="700">
+          {hoveredIdx !== null ? `${slices[hoveredIdx].pct}%` : 'Total'}
+        </text>
+        {/* Inline SVG tooltip */}
+        {hovered && (() => {
+          const tx = Math.min(Math.max(tooltipPos.x, 60), W - 60);
+          const ty = tooltipPos.y > cy ? tooltipPos.y - 44 : tooltipPos.y + 10;
+          return (
+            <g>
+              <rect x={tx - 58} y={ty} width={116} height={36} rx="8" fill="#1e293b" fillOpacity="0.93" />
+              <text x={tx} y={ty + 14} textAnchor="middle" fill="white" fontSize="9" fontWeight="700">{hovered.label}</text>
+              <text x={tx} y={ty + 28} textAnchor="middle" fill={hovered.color} fontSize="11" fontWeight="800">{fmtVal(hovered.value)} ({hovered.pct}%)</text>
+            </g>
+          );
+        })()}
+      </svg>
+    </div>
+  );
+};
+
 const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], currentUser: User }) => {
-  const [filters, setFilters] = useState({
-    campus: 'All',
-    department: 'All',
-    period: 'All Time', // 'All Time' | 'This Month' | 'Last Month' | 'Custom Date'
+  const [filters, setFilters] = useState<{
+    campuses: string[];
+    departments: string[];
+    period: string;
+    startDate: string;
+    endDate: string;
+  }>({
+    campuses: [],
+    departments: [],
+    period: 'All Time',
     startDate: '',
     endDate: ''
   });
-  const [widgets, setWidgets] = useState({
-    spend: true,
-    volume: true,
-    status: true,
-    table: true
-  });
+  const [campusDropOpen, setCampusDropOpen] = useState(false);
+  const [deptDropOpen, setDeptDropOpen] = useState(false);
+  const campusDropRef = useRef<HTMLDivElement>(null);
+  const deptDropRef = useRef<HTMLDivElement>(null);
 
-  // Filter Data Logic
-  const filteredData = useMemo(() => {
-    return requests.filter(r => {
-      const matchCampus = filters.campus === 'All' || r.requesterCampus === filters.campus;
-      const matchDept = filters.department === 'All' || r.requesterDepartment === filters.department;
+  // Close multi-select dropdowns on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (campusDropRef.current && !campusDropRef.current.contains(e.target as Node)) setCampusDropOpen(false);
+      if (deptDropRef.current && !deptDropRef.current.contains(e.target as Node)) setDeptDropOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const [deptChartType, setDeptChartType] = useState<'bar' | 'line' | 'scatter' | 'bubble' | 'pie'>('bar');
+  const [deptSort, setDeptSort] = useState<{ col: 'dept' | 'count' | 'avg' | 'total', dir: 'asc' | 'desc' }>({ col: 'total', dir: 'desc' });
 
-      let matchDate = true;
+  const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC;
+  const isPNCView = currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN;
+  const showComparison = filters.period !== 'All Time';
+
+  const CHART_ICONS: Record<string, string> = { bar: 'fa-chart-bar', line: 'fa-chart-line', scatter: 'fa-braille', bubble: 'fa-circle-dot', pie: 'fa-chart-pie' };
+
+  // Compute date range for current period
+  const getCurrentRange = useMemo(() => {
+    const now = new Date();
+    if (filters.period === 'This Month') return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999) };
+    if (filters.period === 'Last Month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
+    if (filters.period === 'Custom Date') {
+      const start = filters.startDate ? new Date(filters.startDate) : null;
+      const end = filters.endDate ? (() => { const d = new Date(filters.endDate); d.setHours(23, 59, 59, 999); return d; })() : null;
+      return { start, end };
+    }
+    return { start: null, end: null };
+  }, [filters]);
+
+  // Compute date range for previous period (same duration, shifted back)
+  const getPreviousRange = useMemo(() => {
+    const now = new Date();
+    if (filters.period === 'This Month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
+    if (filters.period === 'Last Month') return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1), end: new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999) };
+    if (filters.period === 'Custom Date' && filters.startDate && filters.endDate) {
+      const s = new Date(filters.startDate);
+      const e = new Date(filters.endDate); e.setHours(23, 59, 59, 999);
+      const dur = e.getTime() - s.getTime();
+      return { start: new Date(s.getTime() - dur - 1000), end: new Date(s.getTime() - 1000) };
+    }
+    return { start: null, end: null };
+  }, [filters]);
+
+  const applyFilters = (data: TravelRequest[], range: { start: Date | null, end: Date | null }) => {
+    return data.filter(r => {
+      const matchCampus = filters.campuses.length === 0 || filters.campuses.includes(r.requesterCampus || '');
+      const matchDept = filters.departments.length === 0 || filters.departments.includes(r.requesterDepartment || '');
       const reqDate = new Date(r.timestamp);
-      const now = new Date();
-
-      if (filters.period === 'This Month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        matchDate = reqDate >= startOfMonth;
-      } else if (filters.period === 'Last Month') {
-        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        matchDate = reqDate >= startOfLastMonth && reqDate <= endOfLastMonth;
-      } else if (filters.period === 'Custom Date') {
-        if (filters.startDate) {
-          const start = new Date(filters.startDate);
-          matchDate = matchDate && reqDate >= start;
-        }
-        if (filters.endDate) {
-          const end = new Date(filters.endDate);
-          end.setHours(23, 59, 59, 999);
-          matchDate = matchDate && reqDate <= end;
-        }
-      }
-
+      let matchDate = true;
+      if (range.start) matchDate = matchDate && reqDate >= range.start;
+      if (range.end) matchDate = matchDate && reqDate <= range.end;
       return matchCampus && matchDept && matchDate;
     });
-  }, [requests, filters]);
+  };
 
-  // Aggregations
+  const filteredData = useMemo(() => applyFilters(requests, getCurrentRange), [requests, filters]);
+  const prevPeriodData = useMemo(() => showComparison ? applyFilters(requests, getPreviousRange) : [], [requests, filters, showComparison]);
+
+  const computeChange = (curr: number, prev: number): { pct: string, up: boolean } | null => {
+    if (!showComparison) return null;
+    if (prev === 0 && curr === 0) return null;
+    if (prev === 0) return { pct: '▲ New', up: true };
+    const pct = ((curr - prev) / prev) * 100;
+    return { pct: `${pct >= 0 ? '+' : ''}${Math.round(pct)}%`, up: pct >= 0 };
+  };
+
+  // KPI Aggregations
   const totalRequests = filteredData.length;
+  const prevTotalRequests = prevPeriodData.length;
   const totalBookings = filteredData.filter(r => r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED).length;
+  const prevTotalBookings = prevPeriodData.filter(r => r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED).length;
   const openRequests = filteredData.filter(r => r.pncStatus !== PNCStatus.CLOSED && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER && r.pncStatus !== PNCStatus.BOOKED).length;
+  const totalSpend = Math.round(filteredData.reduce((acc, r) => acc + (r.ticketCost || 0), 0) * 100) / 100;
+  const prevTotalSpend = Math.round(prevPeriodData.reduce((acc, r) => acc + (r.ticketCost || 0), 0) * 100) / 100;
+
+  // Avg cost: only tickets that are CLOSED (i.e. actually booked & fulfilled)
+  const bookedWithCost = filteredData.filter(r => r.pncStatus === PNCStatus.CLOSED && (r.ticketCost || 0) > 0);
+  const prevBookedWithCost = prevPeriodData.filter(r => r.pncStatus === PNCStatus.CLOSED && (r.ticketCost || 0) > 0);
+  const avgTicketCost = bookedWithCost.length > 0 ? Math.round(bookedWithCost.reduce((acc, r) => acc + (r.ticketCost || 0), 0) / bookedWithCost.length) : 0;
+  const prevAvgTicketCost = prevBookedWithCost.length > 0 ? Math.round(prevBookedWithCost.reduce((acc, r) => acc + (r.ticketCost || 0), 0) / prevBookedWithCost.length) : 0;
 
   const avgProcessingTime = useMemo(() => {
-    const closedReqs = filteredData.filter(r => r.pncStatus === PNCStatus.CLOSED || r.pncStatus === PNCStatus.BOOKED);
-    if (closedReqs.length === 0) return 0;
-
-    const totalTime = closedReqs.reduce((acc, r) => {
-      // Find completion time from timeline or assume last update
+    const closed = filteredData.filter(r => r.pncStatus === PNCStatus.CLOSED || r.pncStatus === PNCStatus.BOOKED);
+    if (!closed.length) return 0;
+    const total = closed.reduce((acc, r) => {
       const created = new Date(r.timestamp).getTime();
-      // Mock completion time spread over 1-3 days for demo if not real
-      // In real app, check timeline for 'Booked' or 'Closed' event
-      const completionEvent = r.timeline?.find(e => e.event === 'Status changed to: Closed' || e.event === 'Status changed to: Booked');
-      const completed = completionEvent ? new Date(completionEvent.timestamp).getTime() : new Date().getTime();
-      return acc + (completed - created);
+      const evt = r.timeline?.find(e => e.event === 'Status changed to: Closed' || e.event === 'Status changed to: Booked');
+      return acc + ((evt ? new Date(evt.timestamp).getTime() : new Date().getTime()) - created);
     }, 0);
-
-    return Math.round((totalTime / closedReqs.length) / (1000 * 60 * 60 * 24) * 10) / 10; // Days with 1 decimal
+    return Math.round((total / closed.length) / (1000 * 60 * 60 * 24) * 10) / 10;
   }, [filteredData]);
 
-  const totalSpend = Math.round(filteredData.reduce((acc, r) => acc + (r.ticketCost || 0), 0) * 100) / 100;
+  const reqChange = computeChange(totalRequests, prevTotalRequests);
+  const bookingsChange = computeChange(totalBookings, prevTotalBookings);
+  const spendChange = computeChange(totalSpend, prevTotalSpend);
+  const avgCostChange = computeChange(avgTicketCost, prevAvgTicketCost);
 
-
-  // Charts Data Preparation
+  // Charts data
   const deptData = useMemo(() => {
     const counts: Record<string, number> = {};
     filteredData.forEach(r => {
       const d = r.requesterDepartment || 'Unknown';
-      counts[d] = Math.round(((counts[d] || 0) + (currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC ? (r.ticketCost || 0) : 1)) * 100) / 100;
+      counts[d] = Math.round(((counts[d] || 0) + (isFinancialView ? (r.ticketCost || 0) : 1)) * 100) / 100;
     });
     return Object.entries(counts).map(([label, value]) => ({ label, value }));
-  }, [filteredData, currentUser.role]);
+  }, [filteredData, isFinancialView]);
 
   const statusData = useMemo(() => {
     const counts: Record<string, number> = {};
-    filteredData.forEach(r => {
-      counts[r.pncStatus] = (counts[r.pncStatus] || 0) + 1;
-    });
-
-    // Map status to colors
+    filteredData.forEach(r => { counts[r.pncStatus] = (counts[r.pncStatus] || 0) + 1; });
     const colors: Record<string, string> = {
-      [PNCStatus.NOT_STARTED]: '#cbd5e1', // slate-300
-      [PNCStatus.APPROVAL_PENDING]: '#fcd34d', // amber-300
-      [PNCStatus.APPROVED]: '#34d399', // emerald-400
-      [PNCStatus.PROCESSING]: '#818cf8', // indigo-400
-      [PNCStatus.BOOKED]: '#60a5fa', // blue-400
-      [PNCStatus.REJECTED_BY_MANAGER]: '#fda4af', // rose-300
-      [PNCStatus.REJECTED_BY_PNC]: '#f87171', // red-400
-      [PNCStatus.CLOSED]: '#64748b', // slate-500
+      [PNCStatus.NOT_STARTED]: '#cbd5e1', [PNCStatus.APPROVAL_PENDING]: '#fcd34d',
+      [PNCStatus.APPROVED]: '#34d399', [PNCStatus.PROCESSING]: '#818cf8',
+      [PNCStatus.BOOKED]: '#60a5fa', [PNCStatus.REJECTED_BY_MANAGER]: '#fda4af',
+      [PNCStatus.REJECTED_BY_PNC]: '#f87171', [PNCStatus.CLOSED]: '#64748b',
     };
+    return Object.entries(counts).map(([label, value]) => ({ label: label.replace(/_/g, ' '), value, color: colors[label] || '#94a3b8' }));
+  }, [filteredData]);
 
-    return Object.entries(counts).map(([label, value]) => ({
-      label: label.replace(/_/g, ' '),
-      value,
-      color: colors[label] || '#94a3b8'
+  // Department summary table — avg cost on CLOSED tickets only
+  const deptSummary = useMemo(() => {
+    const map: Record<string, { count: number, totalCost: number, closedCount: number, closedCost: number }> = {};
+    filteredData.forEach(r => {
+      const d = r.requesterDepartment || 'Unknown';
+      if (!map[d]) map[d] = { count: 0, totalCost: 0, closedCount: 0, closedCost: 0 };
+      map[d].count += 1;
+      map[d].totalCost += r.ticketCost || 0;
+      if (r.pncStatus === PNCStatus.CLOSED && (r.ticketCost || 0) > 0) {
+        map[d].closedCount += 1;
+        map[d].closedCost += r.ticketCost || 0;
+      }
+    });
+    return Object.entries(map).map(([dept, s]) => ({
+      dept,
+      count: s.count,
+      totalCost: Math.round(s.totalCost),
+      avgCost: s.closedCount > 0 ? Math.round(s.closedCost / s.closedCount) : 0
     }));
   }, [filteredData]);
 
-  const uniqueCampuses = Array.from(new Set(requests.map(r => r.requesterCampus).filter(Boolean)));
-  const uniqueDepts = Array.from(new Set(requests.map(r => r.requesterDepartment).filter(Boolean)));
+  const sortedDeptSummary = useMemo(() => {
+    return [...deptSummary].sort((a, b) => {
+      const dir = deptSort.dir === 'asc' ? 1 : -1;
+      if (deptSort.col === 'dept') return dir * a.dept.localeCompare(b.dept);
+      if (deptSort.col === 'count') return dir * (a.count - b.count);
+      if (deptSort.col === 'avg') return dir * (a.avgCost - b.avgCost);
+      return dir * (a.totalCost - b.totalCost);
+    });
+  }, [deptSummary, deptSort]);
 
-  const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC;
-  const isPNCView = currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN;
+  const toggleDeptSort = (col: typeof deptSort.col) => setDeptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+
+  const SortIcon = ({ col }: { col: typeof deptSort.col }) => (
+    <i className={`fa-solid ml-1 text-[9px] ${deptSort.col === col ? (deptSort.dir === 'asc' ? 'fa-arrow-up text-indigo-500' : 'fa-arrow-down text-indigo-500') : 'fa-arrows-up-down text-slate-300'}`}></i>
+  );
+
+  const uniqueCampuses = Array.from(new Set(requests.map(r => r.requesterCampus).filter(Boolean))) as string[];
+  const uniqueDepts = Array.from(new Set(requests.map(r => r.requesterDepartment).filter(Boolean))) as string[];
+  const CHART_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+  // Department chart renderer
+  const renderDeptChart = () => {
+    if (deptData.length === 0) return (
+      <div className="h-80 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">No data for selected period.</div>
+    );
+
+    // Shared chart dimensions
+    const W = 440, H = 300, PL = 52, PR = 12, PT = 16, PB = 32;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const max = Math.max(...deptData.map(d => d.value), 1);
+    const NUM_Y = 4;
+    const gridVals = Array.from({ length: NUM_Y + 1 }, (_, i) => ({
+      val: Math.round((max / NUM_Y) * (NUM_Y - i)),
+      y: PT + (i / NUM_Y) * cH
+    }));
+    const fmtVal = (v: number) => isFinancialView
+      ? (v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${(v / 1000).toFixed(0)}k` : `₹${v}`)
+      : `${v}`;
+    const svgClass = "w-full h-80";
+
+    // Shared axes JSX (reused across all chart types)
+    const axesJSX = (
+      <>
+        {gridVals.map((g, i) => (
+          <g key={i}>
+            <line x1={PL} y1={g.y} x2={W - PR} y2={g.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={i === NUM_Y ? '0' : '4 3'} />
+            <text x={PL - 5} y={g.y + 3} textAnchor="end" fill="#94a3b8" fontSize="8" fontWeight="600">{fmtVal(g.val)}</text>
+          </g>
+        ))}
+        <line x1={PL} y1={PT} x2={PL} y2={PT + cH} stroke="#cbd5e1" strokeWidth="1.5" />
+        <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="#cbd5e1" strokeWidth="1.5" />
+      </>
+    );
+
+    if (deptChartType === 'pie') return (
+      <div className="h-80 flex items-center justify-center py-4">
+        <PieChartInteractive data={deptData.map((d, i) => ({ ...d, color: CHART_COLORS[i % CHART_COLORS.length] }))} isFinancial={isFinancialView} />
+      </div>
+    );
+
+    if (deptChartType === 'bar') {
+      const gap = cW / deptData.length;
+      const barW = Math.max(10, gap * 0.55);
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} className={svgClass}>
+          {axesJSX}
+          {deptData.map((d, i) => {
+            const bH = Math.max(2, (d.value / max) * cH);
+            const x = PL + gap * i + (gap - barW) / 2;
+            const y = PT + cH - bH;
+            return (
+              <g key={i}>
+                <rect x={x} y={y} width={barW} height={bH} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity="0.85" rx="3" />
+                <line x1={x + barW / 2} y1={PT + cH} x2={x + barW / 2} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+                <text x={x + barW / 2} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{d.label.substring(0, 9)}</text>
+              </g>
+            );
+          })}
+        </svg>
+      );
+    }
+
+    if (deptChartType === 'line') {
+      const pts = deptData.map((d, i) => ({
+        x: PL + (deptData.length < 2 ? cW / 2 : (i / (deptData.length - 1)) * cW),
+        y: PT + (1 - d.value / max) * cH,
+        d
+      }));
+      const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+      const area = pts.length > 1 ? `${path} L ${pts[pts.length - 1].x} ${PT + cH} L ${pts[0].x} ${PT + cH} Z` : '';
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} className={svgClass}>
+          <defs><linearGradient id="lgDeptArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity="0.22" /><stop offset="100%" stopColor="#6366f1" stopOpacity="0" /></linearGradient></defs>
+          {axesJSX}
+          {area && <path d={area} fill="url(#lgDeptArea)" />}
+          <path d={path} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          {pts.map((p, i) => (
+            <g key={i}>
+              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+              <circle cx={p.x} cy={p.y} r="4.5" fill="#6366f1" stroke="white" strokeWidth="2" />
+              <text x={p.x} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{p.d.label.substring(0, 9)}</text>
+            </g>
+          ))}
+        </svg>
+      );
+    }
+
+    if (deptChartType === 'scatter') {
+      const SIDE_PAD = 28;
+      const pts = deptData.map((d, i) => ({
+        x: PL + SIDE_PAD + (deptData.length < 2 ? (cW - 2 * SIDE_PAD) / 2 : (i / (deptData.length - 1)) * (cW - 2 * SIDE_PAD)),
+        y: PT + (1 - d.value / max) * cH,
+        d, c: CHART_COLORS[i % CHART_COLORS.length]
+      }));
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} className={svgClass}>
+          {axesJSX}
+          {pts.map((p, i) => (
+            <g key={i}>
+              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+              <circle cx={p.x} cy={p.y} r="9" fill={p.c} fillOpacity="0.75" stroke={p.c} strokeWidth="1.5" />
+              <text x={p.x} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{p.d.label.substring(0, 9)}</text>
+            </g>
+          ))}
+        </svg>
+      );
+    }
+
+    if (deptChartType === 'bubble') {
+      const minV = Math.min(...deptData.map(d => d.value));
+      const rng = max - minV || 1;
+      const SIDE_PAD = 28;
+      const pts = deptData.map((d, i) => ({
+        x: PL + SIDE_PAD + (deptData.length < 2 ? (cW - 2 * SIDE_PAD) / 2 : (i / (deptData.length - 1)) * (cW - 2 * SIDE_PAD)),
+        y: PT + (1 - d.value / max) * cH,
+        r: 14 + ((d.value - minV) / rng) * 36,
+        d, c: CHART_COLORS[i % CHART_COLORS.length]
+      }));
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} className={svgClass}>
+          {axesJSX}
+          {pts.map((p, i) => (
+            <g key={i}>
+              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+              <circle cx={p.x} cy={p.y} r={p.r} fill={p.c} fillOpacity="0.55" stroke={p.c} strokeWidth="1.5" />
+              <text x={p.x} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{p.d.label.substring(0, 9)}</text>
+            </g>
+          ))}
+        </svg>
+      );
+    }
+    return null;
+  };
+
+
+
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -3191,75 +3578,154 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
             {currentUser.role === UserRole.EMPLOYEE ? 'Track your personal travel history and spend.' : 'Data-driven insights for strategic decision making.'}
           </p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => {
-            const csvContent = [
-              ['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice URL'],
-              ...filteredData.map(r => [
-                r.submissionId || r.id,
-                r.requesterName,
-                r.requesterDepartment,
-                r.requesterCampus,
-                `${r.from} -> ${r.to}`,
-                new Date(r.dateOfTravel).toLocaleDateString(),
-                r.pncStatus,
-                r.ticketCost || 0,
-                r.vendorName || '',
-                r.invoiceUrl || ''
-              ])
-            ].map(e => e.join(",")).join("\n");
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `travel_report_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            toast.success("CSV Export downloaded successfully!");
-          }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
-            <i className="fa-solid fa-download mr-2"></i>Export Report
-          </button>
-        </div>
+        <button onClick={() => {
+          const csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
+          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `travel_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          toast.success('CSV exported!');
+        }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
+          <i className="fa-solid fa-download mr-2"></i>Export Report
+        </button>
       </header>
 
-      {/* Filter Bar */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap gap-4 items-center shadow-sm">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mr-2"><i className="fa-solid fa-filter"></i> Filters</div>
+      {/* Filters */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap gap-4 items-start shadow-sm">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mt-2"><i className="fa-solid fa-filter"></i> Filters</div>
 
-        <select className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.campus} onChange={e => setFilters({ ...filters, campus: e.target.value })}>
-          <option value="All">All Campuses</option>
-          {uniqueCampuses.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        {/* Campus multi-select */}
+        <div className="relative" ref={campusDropRef}>
+          <button
+            onClick={() => { setCampusDropOpen(v => !v); setDeptDropOpen(false); }}
+            className={`flex items-center gap-2 min-w-[140px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.campuses.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'
+              }`}
+          >
+            <i className="fa-solid fa-building text-slate-400 text-xs"></i>
+            <span className="flex-1 text-left truncate">
+              {filters.campuses.length === 0 ? 'All Campuses' : filters.campuses.length === 1 ? filters.campuses[0] : `${filters.campuses.length} Campuses`}
+            </span>
+            <i className={`fa-solid fa-chevron-${campusDropOpen ? 'up' : 'down'} text-[9px] text-slate-400`}></i>
+          </button>
+          {campusDropOpen && (
+            <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Campus</span>
+                {filters.campuses.length > 0 && (
+                  <button onClick={() => setFilters(f => ({ ...f, campuses: [] }))} className="text-[10px] font-bold text-rose-500 hover:text-rose-600">Clear</button>
+                )}
+              </div>
+              <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                {uniqueCampuses.map(c => {
+                  const checked = filters.campuses.includes(c);
+                  return (
+                    <button key={c} onClick={() => setFilters(f => ({ ...f, campuses: checked ? f.campuses.filter(x => x !== c) : [...f.campuses, c] }))}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <div className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
+                        }`}>
+                        {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
+                      </div>
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* Selected chips */}
+          {filters.campuses.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {filters.campuses.map(c => (
+                <span key={c} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {c}
+                  <button onClick={() => setFilters(f => ({ ...f, campuses: f.campuses.filter(x => x !== c) }))} className="hover:text-rose-500 transition-colors"><i className="fa-solid fa-xmark text-[8px]"></i></button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <select className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.department} onChange={e => setFilters({ ...filters, department: e.target.value })}>
-          <option value="All">All Departments</option>
-          {uniqueDepts.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        {/* Department multi-select */}
+        <div className="relative" ref={deptDropRef}>
+          <button
+            onClick={() => { setDeptDropOpen(v => !v); setCampusDropOpen(false); }}
+            className={`flex items-center gap-2 min-w-[160px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.departments.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'
+              }`}
+          >
+            <i className="fa-solid fa-sitemap text-slate-400 text-xs"></i>
+            <span className="flex-1 text-left truncate">
+              {filters.departments.length === 0 ? 'All Departments' : filters.departments.length === 1 ? filters.departments[0] : `${filters.departments.length} Departments`}
+            </span>
+            <i className={`fa-solid fa-chevron-${deptDropOpen ? 'up' : 'down'} text-[9px] text-slate-400`}></i>
+          </button>
+          {deptDropOpen && (
+            <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Department</span>
+                {filters.departments.length > 0 && (
+                  <button onClick={() => setFilters(f => ({ ...f, departments: [] }))} className="text-[10px] font-bold text-rose-500 hover:text-rose-600">Clear</button>
+                )}
+              </div>
+              <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                {uniqueDepts.map(d => {
+                  const checked = filters.departments.includes(d);
+                  return (
+                    <button key={d} onClick={() => setFilters(f => ({ ...f, departments: checked ? f.departments.filter(x => x !== d) : [...f.departments, d] }))}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <div className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
+                        }`}>
+                        {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
+                      </div>
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* Selected chips */}
+          {filters.departments.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {filters.departments.map(d => (
+                <span key={d} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {d}
+                  <button onClick={() => setFilters(f => ({ ...f, departments: f.departments.filter(x => x !== d) }))} className="hover:text-rose-500 transition-colors"><i className="fa-solid fa-xmark text-[8px]"></i></button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
+        {/* Period select */}
         <select className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
           <option value="All Time">All Time</option>
           <option value="This Month">This Month</option>
           <option value="Last Month">Last Month</option>
           <option value="Custom Date">Custom Date</option>
         </select>
-
         {filters.period === 'Custom Date' && (
-          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
-            <input
-              type="date"
-              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300"
-              value={filters.startDate}
-              onChange={e => setFilters({ ...filters, startDate: e.target.value })}
-            />
-            <span className="text-slate-400 font-bold">-</span>
-            <input
-              type="date"
-              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300"
-              value={filters.endDate}
-              onChange={e => setFilters({ ...filters, endDate: e.target.value })}
-            />
+          <div className="flex items-center gap-2">
+            <input type="date" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.startDate} onChange={e => setFilters({ ...filters, startDate: e.target.value })} />
+            <span className="text-slate-400 font-bold">–</span>
+            <input type="date" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} />
+          </div>
+        )}
+
+        {/* Clear all */}
+        {(filters.campuses.length > 0 || filters.departments.length > 0) && (
+          <button
+            onClick={() => setFilters(f => ({ ...f, campuses: [], departments: [] }))}
+            className="text-xs font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors"
+          >
+            <i className="fa-solid fa-xmark"></i> Clear All
+          </button>
+        )}
+
+        {showComparison && (
+          <div className="ml-auto flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-full">
+            <i className="fa-solid fa-arrows-left-right"></i>
+            vs previous {filters.period === 'Custom Date' ? 'period' : 'month'}
           </div>
         )}
       </div>
@@ -3268,96 +3734,134 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {isPNCView ? (
           <>
-            <StatCard title="Total Requests" value={totalRequests} icon={<i className="fa-solid fa-inbox"></i>} trendUp={true} description="All time volume" />
-            <StatCard title="Total Tickets" value={totalBookings} icon={<i className="fa-solid fa-check-double"></i>} trendUp={true} description="Successfully closed" />
-            <StatCard title="Open Requests" value={openRequests} icon={<i className="fa-solid fa-clock"></i>} trendUp={false} description="Pending action" />
-            <StatCard title="Avg Processing" value={`${avgProcessingTime} Days`} icon={<i className="fa-solid fa-stopwatch"></i>} description="Request to Close" />
+            <StatCard title="Total Requests" value={totalRequests} icon={<i className="fa-solid fa-inbox"></i>} trend={reqChange?.pct} trendUp={reqChange?.up} description={showComparison ? `vs ${prevTotalRequests} prev period` : 'All time volume'} />
+            <StatCard title="Total Tickets" value={totalBookings} icon={<i className="fa-solid fa-check-double"></i>} trend={bookingsChange?.pct} trendUp={bookingsChange?.up} description={showComparison ? `vs ${prevTotalBookings} prev period` : 'Successfully closed'} />
+            <StatCard title="Open Requests" value={openRequests} icon={<i className="fa-solid fa-clock"></i>} description="Pending action" />
+            <StatCard title="Avg Ticket Cost" value={avgTicketCost > 0 ? `₹${avgTicketCost.toLocaleString()}` : '—'} icon={<i className="fa-solid fa-calculator"></i>} trend={avgCostChange?.pct} trendUp={avgCostChange?.up} description={`${bookedWithCost.length} closed tickets`} />
           </>
         ) : (
           <>
-            <StatCard title="Total Bookings" value={totalRequests} icon={<i className="fa-solid fa-ticket"></i>} trend="+5%" trendUp={true} description="Total requests in period" />
-            {isFinancialView && (
-              <StatCard title="Total Spend" value={`₹ ${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} trend="+12%" trendUp={false} description="Actual ticket cost" />
-            )}
-            <StatCard title="Avg Processing" value="1.2 Days" icon={<i className="fa-solid fa-stopwatch"></i>} description="Submit to Issue" />
-            <StatCard title="Compliance Rate" value="94%" icon={<i className="fa-solid fa-check-circle"></i>} trend="-2%" trendUp={false} description="Adherence to policy" />
+            <StatCard title="Total Bookings" value={totalRequests} icon={<i className="fa-solid fa-ticket"></i>} trend={reqChange?.pct} trendUp={reqChange?.up} description={showComparison ? `vs ${prevTotalRequests} prev period` : 'Total requests in period'} />
+            {isFinancialView && <StatCard title="Total Spend" value={`₹ ${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} trend={spendChange?.pct} trendUp={spendChange?.up !== undefined ? !spendChange.up : undefined} description="Actual ticket cost" />}
+            {isFinancialView && <StatCard title="Avg Ticket Cost" value={avgTicketCost > 0 ? `₹${avgTicketCost.toLocaleString()}` : '—'} icon={<i className="fa-solid fa-calculator"></i>} trend={avgCostChange?.pct} trendUp={avgCostChange?.up} description={`${bookedWithCost.length} closed tickets`} />}
           </>
         )}
       </div>
 
-      {/* Widget Grid */}
+      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {widgets.status && (
+        {isPNCView && (
           <Card className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h4 className="font-bold text-slate-800 dark:text-white">Request Status Breakdown</h4>
-            </div>
-            {isPNCView ? (
-              <DonutChart data={statusData} />
-            ) : (
-              <BarChart data={statusData} color="bg-amber-400" />
-            )}
+            <h4 className="font-bold text-slate-800 dark:text-white mb-6">Request Status Breakdown</h4>
+            <DonutChart data={statusData} />
           </Card>
         )}
-
-        {widgets.volume && (
-          <Card className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h4 className="font-bold text-slate-800 dark:text-white">
-                {isFinancialView ? 'Spend by Department' : 'Volume by Department'}
-              </h4>
+        <Card className="p-6 flex flex-col" style={{ minHeight: '420px' }}>
+          <div className="flex justify-between items-center mb-5">
+            <h4 className="font-bold text-slate-800 dark:text-white">{isFinancialView ? 'Spend by Department' : 'Volume by Department'}</h4>
+            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              {(['bar', 'line', 'scatter', 'bubble', 'pie'] as const).map(type => (
+                <button key={type} onClick={() => setDeptChartType(type)} title={type.charAt(0).toUpperCase() + type.slice(1)}
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all ${deptChartType === type ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                  <i className={`fa-solid ${CHART_ICONS[type]}`}></i>
+                </button>
+              ))}
             </div>
-            <BarChart data={deptData} color={isFinancialView ? 'bg-emerald-500' : 'bg-indigo-500'} />
-          </Card>
-        )}
-      </div>
-
-      {/* Master Data Table */}
-      {widgets.table && (
-        <Card className="overflow-hidden">
-          <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-            <h4 className="font-bold text-slate-800 dark:text-white">Detailed Report</h4>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="bg-white dark:bg-slate-900 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
-                <tr>
-                  <th className="px-6 py-4">Request ID</th>
-                  <th className="px-6 py-4">Traveler</th>
-                  <th className="px-6 py-4">Dept / Campus</th>
-                  <th className="px-6 py-4">Route</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Ticket</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y dark:divide-slate-800">
-                {filteredData.map((r: any) => (
-                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">{r.submissionId || r.id}</td>
-                    <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">{r.requesterName}</td>
-                    <td className="px-6 py-4 text-slate-500 text-xs">
-                      {r.requesterDepartment} <span className="text-slate-300 mx-1">•</span> {r.requesterCampus}
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
-                    <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                    <td className="px-6 py-4 text-xs font-mono text-slate-500">
-                      {(r.invoiceUrl || r.ticketUrl) ? (
-                        <a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">
-                          View Ticket <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                        </a>
-                      ) : (
-                        <span className="text-slate-300">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex-1 flex flex-col justify-center">
+            {renderDeptChart()}
           </div>
         </Card>
-      )}
+      </div>
+
+      {/* Department Summary Table */}
+      <Card className="overflow-hidden">
+        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+          <div>
+            <h4 className="font-bold text-slate-800 dark:text-white">Tickets by Department</h4>
+            <p className="text-xs text-slate-400 mt-0.5">Booking summary per department — click headers to sort</p>
+          </div>
+          <span className="text-xs font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-full">{filteredData.length} records</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-white dark:bg-slate-900 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+              <tr>
+                <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('dept')}>Department <SortIcon col="dept" /></th>
+                <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('count')}># Tickets <SortIcon col="count" /></th>
+                {isFinancialView && <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('avg')}>Avg Cost <SortIcon col="avg" /></th>}
+                {isFinancialView && <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('total')}>Total Cost <SortIcon col="total" /></th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y dark:divide-slate-800">
+              {sortedDeptSummary.map((row, i) => (
+                <tr key={row.dept} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}></div>
+                      <span className="font-bold text-slate-800 dark:text-white">{row.dept}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-slate-800 dark:text-white w-8">{row.count}</span>
+                      <div className="flex-1 max-w-[100px] h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(row.count / (Math.max(...sortedDeptSummary.map(r => r.count)) || 1)) * 100}%` }}></div>
+                      </div>
+                    </div>
+                  </td>
+                  {isFinancialView && <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400">₹{row.avgCost.toLocaleString()}</td>}
+                  {isFinancialView && <td className="px-6 py-4"><span className="font-bold text-slate-900 dark:text-white">₹{row.totalCost.toLocaleString()}</span></td>}
+                </tr>
+              ))}
+              {sortedDeptSummary.length === 0 && (
+                <tr><td colSpan={isFinancialView ? 4 : 2} className="px-6 py-12 text-center text-slate-400 text-sm">No data for the selected period.</td></tr>
+              )}
+            </tbody>
+            {sortedDeptSummary.length > 0 && isFinancialView && (
+              <tfoot className="bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700">
+                <tr>
+                  <td className="px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-widest">Totals</td>
+                  <td className="px-6 py-3 font-black text-slate-800 dark:text-white">{sortedDeptSummary.reduce((a, r) => a + r.count, 0)}</td>
+                  <td className="px-6 py-3 font-mono text-slate-500">₹{avgTicketCost.toLocaleString()}</td>
+                  <td className="px-6 py-3 font-black text-indigo-600">₹{totalSpend.toLocaleString()}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </Card>
+
+      {/* Detailed Report Table */}
+      <Card className="overflow-hidden">
+        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+          <h4 className="font-bold text-slate-800 dark:text-white">Detailed Report</h4>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left whitespace-nowrap">
+            <thead className="bg-white dark:bg-slate-900 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+              <tr>
+                <th className="px-6 py-4">Request ID</th><th className="px-6 py-4">Traveler</th>
+                <th className="px-6 py-4">Dept / Campus</th><th className="px-6 py-4">Route</th>
+                <th className="px-6 py-4">Date</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Ticket</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y dark:divide-slate-800">
+              {filteredData.map((r: any) => (
+                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                  <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">{r.submissionId || r.id}</td>
+                  <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">{r.requesterName}</td>
+                  <td className="px-6 py-4 text-slate-500 text-xs">{r.requesterDepartment} <span className="text-slate-300 mx-1">•</span> {r.requesterCampus}</td>
+                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
+                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
+                  <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
+                  <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">View <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>) : <span className="text-slate-300">—</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
     </div>
   );
@@ -3760,7 +4264,21 @@ const App: React.FC = () => {
           id: profile.id,
           name: profile.name || session.user.email?.split('@')[0],
           email: profile.email,
-          role: (sessionStorage.getItem('currentRole') as UserRole) || UserRole.EMPLOYEE,
+          role: (() => {
+            const dbRole = profile.role as UserRole;
+            const storedRole = sessionStorage.getItem('currentRole') as UserRole | null;
+            // Only honour the stored role if it's a valid view-switch for this user's base role
+            // e.g. a PNC user may have chosen to "view as Employee" — keep that choice.
+            // But if there's no stored role, or it isn't accessible to this user, fall back to DB role.
+            const validRolesForDbRole = (() => {
+              if (dbRole === UserRole.ADMIN) return Object.values(UserRole);
+              if (dbRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.FINANCE];
+              if (dbRole === UserRole.FINANCE) return [UserRole.EMPLOYEE, UserRole.FINANCE];
+              return [UserRole.EMPLOYEE];
+            })();
+            if (storedRole && validRolesForDbRole.includes(storedRole)) return storedRole;
+            return dbRole;
+          })(),
           department: profile.department,
           campus: profile.campus,
           managerName: profile.manager_name,
@@ -4047,39 +4565,95 @@ const App: React.FC = () => {
     return !isUserVerified(currentUser);
   }, [currentUser, policy]);
 
+  // ─── Profile-only update (never touches the role column) ───────────────────
   const handleUpdateUser = async (updatedUser: User) => {
+    // NOTE: This function intentionally does NOT update the `role` field.
+    // Role changes must go through handleUpdateUserRole (Admin/PNC → Users tab only).
+    const PROTECTED_ADMIN_EMAIL = 'nitin@navgurukul.org';
+    const isProtected = updatedUser.email?.toLowerCase() === PROTECTED_ADMIN_EMAIL;
+    // Re-lock the protected admin's role in local state, just in case
+    const finalUser = isProtected ? { ...updatedUser, role: UserRole.ADMIN } : updatedUser;
+
     try {
       const { error } = await supabase
         .from('profiles')
         .update({
-          name: updatedUser.name,
-          avatar: updatedUser.avatar,
-          department: updatedUser.department,
-          campus: updatedUser.campus,
-          manager_name: updatedUser.managerName,
-          manager_email: updatedUser.managerEmail,
-          passport_photo: updatedUser.passportPhoto,
-          id_proof: updatedUser.idProof,
-          phone: updatedUser.phone,
-          emergency_contact_name: updatedUser.emergencyContactName,
-          emergency_contact_phone: updatedUser.emergencyContactPhone,
-          emergency_contact_relation: updatedUser.emergencyContactRelation,
-          blood_group: updatedUser.bloodGroup,
-          medical_conditions: updatedUser.medicalConditions,
-          role: updatedUser.role,
+          name: finalUser.name,
+          avatar: finalUser.avatar,
+          department: finalUser.department,
+          campus: finalUser.campus,
+          manager_name: finalUser.managerName,
+          manager_email: finalUser.managerEmail,
+          passport_photo: finalUser.passportPhoto,
+          id_proof: finalUser.idProof,
+          phone: finalUser.phone,
+          emergency_contact_name: finalUser.emergencyContactName,
+          emergency_contact_phone: finalUser.emergencyContactPhone,
+          emergency_contact_relation: finalUser.emergencyContactRelation,
+          blood_group: finalUser.bloodGroup,
+          medical_conditions: finalUser.medicalConditions,
+          // ⚠️  role is intentionally omitted — use handleUpdateUserRole instead
           updated_at: new Date().toISOString()
         })
-        .eq('id', updatedUser.id);
+        .eq('id', finalUser.id);
 
       if (error) throw error;
 
-      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-      if (currentUser?.id === updatedUser.id) {
-        setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => u.id === finalUser.id ? finalUser : u));
+      if (currentUser?.id === finalUser.id) {
+        setCurrentUser(finalUser);
       }
       toast.success("Profile updated in database");
     } catch (err: any) {
       toast.error("Update failed: " + err.message);
+    }
+  };
+
+  // ─── Role-only update — callable only from PNC → Users or Admin → Users ────
+  const handleUpdateUserRole = async (targetUser: User, newRole: UserRole) => {
+    const callerRole = currentUser?.role;
+
+    // 1. Only Admin or PNC (acting as PNC) can change roles
+    if (callerRole !== UserRole.ADMIN && callerRole !== UserRole.PNC) {
+      toast.error("Unauthorised: only Admin or PNC can change roles.");
+      return;
+    }
+
+    // 2. Protected admin account is always locked
+    const PROTECTED_ADMIN_EMAIL = 'nitin@navgurukul.org';
+    if (targetUser.email?.toLowerCase() === PROTECTED_ADMIN_EMAIL) {
+      toast.error("The protected admin account cannot be re-assigned.");
+      return;
+    }
+
+    // 3. PNC can only assign Employee or PNC roles
+    if (callerRole === UserRole.PNC) {
+      if (newRole !== UserRole.EMPLOYEE && newRole !== UserRole.PNC) {
+        toast.error("PNC can only assign Employee or PNC roles.");
+        return;
+      }
+    }
+
+    // 4. Nobody can self-demote (prevents accidental lockout)
+    if (targetUser.id === currentUser?.id) {
+      toast.error("You cannot change your own role here. Use the DB directly.");
+      return;
+    }
+
+    const updatedUser = { ...targetUser, role: newRole };
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq('id', targetUser.id);
+
+      if (error) throw error;
+
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? updatedUser : u));
+      toast.success(`Role updated to ${newRole} for ${targetUser.name || targetUser.email}`);
+    } catch (err: any) {
+      toast.error("Role update failed: " + err.message);
     }
   };
 
@@ -4199,7 +4773,7 @@ const App: React.FC = () => {
         return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
-        return <FinanceDashboard requests={requests} />;
+        return <AnalyticsView requests={requests} currentUser={currentUser} />;
       }
       return null;
     };
@@ -4243,7 +4817,7 @@ const App: React.FC = () => {
         />;
       case 'role-management':
         if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
-        return <UserRoleManagement users={users} onUpdateUser={handleUpdateUser} currentUser={currentUser} />;
+        return <UserRoleManagement users={users} onUpdateRole={handleUpdateUserRole} currentUser={currentUser} />;
       case 'profile':
         return (
           <div className="max-w-4xl mx-auto transition-all duration-300">
@@ -4473,10 +5047,9 @@ const App: React.FC = () => {
           {currentUser.role === UserRole.FINANCE && (
             <>
               <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
-                <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
+                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
-                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
               </div>
 
             </>

@@ -967,93 +967,280 @@ const IgathpuriMeetupView = ({
     const pending = availabilityRequests.filter(r => r.status === 'Pending');
     const approved = availabilityRequests.filter(r => r.status === 'Approved');
     const rejected = availabilityRequests.filter(r => r.status === 'Rejected');
+    const totalPax = availabilityRequests.reduce((sum, r) => sum + (r.teamSize || 0), 0);
+    const approvalRate = availabilityRequests.length > 0
+      ? Math.round((approved.length / availabilityRequests.length) * 100)
+      : 0;
 
-    const RequestList = ({ title, data, icon, colorClass }: any) => (
-      <div className="space-y-4">
-        <h3 className={`text-sm font-black uppercase tracking-[0.2em] flex items-center gap-2 ${colorClass}`}>
-          <i className={`fa-solid ${icon}`}></i>
-          {title} ({data.length})
-        </h3>
-        {data.length === 0 ? (
-          <div className="py-8 text-center bg-white/50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800">
-            <p className="text-slate-400 text-xs font-bold italic tracking-wider">No requests in this category</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.map((r: MeetupAvailabilityRequest) => (
-              <Card key={r.id} className="p-5 hover:border-indigo-500/30 transition-all group">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{r.fullName}</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{r.department}</p>
-                  </div>
-                  <div className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
-                    {r.teamSize} PAX
-                  </div>
-                </div>
+    const PncMeetupSubTabs = () => {
+      const [activeSubTab, setActiveSubTab] = React.useState<'pending' | 'approved' | 'rejected'>('pending');
+      const [selectedRequest, setSelectedRequest] = React.useState<MeetupAvailabilityRequest | null>(null);
 
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <i className="fa-solid fa-calendar-days text-indigo-500 w-4"></i>
-                    <span>{new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 p-2 rounded-xl">
-                    <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
-                    <span className="truncate">{r.email}</span>
-                  </div>
-                </div>
+      const subTabs = [
+        { id: 'pending' as const, label: 'Pending', count: pending.length, icon: 'fa-clock-rotate-left', color: 'amber' },
+        { id: 'approved' as const, label: 'Approved', count: approved.length, icon: 'fa-circle-check', color: 'emerald' },
+        { id: 'rejected' as const, label: 'Rejected', count: rejected.length, icon: 'fa-circle-xmark', color: 'rose' },
+      ];
 
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase">Created: {new Date(r.createdAt).toLocaleDateString()}</span>
-                  <div className={`w-2 h-2 rounded-full ${r.status === 'Approved' ? 'bg-emerald-500' : r.status === 'Pending' ? 'bg-amber-500' : 'bg-rose-500'}`}></div>
-                </div>
-              </Card>
+      const activeData = activeSubTab === 'pending' ? pending : activeSubTab === 'approved' ? approved : rejected;
+
+      const colorMap: Record<string, { tab: string, badge: string, dot: string, empty: string }> = {
+        pending: {
+          tab: 'border-amber-500 text-amber-600 dark:text-amber-400',
+          badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+          dot: 'bg-amber-500',
+          empty: 'text-amber-400',
+        },
+        approved: {
+          tab: 'border-emerald-500 text-emerald-600 dark:text-emerald-400',
+          badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+          dot: 'bg-emerald-500',
+          empty: 'text-emerald-400',
+        },
+        rejected: {
+          tab: 'border-rose-500 text-rose-600 dark:text-rose-400',
+          badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+          dot: 'bg-rose-500',
+          empty: 'text-rose-400',
+        },
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Sub-tab bar */}
+          <div className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/50 p-1.5 rounded-2xl w-fit">
+            {subTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-200 ${activeSubTab === tab.id
+                  ? 'bg-white dark:bg-slate-900 shadow-md ' + colorMap[tab.id].tab + ' border-b-2'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+              >
+                <i className={`fa-solid ${tab.icon}`}></i>
+                {tab.label}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-lg font-black ${activeSubTab === tab.id ? colorMap[tab.id].badge : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                  }`}>
+                  {tab.count}
+                </span>
+              </button>
             ))}
           </div>
-        )}
-      </div>
-    );
+
+          {/* Content */}
+          <div className="animate-in fade-in duration-300">
+            {activeData.length === 0 ? (
+              <div className="py-16 text-center bg-white/50 dark:bg-slate-900/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                <i className={`fa-solid ${subTabs.find(t => t.id === activeSubTab)?.icon} text-3xl mb-3 ${colorMap[activeSubTab].empty}`}></i>
+                <p className="text-slate-400 text-xs font-bold italic tracking-wider">
+                  No {activeSubTab} requests
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activeData.map((r: MeetupAvailabilityRequest) => (
+                  <Card key={r.id} onClick={() => setSelectedRequest(r)} className="p-5 hover:border-indigo-500/30 transition-all group cursor-pointer hover:shadow-lg hover:-translate-y-1">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{r.fullName}</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{r.department}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${colorMap[activeSubTab].dot}`}></div>
+                        <div className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
+                          {r.teamSize} PAX
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <i className="fa-solid fa-calendar-days text-indigo-500 w-4"></i>
+                        <span>{new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 p-2 rounded-xl">
+                        <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
+                        <span className="truncate">{r.email}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Created: {new Date(r.createdAt).toLocaleDateString()}</span>
+                      <i className="fa-solid fa-arrow-right text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all text-xs"></i>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Details Modal */}
+          {selectedRequest && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+              <Card className="w-full max-w-2xl bg-white dark:bg-slate-900 p-8 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                <button
+                  onClick={() => setSelectedRequest(null)}
+                  className="absolute top-6 right-6 w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors z-50"
+                >
+                  <i className="fa-solid fa-times"></i>
+                </button>
+
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-6 flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${selectedRequest.status === 'Approved' ? 'bg-emerald-500' : selectedRequest.status === 'Rejected' ? 'bg-rose-500' : 'bg-amber-500'}`}>
+                    <i className="fa-solid fa-map-location-dot"></i>
+                  </div>
+                  Request Details
+                </h3>
+
+                <div className="overflow-y-auto custom-scrollbar pr-2 space-y-6">
+                  {/* Grid of details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-user text-indigo-400"></i> Requester Name</p>
+                      <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.fullName}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-building text-indigo-400"></i> Department / Team</p>
+                      <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.department || 'N/A'}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-envelope text-indigo-400"></i> Email Address</p>
+                      <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.email}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-phone text-indigo-400"></i> Contact Number</p>
+                      <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.phone}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-calendar text-indigo-400"></i> Proposed Dates</p>
+                      <p className="font-black text-slate-800 dark:text-white truncate">{new Date(selectedRequest.startDate).toLocaleDateString()} - {new Date(selectedRequest.endDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-users text-indigo-400"></i> Team Size / Status</p>
+                      <p className="font-black text-slate-800 dark:text-white flex items-center justify-between">
+                        <span>{selectedRequest.teamSize} PAX</span>
+                        <span className={`px-2.5 py-0.5 rounded-lg text-[10px] uppercase font-black tracking-widest ${selectedRequest.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : selectedRequest.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>{selectedRequest.status}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedRequest.attendeeEmails && selectedRequest.attendeeEmails.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                        <i className="fa-solid fa-clipboard-user text-indigo-500"></i>
+                        Attendees Confirmed
+                      </h4>
+                      <div className="flex flex-wrap gap-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        {selectedRequest.attendeeEmails.map((email, idx) => (
+                          <span key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">{email}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedRequest.timeline && selectedRequest.timeline.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                        <i className="fa-solid fa-clock-rotate-left text-indigo-500"></i>
+                        Request History
+                      </h4>
+                      <div className="space-y-3">
+                        {selectedRequest.timeline?.map((event, idx) => (
+                          <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                            <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm">
+                              <i className={`fa-solid ${event.event.includes('Approved') || event.event.includes('Approved availability') ? 'fa-check text-emerald-500' : event.event.includes('Rejected') ? 'fa-xmark text-rose-500' : 'fa-clock text-amber-500'} text-xs`}></i>
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-slate-800 dark:text-white capitalize leading-tight">{event.event}</p>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <p className="text-[10px] font-bold text-slate-500">{new Date(event.timestamp).toLocaleString()}</p>
+                                <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                <p className="text-[10px] font-bold text-slate-500 truncate max-w-[150px]" title={event.actor}>{event.actor}</p>
+                              </div>
+                              {event.details && <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm italic">&quot;{event.details}&quot;</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                  <button onClick={() => setSelectedRequest(null)} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-xl shadow-slate-900/10 dark:shadow-white/10">
+                    <i className="fa-solid fa-times"></i>
+                    Close Details
+                  </button>
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
-      <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <header className="relative py-8 px-10 bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-900/20">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 -mr-20 -mt-20 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 -ml-16 -mb-16 rounded-full blur-3xl"></div>
-
-          <div className="relative z-10">
-            <span className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-indigo-500/30">
-              <i className="fa-solid fa-shield-halved"></i>
-              PNC Operational View
-            </span>
-            <h2 className="text-4xl font-black text-white tracking-tight uppercase leading-none">Meetup Availability Control</h2>
-            <p className="text-slate-400 text-sm mt-3 font-medium max-w-xl">
-              Monitoring all pending and historical location reservation requests for the Igatpuri campus. This is a read-only tracking view for PNC operations.
-            </p>
-          </div>
+      <div className="space-y-8 animate-in fade-in duration-500">
+        <header>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Igatpuri Meetup Dashboard</h2>
+          <p className="text-slate-500 text-sm mt-1">Monitoring pending constraints and historical location reservations for the Igatpuri campus.</p>
         </header>
 
-        <div className="space-y-16 pb-12">
-          <RequestList
-            title="Pending Requests"
-            data={pending}
-            icon="fa-clock-rotate-left"
-            colorClass="text-amber-500"
-          />
+        {/* Separated Analytics Elements */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
+                <i className="fa-solid fa-inbox text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors text-xs"></i>
+              </div>
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Total<br />Requests</span>
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-indigo-600 transition-colors">{availabilityRequests.length}</p>
+            <p className="text-[9px] text-slate-400 font-bold mt-1.5">All time</p>
+          </div>
 
-          <RequestList
-            title="Approved History"
-            data={approved}
-            icon="fa-circle-check"
-            colorClass="text-emerald-500"
-          />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-900/10 flex items-center justify-center group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors border border-amber-100 dark:border-amber-800/50">
+                <i className="fa-solid fa-hourglass-half text-amber-500 text-xs"></i>
+              </div>
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Pending<br />Review</span>
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-amber-500 transition-colors">{pending.length}</p>
+            <p className="text-[9px] text-slate-400 font-bold mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">Awaiting decision</p>
+          </div>
 
-          <RequestList
-            title="Rejected History"
-            data={rejected}
-            icon="fa-circle-xmark"
-            colorClass="text-rose-500"
-          />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors border border-emerald-100 dark:border-emerald-800/50">
+                <i className="fa-solid fa-circle-check text-emerald-500 text-xs"></i>
+              </div>
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Approved<br />Requests</span>
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-emerald-500 transition-colors">{approved.length}</p>
+            <div className="flex items-center gap-2 mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
+                <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${approvalRate}%` }}></div>
+              </div>
+              <span className="text-[9px] text-slate-400 font-bold">{approvalRate}%</span>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-900/10 flex items-center justify-center group-hover:bg-violet-100 dark:group-hover:bg-violet-900/30 transition-colors border border-violet-100 dark:border-violet-800/50">
+                <i className="fa-solid fa-users text-violet-500 text-xs"></i>
+              </div>
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Total<br />PAX</span>
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-violet-500 transition-colors">{totalPax}</p>
+            <p className="text-[9px] text-slate-400 font-bold mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">Across all requests</p>
+          </div>
         </div>
+
+        {/* Sub-tabbed content */}
+        <PncMeetupSubTabs />
       </div>
     );
   }
@@ -2064,8 +2251,8 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
                             </div>
                             <div className="flex-shrink-0">
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${user.role === UserRole.ADMIN
-                                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
-                                  : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                                : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
                                 }`}>{user.role}</span>
                             </div>
                           </button>
@@ -2148,6 +2335,10 @@ const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[
   const [searchQuery, setSearchQuery] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
 
   const filteredUsers = useMemo(() => {
     return users.filter(user =>
@@ -2166,12 +2357,46 @@ const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[
     setCurrentPage(1);
   }, [searchQuery, itemsPerPage]);
 
+  const handleInviteUser = async () => {
+    if (!newUserEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newUserEmail.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    setIsInviting(true);
+    try {
+      // Step 1: Send a magic link / signup invite via Supabase OTP
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: newUserEmail.trim(),
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: window.location.origin,
+          data: { name: newUserName.trim() || undefined }
+        }
+      });
+      if (otpError) throw otpError;
+
+      toast.success(`Invite sent to ${newUserEmail.trim()}! They will receive a magic link to sign in.`);
+      setNewUserName('');
+      setNewUserEmail('');
+      setIsAddUserModalOpen(false);
+    } catch (err: any) {
+      toast.error('Failed to send invite: ' + err.message);
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Role Management</h2>
-          <p className="text-slate-500 text-sm mt-1">Manage user roles and system access permissions.</p>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">User Management</h2>
+          <p className="text-slate-500 text-sm mt-1">Manage users, roles and system access permissions.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -2180,6 +2405,13 @@ const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[
             title="Refresh Data"
           >
             <i className="fa-solid fa-sync"></i>
+          </button>
+          <button
+            onClick={() => setIsAddUserModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+          >
+            <i className="fa-solid fa-user-plus"></i>
+            Add User
           </button>
           <div className="relative w-full md:w-80">
             <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
@@ -2293,6 +2525,102 @@ const UserRoleManagement = ({ users, onUpdateUser, currentUser }: { users: User[
           </div>
         </div>
       </Card>
+
+      {/* Add User Modal */}
+      {isAddUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setIsAddUserModalOpen(false)}></div>
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 z-10 overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b dark:border-slate-800 bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-indigo-600/20">
+                    <i className="fa-solid fa-user-plus"></i>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Add New User</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">Send an invitation to a new team member</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAddUserModalOpen(false)}
+                  className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                >
+                  <i className="fa-solid fa-xmark text-lg"></i>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-8 py-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Full Name</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i className="fa-solid fa-user text-slate-400"></i>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Enter full name"
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                    disabled={isInviting}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Email Address <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i className="fa-solid fa-envelope text-slate-400"></i>
+                  </div>
+                  <input
+                    type="email"
+                    placeholder="Enter email address"
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleInviteUser()}
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                    disabled={isInviting}
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl flex gap-3">
+                <i className="fa-solid fa-circle-info text-indigo-500 mt-0.5 flex-shrink-0"></i>
+                <p className="text-xs text-indigo-700 dark:text-indigo-400/80 leading-relaxed font-medium">
+                  An invitation magic link will be sent to the user's email. They can click it to sign in and complete their profile. Their default role will be <span className="font-black">Employee</span>.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-8 py-6 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex gap-3 justify-end">
+              <button
+                onClick={() => { setIsAddUserModalOpen(false); setNewUserName(''); setNewUserEmail(''); }}
+                className="px-6 py-2.5 text-sm font-black text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
+                disabled={isInviting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInviteUser}
+                disabled={isInviting || !newUserEmail.trim()}
+                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-black rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isInviting ? (
+                  <><i className="fa-solid fa-spinner fa-spin"></i> Sending...</>
+                ) : (
+                  <><i className="fa-solid fa-paper-plane"></i> Send Invite</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -4136,7 +4464,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
-                <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
               </div>
 
             </>
@@ -4166,7 +4494,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
-                <SidebarLink icon="fa-users-gear" label="Roles" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
               </div>
 
             </>

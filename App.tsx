@@ -1880,7 +1880,7 @@ const IgathpuriMeetupView = ({
   );
 };
 
-const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled }: any) => {
+const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled, currentUser }: any) => {
   const handleUpdateMinAdvanceDays = async (mode: string, days: number) => {
     try {
       const { data, error } = await supabase
@@ -1898,6 +1898,22 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
       toast.success(`${mode} policy updated`);
     } catch (err: any) {
       toast.error("Failed to update policy: " + err.message);
+    }
+  };
+
+  const handleUpdatePolicy = async (updates: Partial<any>) => {
+    const newPolicy = { ...policy, ...updates };
+    setPolicy(newPolicy);
+    try {
+      const { error } = await supabase.from('meetup_settings').upsert({
+        setting_key: 'policy_config',
+        setting_value: newPolicy as any,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+      if (error) throw error;
+      toast.success("Policy saved successfully");
+    } catch (err: any) {
+      toast.error("Failed to save policy: " + err.message);
     }
   };
 
@@ -2175,7 +2191,8 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
                 label="Auto-approval Limit (₹)"
                 type="number"
                 value={policy.autoApproveBelowAmount}
-                onChange={(e: any) => setPolicy({ ...policy, autoApproveBelowAmount: parseInt(e.target.value) })}
+                onChange={(e: any) => setPolicy({ ...policy, autoApproveBelowAmount: parseInt(e.target.value) || 0 })}
+                onBlur={() => handleUpdatePolicy({ autoApproveBelowAmount: policy.autoApproveBelowAmount })}
               />
             </div>
           </div>
@@ -2200,7 +2217,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
               <p className="font-bold text-sm text-slate-700 dark:text-slate-300">Enforce Verification</p>
               <p className="text-xs text-slate-500 mt-1">Require documents before allowing travel bookings.</p>
             </div>
-            <Toggle active={policy.isEnforcementEnabled} onChange={() => setPolicy({ ...policy, isEnforcementEnabled: !policy.isEnforcementEnabled })} />
+            <Toggle active={policy.isEnforcementEnabled} onChange={() => handleUpdatePolicy({ isEnforcementEnabled: !policy.isEnforcementEnabled })} />
           </div>
 
           {policy.isEnforcementEnabled && (
@@ -2216,15 +2233,23 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
                   </p>
                 </div>
               </div>
-              <div className="max-w-[200px] ml-14">
-                <Input
-                  label="Days Duration"
-                  type="number"
-                  min="1"
-                  max="30"
-                  value={policy.temporaryUnlockDays}
-                  onChange={(e: any) => setPolicy({ ...policy, temporaryUnlockDays: parseInt(e.target.value) || 7 })}
-                />
+              <div className="ml-14 flex items-end gap-3 max-w-[300px]">
+                <div className="flex-1">
+                  <Input
+                    label="Days Duration"
+                    type="number"
+                    min="1"
+                    max="30"
+                    value={policy.temporaryUnlockDays}
+                    onChange={(e: any) => setPolicy({ ...policy, temporaryUnlockDays: parseInt(e.target.value) || 7 })}
+                  />
+                </div>
+                <button
+                  onClick={() => handleUpdatePolicy({ temporaryUnlockDays: policy.temporaryUnlockDays })}
+                  className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-violet-600/20 transition-all mb-1"
+                >
+                  Save
+                </button>
               </div>
             </div>
           )}
@@ -2232,6 +2257,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
       </section>
 
       {/* Igatpuri Section */}
+      {currentUser?.email === 'nitin@navgurukul.org' && currentUser?.role === UserRole.ADMIN && (
       <section className="space-y-6">
         <div className="flex items-center justify-between border-b-2 border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-3">
@@ -2413,6 +2439,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
           </Card>
         </div>
       </section>
+      )}
     </div>
   );
 };
@@ -4439,12 +4466,16 @@ const App: React.FC = () => {
         const { data: settingsData, error: settingsError } = await supabase
           .from('meetup_settings')
           .select('*')
-          .in('setting_key', ['is_igatpuri_enabled']);
+          .in('setting_key', ['is_igatpuri_enabled', 'policy_config']);
 
         if (!settingsError && settingsData) {
           const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
           if (igatpuriSetting) {
             setIsIgatpuriEnabled(igatpuriSetting.setting_value === true || igatpuriSetting.setting_value === 'true');
+          }
+          const policySetting = settingsData.find(s => s.setting_key === 'policy_config');
+          if (policySetting && policySetting.setting_value) {
+            setPolicy(prev => ({ ...prev, ...policySetting.setting_value }));
           }
         }
 
@@ -4763,6 +4794,7 @@ const App: React.FC = () => {
             user={currentUser}
             meetupRequests={meetupAvailabilityRequests}
             onNavigateToMeetup={() => handleTabChange('igathpuri-meetup')}
+            isIgatpuriEnabled={isIgatpuriEnabled}
           />
         );
       }
@@ -4814,6 +4846,7 @@ const App: React.FC = () => {
           users={users}
           isIgatpuriEnabled={isIgatpuriEnabled}
           setIsIgatpuriEnabled={setIsIgatpuriEnabled}
+          currentUser={currentUser}
         />;
       case 'role-management':
         if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
@@ -5366,7 +5399,7 @@ const App: React.FC = () => {
 
 // --- Shared Display Sub-components ---
 
-const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, completeness, onViewProfile, user, meetupRequests = [], onNavigateToMeetup }: { requests: TravelRequest[], onNewRequest: (context?: any) => void, onView: (r: TravelRequest) => void, isWarningVisible: boolean, completeness: number, onViewProfile: () => void, user: User, meetupRequests: MeetupAvailabilityRequest[], onNavigateToMeetup: () => void }) => {
+const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, completeness, onViewProfile, user, meetupRequests = [], onNavigateToMeetup, isIgatpuriEnabled = false }: { requests: TravelRequest[], onNewRequest: (context?: any) => void, onView: (r: TravelRequest) => void, isWarningVisible: boolean, completeness: number, onViewProfile: () => void, user: User, meetupRequests: MeetupAvailabilityRequest[], onNavigateToMeetup: () => void, isIgatpuriEnabled?: boolean }) => {
   const welcomeNote = useMemo(() => WELCOME_NOTES[Math.floor(Math.random() * WELCOME_NOTES.length)], []);
   const activeRequests = requests.filter((r: TravelRequest) =>
     r.pncStatus !== PNCStatus.BOOKED &&
@@ -5427,7 +5460,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
       )}
 
       {/* Meetup Notification Card */}
-      {meetupRequests.filter((mr: MeetupAvailabilityRequest) =>
+      {isIgatpuriEnabled && meetupRequests.filter((mr: MeetupAvailabilityRequest) =>
         mr.isFinalized &&
         mr.attendeeEmails?.some(email => email.toLowerCase() === user?.email?.toLowerCase()) &&
         !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER)

@@ -66,7 +66,7 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
   };
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-2xs uppercase font-bold border transition-colors ${getStyles()}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs uppercase font-bold border transition-colors ${getStyles()}`}>
       {getIcon()}
       {value}
     </span>

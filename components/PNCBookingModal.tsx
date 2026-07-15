@@ -94,7 +94,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl" onClick={onClose}></div>
 
-            <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500 border border-slate-200 dark:border-slate-800">
+            <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500 border border-slate-200 dark:border-slate-800">
 
                 {/* Progress bar */}
                 <div className="h-1 bg-slate-100 dark:bg-slate-800">
@@ -197,7 +197,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                                                 <button
                                                     key={m}
                                                     onClick={() => handleInputChange('mode', m)}
-                                                    className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${data.mode === m
+                                                    className={`px-4 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${data.mode === m
                                                         ? 'bg-indigo-600 text-white shadow-sm'
                                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                                         }`}
@@ -218,7 +218,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                                                 <button
                                                     key={t}
                                                     onClick={() => handleInputChange('tripType', t)}
-                                                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${data.tripType === t
+                                                    className={`flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${data.tripType === t
                                                         ? 'bg-indigo-600 text-white shadow-sm'
                                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                                         }`}
@@ -235,7 +235,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                         {/* Step 2: Travel Logistics */}
                         {step === 2 && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-md border border-slate-200 dark:border-slate-700">
                                     <div className="flex items-center gap-2 mb-5">
                                         <i className="fa-solid fa-plane-departure text-indigo-600 text-lg"></i>
                                         <h3 className="text-base font-semibold text-slate-900 dark:text-white">Outbound Journey</h3>
@@ -268,7 +268,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                                 </div>
 
                                 {data.tripType === TripType.ROUND_TRIP && (
-                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-md border border-slate-200 dark:border-slate-700">
                                         <div className="flex items-center gap-2 mb-5">
                                             <i className="fa-solid fa-plane-arrival text-violet-600 text-lg"></i>
                                             <h3 className="text-base font-semibold text-slate-900 dark:text-white">Return Journey</h3>
@@ -307,7 +307,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                         {/* Step 3: Booking Confirmation (PNC Specific) */}
                         {step === 3 && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
+                                <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-md border border-emerald-100 dark:border-emerald-800/30">
                                     <div className="flex items-center gap-2 mb-5">
                                         <i className="fa-solid fa-check-circle text-emerald-600 text-lg"></i>
                                         <h3 className="text-base font-semibold text-emerald-900 dark:text-emerald-100">Booking Details</h3>
@@ -339,7 +339,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                                                     required
                                                     accept=".pdf,.jpg,.jpeg,.png"
                                                     onChange={handleFileChange}
-                                                    className="w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer border border-slate-200 dark:border-slate-800 rounded-xl"
+                                                    className="w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer border border-slate-200 dark:border-slate-800 rounded-md"
                                                 />
                                             </div>
                                             {data.invoiceFile && (
@@ -373,7 +373,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                     {step < totalSteps ? (
                         <button
                             onClick={nextStep}
-                            className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/30 active:scale-[0.98] transition-all"
+                            className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/30 active:scale-[0.98] transition-all"
                         >
                             Continue
                             <i className="fa-solid fa-arrow-right ml-2"></i>
@@ -382,7 +382,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                         <button
                             onClick={() => onSubmit(data)}
                             disabled={!data.ticketCost || !data.vendorName || !data.invoiceFile}
-                            className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-lg shadow-emerald-600/25 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-md shadow-lg shadow-emerald-600/25 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <i className="fa-solid fa-check mr-2"></i>
                             Submit Past Booking

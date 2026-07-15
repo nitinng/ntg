@@ -21,7 +21,7 @@ import { Toaster, toast } from 'sonner';
 // --- UI Utility Components ---
 
 const Card = ({ children, className = "", ...props }: { children: React.ReactNode, className?: string, [key: string]: any }) => (
-  <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${className}`} {...props}>
+  <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden transition-all duration-300 ${className}`} {...props}>
     {children}
   </div>
 );
@@ -35,7 +35,7 @@ const StatCard = ({ title, value, icon, description, trend, trendUp }: any) => (
     <div className="flex items-baseline gap-2">
       <h3 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{value}</h3>
       {trend && (
-        <span className={`text-2xs font-bold ${trendUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+        <span className={`text-xs font-bold ${trendUp ? 'text-emerald-500' : 'text-rose-500'}`}>
           {trend}
         </span>
       )}
@@ -56,14 +56,14 @@ const BarChart = ({ data, color = 'bg-indigo-500' }: { data: { label: string, va
         <div key={i} className="flex-1 flex flex-col items-center justify-end group">
           <div className="relative w-full flex-1 flex items-end justify-center px-1">
             <div
-              className={`w-full max-w-[2rem] rounded-t-sm transition-all duration-500 group-hover:opacity-80 ${color}`}
+              className={`w-full max-w-[2rem] rounded-t-md transition-all duration-500 group-hover:opacity-80 ${color}`}
               style={{ height: `${Math.max((d.value / max) * 100, 1)}%` }}
             ></div>
-            <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold bg-slate-800 text-white px-2 py-1 rounded pointer-events-none whitespace-nowrap z-10">
+            <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold bg-slate-800 text-white px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap z-10">
               {d.value}
             </div>
           </div>
-          <span className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-tight truncate w-full text-center block h-4">{d.label}</span>
+          <span className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-tight truncate w-full text-center block h-4">{d.label}</span>
         </div>
       ))}
     </div>
@@ -106,7 +106,7 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
             <i className={`fa-solid ${isSidebarOpen ? 'fa-xmark' : 'fa-bars'} text-xl`}></i>
           </button>
         )}
-        <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-600/20 flex-shrink-0">N</div>
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-600/20 flex-shrink-0">N</div>
         <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 hidden md:block tracking-tight whitespace-nowrap">Navgurukul Travel Desk</h1>
         {visibleRoles.length > 0 && (
           <>
@@ -116,7 +116,7 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
                 <button
                   key={role}
                   onClick={() => onToggleRole(role)}
-                  className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all duration-300 ${currentUser.role === role ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${currentUser.role === role ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   {role}
                 </button>
@@ -127,7 +127,7 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
             <div className="ml-2 md:hidden relative role-dropdown-container">
               <button
                 onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                className="flex items-center justify-between min-w-[100px] bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs font-black uppercase tracking-widest py-1.5 pl-3.5 pr-2.5 rounded-full outline-none shadow-sm shadow-indigo-500/5 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-300"
+                className="flex items-center justify-between min-w-[100px] bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-xs sm:text-xs font-black uppercase tracking-widest py-1.5 pl-3.5 pr-2.5 rounded-full outline-none shadow-sm shadow-indigo-500/5 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-300"
               >
                 <span>{currentUser.role}</span>
                 <div className="w-4 h-4 ml-2 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center transition-colors">
@@ -137,7 +137,7 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
 
               {/* Dropdown Menu */}
               {isRoleDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl shadow-slate-900/10 dark:shadow-black/30 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl shadow-slate-900/10 dark:shadow-black/30 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-1.5 flex flex-col gap-0.5">
                     {visibleRoles.map(role => (
                       <button
@@ -146,7 +146,7 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
                           onToggleRole(role);
                           setIsRoleDropdownOpen(false);
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-200 flex items-center justify-between group ${currentUser.role === role
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs sm:text-xs font-black uppercase tracking-widest transition-all duration-200 flex items-center justify-between group ${currentUser.role === role
                           ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
                           : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
                           }`}
@@ -172,7 +172,7 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
           </div>
           <button
             onClick={onOpenProfile}
-            className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl overflow-hidden border-2 border-transparent hover:border-indigo-500/20 flex items-center justify-center transition-all"
+            className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-lg overflow-hidden border-2 border-transparent hover:border-indigo-500/20 flex items-center justify-center transition-all"
           >
             {currentUser.avatar ? (
               <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
@@ -189,10 +189,10 @@ const Navbar = ({ currentUser, baseRole, onToggleRole, onOpenProfile, onToggleSi
 };
 
 const SidebarLink = ({ icon, label, active, onClick, badge, badgeColor }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+  <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 group ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
     <i className={`fa-solid ${icon} w-5 ${active ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'}`}></i>
     <span className="flex-1 text-left whitespace-nowrap">{label}</span>
-    {badge && <span className={`text-2xs ${badgeColor || 'bg-rose-500 px-1.5 py-0.5'} text-white rounded-full font-bold`}>{badge}</span>}
+    {badge && <span className={`text-xs ${badgeColor || 'bg-rose-500 px-1.5 py-0.5'} text-white rounded-full font-bold`}>{badge}</span>}
   </button>
 );
 
@@ -240,7 +240,7 @@ const AdminDashboard = ({ requests, users, onTabChange }: any) => {
         <h4 className="font-bold text-slate-800 dark:text-white mb-4">Recent Activity</h4>
         <div className="space-y-4">
           {requests.slice(0, 5).map((r: TravelRequest) => (
-            <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+            <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
               <div>
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{r.requesterName}</p>
                 <p className="text-xs text-slate-500">{r.from} → {r.to}</p>
@@ -322,10 +322,10 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
   const StageCard = ({ status, count, icon, color, onClick }: any) => (
     <div
       onClick={onClick}
-      className={`bg-white dark:bg-slate-900 border-2 ${color.border} rounded-2xl p-6 transition-all hover:shadow-lg hover:-translate-y-1 cursor-pointer group`}
+      className={`bg-white dark:bg-slate-900 border-2 ${color.border} rounded-lg p-6 transition-all hover:shadow-lg hover:-translate-y-1 cursor-pointer group`}
     >
       <div className="flex items-start justify-between mb-4">
-        <div className={`w-12 h-12 ${color.bg} ${color.text} rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition-transform`}>
+        <div className={`w-12 h-12 ${color.bg} ${color.text} rounded-lg flex items-center justify-center text-xl group-hover:scale-110 transition-transform`}>
           {icon}
         </div>
         <div className={`px-5 py-2 ${color.bg} ${color.text} rounded-full text-xl font-black min-w-[3.5rem] text-center`}>
@@ -378,7 +378,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
         </div>
 
         {/* Time Filter Buttons */}
-        <div className="flex flex-wrap gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl">
+        <div className="flex flex-wrap gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg">
           {timeFilterOptions.map(option => (
             <button
               key={option.value}
@@ -489,7 +489,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
       {/* Quick Action Card */}
       <Card className="p-8 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900 border-2 border-indigo-100 dark:border-indigo-900/30">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-indigo-600/20">
+          <div className="w-14 h-14 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-2xl shadow-lg shadow-indigo-600/20">
             <i className="fa-solid fa-list-check"></i>
           </div>
           <div>
@@ -499,7 +499,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
         </div>
         <button
           onClick={() => onTabChange('requests')}
-          className="bg-indigo-600 text-white px-8 py-3 rounded-xl text-sm font-black uppercase tracking-wide shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+          className="bg-indigo-600 text-white px-8 py-3 rounded-lg text-sm font-black uppercase tracking-wide shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
         >
           Go to Queue <i className="fa-solid fa-arrow-right ml-2"></i>
         </button>
@@ -509,7 +509,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
       {selectedStage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={handleCloseModal}></div>
-          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
+          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
             {/* Modal Header */}
             <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
               <div className="flex justify-between items-start gap-4 mb-4">
@@ -521,7 +521,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
                 </div>
                 <button
                   onClick={handleCloseModal}
-                  className="w-10 h-10 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 flex items-center justify-center"
+                  className="w-10 h-10 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all text-slate-400 flex items-center justify-center"
                 >
                   <i className="fa-solid fa-xmark text-xl"></i>
                 </button>
@@ -533,7 +533,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
                 <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                   <button
                     onClick={() => setSortOrder('newest')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'newest'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sortOrder === 'newest'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
                       }`}
@@ -543,7 +543,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
                   </button>
                   <button
                     onClick={() => setSortOrder('oldest')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'oldest'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sortOrder === 'oldest'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
                       }`}
@@ -571,7 +571,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
                     return (
                       <div
                         key={req.id}
-                        className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all cursor-pointer group"
+                        className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-lg border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all cursor-pointer group"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
@@ -579,7 +579,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
                               <span className="font-mono text-sm font-black text-indigo-600">{req.submissionId || req.id}</span>
                               <StatusBadge type="priority" value={req.priority} />
                               {isViolated && (
-                                <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
+                                <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded-lg text-xs font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
                                   <i className="fa-solid fa-triangle-exclamation"></i>
                                   Policy
                                 </div>
@@ -601,7 +601,7 @@ const PNCDashboard = ({ requests, onTabChange, onView, policies = [] }: any) => 
                               onView(req);
                               handleCloseModal();
                             }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700"
                           >
                             View Details
                           </button>
@@ -732,7 +732,7 @@ const FinanceDashboard = ({ requests }: any) => {
           {chartData.length > 0 ? (
             <BarChart data={chartData} color="bg-emerald-500" />
           ) : (
-            <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
+            <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-lg">
               No department spend data available yet.
             </div>
           )}
@@ -742,28 +742,28 @@ const FinanceDashboard = ({ requests }: any) => {
           <h4 className="font-bold text-slate-800 dark:text-white mb-4">Recent Transactions</h4>
           <div className="space-y-4">
             {allBookedRequests.sort((a: TravelRequest, b: TravelRequest) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5).map((r: TravelRequest) => (
-              <div key={r.id} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-all hover:shadow-md">
+              <div key={r.id} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700/50 transition-all hover:shadow-md">
                 <div>
                   <p className="text-sm font-bold text-slate-800 dark:text-white">{r.requesterName}</p>
                   <p className="text-xs text-slate-500">{r.from} → {r.to}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{r.requesterDepartment || 'General'} • {new Date(r.timestamp).toLocaleDateString()}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{r.requesterDepartment || 'General'} • {new Date(r.timestamp).toLocaleDateString()}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   <span className="font-bold text-slate-900 dark:text-white">₹{r.ticketCost?.toLocaleString()}</span>
                   {r.paymentStatus === PaymentStatus.PAID ? (
-                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded flex items-center gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><i className="fa-solid fa-check"></i> Paid</span>
+                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><i className="fa-solid fa-check"></i> Paid</span>
                   ) : r.paymentStatus === PaymentStatus.PENDING ? (
-                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded flex items-center gap-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><i className="fa-regular fa-clock"></i> Pending</span>
+                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><i className="fa-regular fa-clock"></i> Pending</span>
                   ) : r.paymentStatus === PaymentStatus.REIMBURSED ? (
-                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded flex items-center gap-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"><i className="fa-solid fa-arrow-rotate-left"></i> Reimbursed</span>
+                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"><i className="fa-solid fa-arrow-rotate-left"></i> Reimbursed</span>
                   ) : (
-                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{r.paymentStatus || 'N/A'}</span>
+                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{r.paymentStatus || 'N/A'}</span>
                   )}
                 </div>
               </div>
             ))}
             {allBookedRequests.length === 0 && (
-              <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
+              <div className="h-48 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-lg">
                 No recent transactions found.
               </div>
             )}
@@ -785,7 +785,7 @@ const ManagerApprovalsView = ({ requests, onUpdate, currentUser }: any) => {
       </header>
 
       {requests.length === 0 ? (
-        <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
           <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 text-2xl">
             <i className="fa-solid fa-check-double"></i>
           </div>
@@ -794,40 +794,123 @@ const ManagerApprovalsView = ({ requests, onUpdate, currentUser }: any) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {requests.map((r: TravelRequest) => (
-            <div key={r.id} onClick={() => setSelectedRequest(r)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl hover:shadow-lg hover:border-indigo-500/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 -mr-6 -mt-6 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+          {requests.map((r: TravelRequest, idx: number) => {
+            const themes = [
+              { // Option 1: Midnight Sapphire
+                name: "Midnight Sapphire",
+                grad: "from-indigo-50/50 to-white dark:from-indigo-900/40 dark:to-slate-900",
+                badge: "text-indigo-600 dark:text-indigo-400/80 bg-indigo-100 dark:bg-indigo-500/10",
+                iconBg: "text-indigo-900 dark:text-white",
+                iconFg: "text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
+                review: "text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300"
+              },
+              { // Option 2: Deep Emerald
+                name: "Deep Emerald",
+                grad: "from-emerald-50/50 to-white dark:from-emerald-900/40 dark:to-slate-900",
+                badge: "text-emerald-600 dark:text-emerald-400/80 bg-emerald-100 dark:bg-emerald-500/10",
+                iconBg: "text-emerald-900 dark:text-white",
+                iconFg: "text-emerald-500 dark:text-emerald-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-300",
+                review: "text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300"
+              },
+              { // Option 3: Amber Sunrise
+                name: "Amber Sunrise",
+                grad: "from-amber-50/50 to-white dark:from-amber-900/40 dark:to-slate-900",
+                badge: "text-amber-600 dark:text-amber-400/80 bg-amber-100 dark:bg-amber-500/10",
+                iconBg: "text-amber-900 dark:text-white",
+                iconFg: "text-amber-500 dark:text-amber-400 group-hover:text-amber-600 dark:group-hover:text-amber-300",
+                review: "text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300"
+              },
+              { // Option 4: Stealth Obsidian
+                name: "Stealth Obsidian",
+                grad: "from-slate-100/50 to-white dark:from-slate-800 dark:to-slate-950",
+                badge: "text-slate-700 dark:text-slate-300/80 bg-slate-200 dark:bg-slate-700/50",
+                iconBg: "text-slate-800 dark:text-slate-700",
+                iconFg: "text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200",
+                review: "text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200"
+              }
+            ];
+            const theme = themes[idx % 4];
 
-              <div className="flex justify-between items-start mb-4 relative z-10">
-                <span className="text-[10px] font-black text-indigo-500/60 font-mono tracking-tighter uppercase">{r.submissionId || r.id}</span>
-                <div className="scale-90 origin-right">
-                  {r.hasViolation && (
-                    <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
-                      <i className="fa-solid fa-triangle-exclamation"></i>
-                      Policy
+            return (
+            <div key={r.id} onClick={() => setSelectedRequest(r)} className="group relative bg-white dark:bg-slate-900 rounded-md flex flex-col sm:flex-row overflow-hidden border border-slate-200 dark:border-slate-800 cursor-pointer shadow-sm hover:shadow-xl hover:shadow-slate-500/10 transition-all hover:-translate-y-1 duration-300">
+              {/* Main Ticket Area */}
+              <div className={`flex-1 p-5 sm:p-6 relative overflow-hidden bg-gradient-to-br ${theme.grad} border-b sm:border-b-0 sm:border-r border-dashed border-slate-200 dark:border-slate-700`}>
+                {/* Watermark Icon */}
+                <div className={`absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.03] text-[8rem] pointer-events-none ${theme.iconBg}`}>
+                  <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'}`}></i>
+                </div>
+                
+                <div className="flex justify-between items-center mb-5 relative z-10">
+                  <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Option { (idx % 4) + 1 }: {theme.name}</span>
+                  <span className="font-mono text-xs font-bold text-slate-500 tracking-wider">{r.submissionId || r.id}</span>
+                </div>
+
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                  <div className="text-left flex-1">
+                    <p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{r.from.substring(0, 3)}</p>
+                    <p className="text-xs sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px] sm:max-w-[100px]">{r.from}</p>
+                  </div>
+                  
+                  <div className="flex-[2] flex flex-col items-center justify-center px-2 sm:px-4">
+                    <div className="w-full flex items-center opacity-60">
+                      <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
+                      <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} ${theme.iconFg} mx-2 sm:mx-3 text-sm sm:text-lg group-hover:scale-125 transition-all duration-500`}></i>
+                      <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="text-right flex-1">
+                    <p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{r.to.substring(0, 3)}</p>
+                    <p className="text-xs sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px] sm:max-w-[100px]">{r.to}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-100 dark:border-slate-800/50 relative z-10">
+                  <div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider mb-0.5">Passenger</p>
+                    <p className="font-black text-sm text-slate-700 dark:text-slate-200 uppercase truncate max-w-[120px]">{r.requesterName}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider mb-0.5">Class / Dept</p>
+                    <p className="font-black text-sm text-slate-700 dark:text-slate-200 uppercase truncate max-w-[100px]">{r.requesterDepartment}</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="mb-4">
-                <h4 className="font-black text-lg mb-0.5 text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors uppercase tracking-tight leading-tight">{r.requesterName}</h4>
-                <p className="text-xs text-slate-500 font-bold">{r.requesterDepartment}</p>
-              </div>
+              {/* Tear-off Stub */}
+              <div className="w-full sm:w-28 bg-slate-50 dark:bg-slate-900/50 flex flex-row sm:flex-col justify-between sm:justify-center items-center p-4 sm:p-0 relative overflow-hidden">
+                {/* Notches for boarding pass look - Vertical for desktop */}
+                <div className="hidden sm:block absolute -left-3 top-[-10px] w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                <div className="hidden sm:block absolute -left-3 bottom-[-10px] w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                
+                {/* Notches for mobile - Horizontal */}
+                <div className="block sm:hidden absolute left-[-10px] -top-3 w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                <div className="block sm:hidden absolute right-[-10px] -top-3 w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
 
-              <div className="flex items-center gap-3 text-xs font-bold text-slate-500 dark:text-slate-400 mb-6">
-                <span className="flex items-center gap-1"><i className="fa-solid fa-route text-indigo-400"></i> {r.from} → {r.to}</span>
-              </div>
+                <div className="flex flex-row sm:flex-col items-center w-full h-full justify-between sm:py-6 relative z-10">
+                  <div className="w-full text-left sm:text-center shrink-0">
+                    {r.hasViolation ? (
+                      <div className="inline-block bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-black px-2 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 animate-pulse">POLICY<br className="hidden sm:block"/> REVIEW</div>
+                    ) : (
+                      <div className="inline-block bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-xs font-black px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">CLEAR</div>
+                    )}
+                  </div>
+                  
+                  {/* Fake barcode (Desktop only) */}
+                  <div className="hidden sm:flex w-full h-12 items-center justify-center opacity-20 gap-[2px] rotate-90 my-6">
+                    {[...Array(14)].map((_, i) => (
+                      <div key={i} className={`h-full bg-slate-800 dark:bg-white ${i % 3 === 0 ? 'w-1' : i % 2 === 0 ? 'w-[2px]' : 'w-[1px]'}`}></div>
+                    ))}
+                  </div>
 
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center relative z-10">
-                <div className="flex items-center gap-1.5 text-slate-400 group-hover:text-indigo-500 transition-colors">
-                  <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-xs`}></i>
-                  <span className="text-[10px] font-bold uppercase tracking-wider">{r.mode}</span>
+                  <button className={`sm:mt-0 text-xs font-black uppercase ${theme.review} group-hover:translate-x-1 transition-all flex items-center gap-1.5 shrink-0`}>
+                    Review <i className="fa-solid fa-arrow-right"></i>
+                  </button>
                 </div>
-                <span className="text-indigo-600 text-xs font-black uppercase tracking-wider group-hover:translate-x-1 transition-transform">Review <i className="fa-solid fa-arrow-right ml-1"></i></span>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -846,13 +929,13 @@ const ManagerApprovalsView = ({ requests, onUpdate, currentUser }: any) => {
 const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={onClose}></div>
-    <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col max-h-[90vh]">
+    <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col max-h-[90vh]">
 
       <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-start">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-black text-slate-400 font-mono uppercase">{request.submissionId || request.id}</span>
-            {request.hasViolation && <span className="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded border border-rose-200">Policy Violation</span>}
+            {request.hasViolation && <span className="text-xs font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-lg border border-rose-200">Policy Violation</span>}
           </div>
           <h3 className="text-2xl font-black text-slate-900 dark:text-white">Approval Request</h3>
         </div>
@@ -861,8 +944,8 @@ const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) =>
 
       <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
         {/* Traveler Info */}
-        <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
-          <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center text-xl font-bold">
+        <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
+          <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg flex items-center justify-center text-xl font-bold">
             {request.requesterName.charAt(0)}
           </div>
           <div>
@@ -877,34 +960,34 @@ const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) =>
           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800 pb-2">Trip Details</h4>
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Route</p>
+              <p className="text-xs font-bold text-slate-400 uppercase">Route</p>
               <p className="font-bold text-slate-800 dark:text-white">{request.from} → {request.to}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Date</p>
+              <p className="text-xs font-bold text-slate-400 uppercase">Date</p>
               <p className="font-bold text-slate-800 dark:text-white">{new Date(request.dateOfTravel).toLocaleDateString()}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Mode</p>
+              <p className="text-xs font-bold text-slate-400 uppercase">Mode</p>
               <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <i className={`fa-solid ${request.mode === 'Flight' ? 'fa-plane' : request.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-indigo-500`}></i>
                 {request.mode}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Trip Type</p>
+              <p className="text-xs font-bold text-slate-400 uppercase">Trip Type</p>
               <p className="font-bold text-slate-800 dark:text-white">{request.tripType}</p>
             </div>
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Purpose</p>
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Purpose</p>
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300 italic">"{request.purpose}"</p>
           </div>
         </div>
 
         {/* Policy Violation Warning */}
         {request.hasViolation && (
-          <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/50 p-4 rounded-xl flex gap-3">
+          <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/50 p-4 rounded-lg flex gap-3">
             <i className="fa-solid fa-triangle-exclamation text-rose-500 mt-0.5"></i>
             <div>
               <h5 className="text-sm font-bold text-rose-700 dark:text-rose-400">Policy Violation Detected</h5>
@@ -917,8 +1000,8 @@ const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) =>
       </div>
 
       <div className="p-6 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex gap-4">
-        <button onClick={onReject} className="flex-1 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-600 font-bold rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/10 hover:border-rose-200 transition-all uppercase tracking-wide text-xs">Reject</button>
-        <button onClick={onApprove} className="flex-[2] py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all uppercase tracking-wide text-xs">Approve Request</button>
+        <button onClick={onReject} className="flex-1 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-600 font-bold rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/10 hover:border-rose-200 transition-all uppercase tracking-wide text-xs">Reject</button>
+        <button onClick={onApprove} className="flex-[2] py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all uppercase tracking-wide text-xs">Approve Request</button>
       </div>
     </div>
   </div>
@@ -963,14 +1046,14 @@ const LocationCalendar = () => {
             <i className="fa-solid fa-calendar-days text-violet-500"></i>
             Availability Calendar
           </h4>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Reference Only • Confirm with Approvers</p>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Reference Only • Confirm with Approvers</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCurrentDate(new Date(year, month - 1))}
             className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all"
           >
-            <i className="fa-solid fa-chevron-left text-[10px]"></i>
+            <i className="fa-solid fa-chevron-left text-xs"></i>
           </button>
           <span className="text-sm font-black text-slate-700 dark:text-slate-300 min-w-[120px] text-center">
             {monthNames[month]} {year}
@@ -979,14 +1062,14 @@ const LocationCalendar = () => {
             onClick={() => setCurrentDate(new Date(year, month + 1))}
             className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all"
           >
-            <i className="fa-solid fa-chevron-right text-[10px]"></i>
+            <i className="fa-solid fa-chevron-right text-xs"></i>
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-2">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-          <div key={d} className="text-[10px] font-black text-slate-400 text-center uppercase py-2">{d}</div>
+          <div key={d} className="text-xs font-black text-slate-400 text-center uppercase py-2">{d}</div>
         ))}
       </div>
 
@@ -996,7 +1079,7 @@ const LocationCalendar = () => {
           return (
             <div
               key={idx}
-              className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all group ${!day ? 'opacity-0' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700'
+              className={`aspect-square rounded-lg flex flex-col items-center justify-center relative transition-all group ${!day ? 'opacity-0' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700'
                 }`}
             >
               {day && (
@@ -1006,7 +1089,7 @@ const LocationCalendar = () => {
                     status === 'tentative' ? 'bg-amber-500' : 'bg-emerald-500'
                     }`}></div>
 
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all scale-90 group-hover:scale-100 z-20 whitespace-nowrap">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all scale-90 group-hover:scale-100 z-20 whitespace-nowrap">
                     {status === 'booked' ? 'Confirmed Workshop' : status === 'tentative' ? 'Tentative' : 'Available'}
                   </div>
                 </>
@@ -1024,7 +1107,7 @@ const LocationCalendar = () => {
         ].map(l => (
           <div key={l.label} className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${l.color}`}></div>
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{l.label}</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{l.label}</span>
           </div>
         ))}
       </div>
@@ -1094,19 +1177,19 @@ const IgathpuriMeetupView = ({
       return (
         <div className="space-y-6">
           {/* Sub-tab bar */}
-          <div className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/50 p-1.5 rounded-2xl w-fit">
+          <div className="flex items-center gap-1 bg-slate-100/70 dark:bg-slate-800/50 p-1.5 rounded-lg w-fit">
             {subTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-200 ${activeSubTab === tab.id
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all duration-200 ${activeSubTab === tab.id
                   ? 'bg-white dark:bg-slate-900 shadow-md ' + colorMap[tab.id].tab + ' border-b-2'
                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                   }`}
               >
                 <i className={`fa-solid ${tab.icon}`}></i>
                 {tab.label}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-lg font-black ${activeSubTab === tab.id ? colorMap[tab.id].badge : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                <span className={`text-xs px-1.5 py-0.5 rounded-lg font-black ${activeSubTab === tab.id ? colorMap[tab.id].badge : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                   }`}>
                   {tab.count}
                 </span>
@@ -1117,7 +1200,7 @@ const IgathpuriMeetupView = ({
           {/* Content */}
           <div className="animate-in fade-in duration-300">
             {activeData.length === 0 ? (
-              <div className="py-16 text-center bg-white/50 dark:bg-slate-900/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+              <div className="py-16 text-center bg-white/50 dark:bg-slate-900/30 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800">
                 <i className={`fa-solid ${subTabs.find(t => t.id === activeSubTab)?.icon} text-3xl mb-3 ${colorMap[activeSubTab].empty}`}></i>
                 <p className="text-slate-400 text-xs font-bold italic tracking-wider">
                   No {activeSubTab} requests
@@ -1130,29 +1213,29 @@ const IgathpuriMeetupView = ({
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{r.fullName}</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{r.department}</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{r.department}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${colorMap[activeSubTab].dot}`}></div>
-                        <div className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-500">
+                        <div className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-xs font-black text-slate-500">
                           {r.teamSize} PAX
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-2.5">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
                         <i className="fa-solid fa-calendar-days text-indigo-500 w-4"></i>
                         <span>{new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 p-2 rounded-xl">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 p-2 rounded-lg">
                         <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
                         <span className="truncate">{r.email}</span>
                       </div>
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">Created: {new Date(r.createdAt).toLocaleDateString()}</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase">Created: {new Date(r.createdAt).toLocaleDateString()}</span>
                       <i className="fa-solid fa-arrow-right text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all text-xs"></i>
                     </div>
                   </Card>
@@ -1173,7 +1256,7 @@ const IgathpuriMeetupView = ({
                 </button>
 
                 <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-6 flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${selectedRequest.status === 'Approved' ? 'bg-emerald-500' : selectedRequest.status === 'Rejected' ? 'bg-rose-500' : 'bg-amber-500'}`}>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${selectedRequest.status === 'Approved' ? 'bg-emerald-500' : selectedRequest.status === 'Rejected' ? 'bg-rose-500' : 'bg-amber-500'}`}>
                     <i className="fa-solid fa-map-location-dot"></i>
                   </div>
                   Request Details
@@ -1182,31 +1265,31 @@ const IgathpuriMeetupView = ({
                 <div className="overflow-y-auto custom-scrollbar pr-2 space-y-6">
                   {/* Grid of details */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-user text-indigo-400"></i> Requester Name</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-user text-indigo-400"></i> Requester Name</p>
                       <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.fullName}</p>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-building text-indigo-400"></i> Department / Team</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-building text-indigo-400"></i> Department / Team</p>
                       <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.department || 'N/A'}</p>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-envelope text-indigo-400"></i> Email Address</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-envelope text-indigo-400"></i> Email Address</p>
                       <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.email}</p>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-phone text-indigo-400"></i> Contact Number</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-phone text-indigo-400"></i> Contact Number</p>
                       <p className="font-black text-slate-800 dark:text-white truncate">{selectedRequest.phone}</p>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-calendar text-indigo-400"></i> Proposed Dates</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-calendar text-indigo-400"></i> Proposed Dates</p>
                       <p className="font-black text-slate-800 dark:text-white truncate">{new Date(selectedRequest.startDate).toLocaleDateString()} - {new Date(selectedRequest.endDate).toLocaleDateString()}</p>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-users text-indigo-400"></i> Team Size / Status</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><i className="fa-solid fa-users text-indigo-400"></i> Team Size / Status</p>
                       <p className="font-black text-slate-800 dark:text-white flex items-center justify-between">
                         <span>{selectedRequest.teamSize} PAX</span>
-                        <span className={`px-2.5 py-0.5 rounded-lg text-[10px] uppercase font-black tracking-widest ${selectedRequest.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : selectedRequest.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>{selectedRequest.status}</span>
+                        <span className={`px-2.5 py-0.5 rounded-lg text-xs uppercase font-black tracking-widest ${selectedRequest.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : selectedRequest.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>{selectedRequest.status}</span>
                       </p>
                     </div>
                   </div>
@@ -1217,9 +1300,9 @@ const IgathpuriMeetupView = ({
                         <i className="fa-solid fa-clipboard-user text-indigo-500"></i>
                         Attendees Confirmed
                       </h4>
-                      <div className="flex flex-wrap gap-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-wrap gap-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
                         {selectedRequest.attendeeEmails.map((email, idx) => (
-                          <span key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">{email}</span>
+                          <span key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">{email}</span>
                         ))}
                       </div>
                     </div>
@@ -1233,18 +1316,18 @@ const IgathpuriMeetupView = ({
                       </h4>
                       <div className="space-y-3">
                         {selectedRequest.timeline?.map((event, idx) => (
-                          <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                            <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm">
+                          <div key={idx} className="flex gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                            <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm">
                               <i className={`fa-solid ${event.event.includes('Approved') || event.event.includes('Approved availability') ? 'fa-check text-emerald-500' : event.event.includes('Rejected') ? 'fa-xmark text-rose-500' : 'fa-clock text-amber-500'} text-xs`}></i>
                             </div>
                             <div>
                               <p className="text-sm font-black text-slate-800 dark:text-white capitalize leading-tight">{event.event}</p>
                               <div className="flex items-center gap-2 mt-1.5">
-                                <p className="text-[10px] font-bold text-slate-500">{new Date(event.timestamp).toLocaleString()}</p>
+                                <p className="text-xs font-bold text-slate-500">{new Date(event.timestamp).toLocaleString()}</p>
                                 <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                                <p className="text-[10px] font-bold text-slate-500 truncate max-w-[150px]" title={event.actor}>{event.actor}</p>
+                                <p className="text-xs font-bold text-slate-500 truncate max-w-[150px]" title={event.actor}>{event.actor}</p>
                               </div>
-                              {event.details && <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm italic">&quot;{event.details}&quot;</p>}
+                              {event.details && <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm italic">&quot;{event.details}&quot;</p>}
                             </div>
                           </div>
                         ))}
@@ -1254,7 +1337,7 @@ const IgathpuriMeetupView = ({
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                  <button onClick={() => setSelectedRequest(null)} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-xl shadow-slate-900/10 dark:shadow-white/10">
+                  <button onClick={() => setSelectedRequest(null)} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-xl shadow-slate-900/10 dark:shadow-white/10">
                     <i className="fa-solid fa-times"></i>
                     Close Details
                   </button>
@@ -1275,53 +1358,53 @@ const IgathpuriMeetupView = ({
 
         {/* Separated Analytics Elements */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
                 <i className="fa-solid fa-inbox text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors text-xs"></i>
               </div>
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Total<br />Requests</span>
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Total<br />Requests</span>
             </div>
             <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-indigo-600 transition-colors">{availabilityRequests.length}</p>
-            <p className="text-[9px] text-slate-400 font-bold mt-1.5">All time</p>
+            <p className="text-xs text-slate-400 font-bold mt-1.5">All time</p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-900/10 flex items-center justify-center group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors border border-amber-100 dark:border-amber-800/50">
+              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/10 flex items-center justify-center group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors border border-amber-100 dark:border-amber-800/50">
                 <i className="fa-solid fa-hourglass-half text-amber-500 text-xs"></i>
               </div>
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Pending<br />Review</span>
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Pending<br />Review</span>
             </div>
             <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-amber-500 transition-colors">{pending.length}</p>
-            <p className="text-[9px] text-slate-400 font-bold mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">Awaiting decision</p>
+            <p className="text-xs text-slate-400 font-bold mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">Awaiting decision</p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors border border-emerald-100 dark:border-emerald-800/50">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/10 flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors border border-emerald-100 dark:border-emerald-800/50">
                 <i className="fa-solid fa-circle-check text-emerald-500 text-xs"></i>
               </div>
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Approved<br />Requests</span>
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Approved<br />Requests</span>
             </div>
             <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-emerald-500 transition-colors">{approved.length}</p>
             <div className="flex items-center gap-2 mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
                 <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${approvalRate}%` }}></div>
               </div>
-              <span className="text-[9px] text-slate-400 font-bold">{approvalRate}%</span>
+              <span className="text-xs text-slate-400 font-bold">{approvalRate}%</span>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-900/10 flex items-center justify-center group-hover:bg-violet-100 dark:group-hover:bg-violet-900/30 transition-colors border border-violet-100 dark:border-violet-800/50">
+              <div className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-900/10 flex items-center justify-center group-hover:bg-violet-100 dark:group-hover:bg-violet-900/30 transition-colors border border-violet-100 dark:border-violet-800/50">
                 <i className="fa-solid fa-users text-violet-500 text-xs"></i>
               </div>
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Total<br />PAX</span>
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-tight">Total<br />PAX</span>
             </div>
             <p className="text-2xl font-black text-slate-800 dark:text-white leading-none group-hover:text-violet-500 transition-colors">{totalPax}</p>
-            <p className="text-[9px] text-slate-400 font-bold mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">Across all requests</p>
+            <p className="text-xs text-slate-400 font-bold mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-1.5">Across all requests</p>
           </div>
         </div>
 
@@ -1509,7 +1592,7 @@ const IgathpuriMeetupView = ({
   return (
     <div className="max-w-4xl space-y-8 animate-in fade-in duration-500">
       <header className="flex items-center gap-4">
-        <div className="w-16 h-16 bg-violet-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-xl shadow-violet-600/20">
+        <div className="w-16 h-16 bg-violet-600 rounded-lg flex items-center justify-center text-white text-3xl shadow-xl shadow-violet-600/20">
           <i className="fa-solid fa-person-shelter"></i>
         </div>
         <div>
@@ -1527,13 +1610,13 @@ const IgathpuriMeetupView = ({
 
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
                 <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-3xl flex items-center justify-center text-3xl shadow-inner group-hover:rotate-6 transition-transform">
+                  <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center text-3xl shadow-inner group-hover:rotate-6 transition-transform">
                     <i className="fa-solid fa-hotel"></i>
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 bg-emerald-200 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg">Active Booking</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">• {activeMeetup.teamSize} PAX</span>
+                      <span className="px-2 py-0.5 bg-emerald-200 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg">Active Booking</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">• {activeMeetup.teamSize} PAX</span>
                     </div>
                     <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight uppercase tracking-tight">Igathpuri Campus Visit</h3>
                     <p className="text-sm font-bold text-slate-500 mt-1 flex items-center gap-2">
@@ -1546,12 +1629,12 @@ const IgathpuriMeetupView = ({
                 {/* Requester Stats or Participant CTA */}
                 {activeMeetup.profileId === currentUser?.id ? (
                   <div className="flex gap-4 w-full md:w-auto">
-                    <div onClick={() => setActiveStatModal('completion')} className="flex-1 md:flex-initial px-6 py-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 cursor-pointer hover:border-emerald-400 transition-all text-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Forms</p>
+                    <div onClick={() => setActiveStatModal('completion')} className="flex-1 md:flex-initial px-6 py-4 bg-white/50 dark:bg-slate-900/50 rounded-lg border border-emerald-100 dark:border-emerald-800/30 cursor-pointer hover:border-emerald-400 transition-all text-center">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Forms</p>
                       <p className="text-xl font-black text-emerald-600">{attendeeStats.filled}/{attendeeStats.total}</p>
                     </div>
-                    <div onClick={() => setActiveStatModal('booking')} className="flex-1 md:flex-initial px-6 py-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 cursor-pointer hover:border-emerald-400 transition-all text-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tickets</p>
+                    <div onClick={() => setActiveStatModal('booking')} className="flex-1 md:flex-initial px-6 py-4 bg-white/50 dark:bg-slate-900/50 rounded-lg border border-emerald-100 dark:border-emerald-800/30 cursor-pointer hover:border-emerald-400 transition-all text-center">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Tickets</p>
                       <p className="text-xl font-black text-emerald-600">{attendeeStats.booked}/{attendeeStats.total}</p>
                     </div>
                   </div>
@@ -1559,7 +1642,7 @@ const IgathpuriMeetupView = ({
                   !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER) && (
                     <button
                       onClick={() => onNewRequest({ startDate: activeMeetup.startDate, endDate: activeMeetup.endDate })}
-                      className="w-full md:w-auto px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all text-center"
+                      className="w-full md:w-auto px-8 py-4 bg-emerald-600 text-white rounded-lg font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all text-center"
                     >
                       Complete Your Travel Request <i className="fa-solid fa-arrow-right ml-2"></i>
                     </button>
@@ -1583,7 +1666,7 @@ const IgathpuriMeetupView = ({
                 <div className="space-y-6">
                   <header>
                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeStatModal === 'completion' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activeStatModal === 'completion' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
                         <i className={`fa-solid ${activeStatModal === 'completion' ? 'fa-file-invoice' : 'fa-ticket'}`}></i>
                       </div>
                       {activeStatModal === 'completion' ? 'Form Completion Status' : 'Ticket Booking Status'}
@@ -1595,7 +1678,7 @@ const IgathpuriMeetupView = ({
 
                   <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                     {attendeeDetails.map((attendee, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 group hover:border-slate-300 dark:hover:border-slate-600 transition-all">
+                      <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 group hover:border-slate-300 dark:hover:border-slate-600 transition-all">
                         <div className="flex items-center gap-4">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${(activeStatModal === 'completion' ? attendee.status === 'Filled' : attendee.isBooked)
                             ? 'bg-emerald-100 text-emerald-600'
@@ -1607,7 +1690,7 @@ const IgathpuriMeetupView = ({
                             <p className="text-sm font-black text-slate-800 dark:text-white truncate max-w-[180px]">
                               {attendee.name || attendee.email.split('@')[0]}
                             </p>
-                            <p className="text-[10px] text-slate-400 font-bold truncate">
+                            <p className="text-xs text-slate-400 font-bold truncate">
                               {attendee.email}
                             </p>
                           </div>
@@ -1615,14 +1698,14 @@ const IgathpuriMeetupView = ({
 
                         <div className="flex items-center gap-2">
                           {activeStatModal === 'completion' ? (
-                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${attendee.status === 'Filled'
+                            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${attendee.status === 'Filled'
                               ? 'bg-emerald-100 text-emerald-600'
                               : 'bg-amber-50 text-amber-600 border border-amber-100'
                               }`}>
                               {attendee.status === 'Filled' ? 'Form Filled' : 'Pending'}
                             </span>
                           ) : (
-                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${attendee.isBooked
+                            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${attendee.isBooked
                               ? 'bg-emerald-100 text-emerald-600'
                               : attendee.status === 'Pending'
                                 ? 'bg-slate-100 text-slate-400'
@@ -1642,7 +1725,7 @@ const IgathpuriMeetupView = ({
 
                   <button
                     onClick={() => setActiveStatModal(null)}
-                    className="w-full py-4 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-xl"
+                    className="w-full py-4 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-xl"
                   >
                     Close Details
                   </button>
@@ -1663,10 +1746,10 @@ const IgathpuriMeetupView = ({
                 <i className="fa-solid fa-plane-departure text-emerald-500"></i>
                 Your Travel Booking
               </h4>
-              <div onClick={() => onView(r)} className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 p-6 rounded-3xl hover:shadow-xl hover:border-emerald-500/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden max-w-md bg-gradient-to-br from-emerald-50/10 to-transparent">
+              <div onClick={() => onView(r)} className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 p-6 rounded-lg hover:shadow-xl hover:border-emerald-500/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden max-w-md bg-gradient-to-br from-emerald-50/10 to-transparent">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 -mr-10 -mt-10 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
                 <div className="flex justify-between items-start mb-4 relative z-10">
-                  <span className="text-[10px] font-black text-emerald-500/60 font-mono tracking-tighter uppercase">{r.submissionId || r.id}</span>
+                  <span className="text-xs font-black text-emerald-500/60 font-mono tracking-tighter uppercase">{r.submissionId || r.id}</span>
                   <StatusBadge type="pnc" value={r.pncStatus} />
                 </div>
                 <h4 className="font-black text-2xl mb-1 text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors uppercase tracking-tight leading-tight">{r.from} → {r.to}</h4>
@@ -1690,7 +1773,7 @@ const IgathpuriMeetupView = ({
             <div className="space-y-8">
               <Card className="p-8 space-y-6">
                 <header className="flex items-center gap-3 border-b dark:border-slate-800 pb-6">
-                  <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600">
+                  <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600">
                     <i className="fa-solid fa-book-open text-sm"></i>
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white">Booking Guidelines</h3>
@@ -1706,10 +1789,10 @@ const IgathpuriMeetupView = ({
                       The Navgurukul Igathpuri campus serves as a central hub for team meetups, workshops, and offsites.
                       Coordinate and confirm venue availability before finalizing travel plans.
                     </p>
-                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800 p-4 rounded-2xl flex gap-4">
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800 p-4 rounded-lg flex gap-4">
                       <i className="fa-solid fa-triangle-exclamation text-amber-600 dark:text-amber-500 mt-1"></i>
                       <p className="text-xs text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
-                        <strong className="uppercase tracking-wide text-[10px]">Mandatory Step:</strong> Before submitting any travel request, you must get written confirmation of location availability.
+                        <strong className="uppercase tracking-wide text-xs">Mandatory Step:</strong> Before submitting any travel request, you must get written confirmation of location availability.
                       </p>
                     </div>
                   </div>
@@ -1738,7 +1821,7 @@ const IgathpuriMeetupView = ({
                               : isAvailabilityPending
                                 ? 'border-amber-500 text-amber-600 bg-amber-50'
                                 : 'border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white'
-                              } rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:cursor-default`}
+                              } rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:cursor-default`}
                           >
                             {isAvailabilityApproved ? 'Approved' : isAvailabilityPending ? 'Verifying Availability' : 'Check Now'}
                           </button>
@@ -1775,18 +1858,18 @@ const IgathpuriMeetupView = ({
                             <button
                               onClick={handleConfirmAttendees}
                               disabled={!isAvailabilityApproved || isSavingAttendees || attendeeEmails.some(e => !e.trim())}
-                              className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 active:scale-95 transition-all disabled:opacity-50"
+                              className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-violet-700 active:scale-95 transition-all disabled:opacity-50"
                             >
                               {isSavingAttendees ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : null}
                               Confirm {approvedRequest?.teamSize || ''} Attendees
                             </button>
                           </div>
                         ) : (
-                          <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl">
-                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2">Confirmed Attendees ({attendeeEmails.length})</p>
+                          <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-lg">
+                            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">Confirmed Attendees ({attendeeEmails.length})</p>
                             <div className="flex flex-wrap gap-2">
                               {attendeeEmails.map((email, idx) => (
-                                <span key={idx} className="px-2 py-1 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/50 rounded-lg text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                                <span key={idx} className="px-2 py-1 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/50 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400">
                                   {email}
                                 </span>
                               ))}
@@ -1794,7 +1877,7 @@ const IgathpuriMeetupView = ({
                             {!isRequestSubmitted && (
                               <button
                                 onClick={() => setIsAttendeesConfirmed(false)}
-                                className="text-[10px] text-slate-400 font-bold hover:text-violet-600 mt-3 hover:underline transition-all block"
+                                className="text-xs text-slate-400 font-bold hover:text-violet-600 mt-3 hover:underline transition-all block"
                               >
                                 <i className="fa-solid fa-pen-to-square mr-1"></i>
                                 Change Attendees
@@ -1814,7 +1897,7 @@ const IgathpuriMeetupView = ({
                         <button
                           onClick={handleFinalizeRequest}
                           disabled={!isAttendeesConfirmed || isRequestSubmitted || isFinalizing}
-                          className="mt-4 w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400"
+                          className="mt-4 w-full py-4 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400"
                         >
                           {isFinalizing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : null}
                           {isRequestSubmitted ? <><i className="fa-solid fa-circle-check mr-2 text-emerald-400"></i>Submitted to active requests</> : 'Submit Request'}
@@ -1840,7 +1923,7 @@ const IgathpuriMeetupView = ({
             <p className="text-xs text-slate-600 dark:text-slate-400 font-bold leading-relaxed mb-6 block relative z-10">
               If you have queries regarding the <span className="text-slate-900 dark:text-white border-b-2 border-indigo-100 dark:border-indigo-800">Igathpuri meetup</span> logistics or coordination, please reach out to the PNC team on Slack.
             </p>
-            <button className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white transition-all rounded-xl text-sm font-black shadow-lg shadow-indigo-600/20 relative z-10">
+            <button className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white transition-all rounded-lg text-sm font-black shadow-lg shadow-indigo-600/20 relative z-10">
               Contact PNC Team
             </button>
           </Card>
@@ -1848,25 +1931,25 @@ const IgathpuriMeetupView = ({
           <div className="space-y-3">
             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Authorized Approvers</h4>
             {loading ? (
-              <div className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl animate-pulse">
-                <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-1/2 mb-2"></div>
-                <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-3/4"></div>
+              <div className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg animate-pulse">
+                <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg w-1/2 mb-2"></div>
+                <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-lg w-3/4"></div>
               </div>
             ) : approvers.length === 0 ? (
-              <div className="p-6 text-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl border-dashed">
+              <div className="p-6 text-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg border-dashed">
                 <p className="text-xs text-slate-400 font-bold">No approvers listed</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {approvers.map(a => (
-                  <div key={a.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm hover:shadow-md transition-all">
+                  <div key={a.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xs font-bold">
                         {a.name ? a.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
                       </div>
                       <div className="overflow-hidden">
                         <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{a.name || 'Admin'}</p>
-                        <p className="text-[10px] text-slate-400 font-medium truncate">{a.email}</p>
+                        <p className="text-xs text-slate-400 font-medium truncate">{a.email}</p>
                       </div>
                     </div>
                   </div>
@@ -2135,12 +2218,12 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
       {/* General Section */}
       <section className="space-y-6">
         <div className="flex items-center gap-3 border-b-2 border-slate-100 dark:border-slate-800 pb-3">
-          <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
+          <div className="w-10 h-10 bg-indigo-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <i className="fa-solid fa-gears"></i>
           </div>
           <div>
             <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">General Policies</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Global travel constraints</p>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">Global travel constraints</p>
           </div>
         </div>
 
@@ -2153,7 +2236,7 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {travelModePolicies && travelModePolicies.length > 0 ? (
                 travelModePolicies.map((p: any) => (
-                  <div key={p.id} className="bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500/30 transition-all duration-300 group">
+                  <div key={p.id} className="bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-indigo-500/30 transition-all duration-300 group">
                     <div className="flex justify-between items-center mb-4">
                       <span className="font-black text-xs text-slate-700 dark:text-slate-300 uppercase tracking-widest">{p.travelMode}</span>
                       <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 shadow-sm">
@@ -2202,12 +2285,12 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
       {/* User Profile Section */}
       <section className="space-y-6">
         <div className="flex items-center gap-3 border-b-2 border-slate-100 dark:border-slate-800 pb-3">
-          <div className="w-10 h-10 bg-violet-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/20">
+          <div className="w-10 h-10 bg-violet-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-violet-600/20">
             <i className="fa-solid fa-user-shield"></i>
           </div>
           <div>
             <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">User Profile Settings</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Identity & Verification rules</p>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">Identity & Verification rules</p>
           </div>
         </div>
 
@@ -2221,9 +2304,9 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
           </div>
 
           {policy.isEnforcementEnabled && (
-            <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/50 rounded-2xl p-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
+            <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/50 rounded-lg p-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-violet-600 shadow-sm flex-shrink-0">
+                <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-violet-600 shadow-sm flex-shrink-0">
                   <i className="fa-solid fa-clock-rotate-left"></i>
                 </div>
                 <div className="flex-1">
@@ -2258,187 +2341,187 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
 
       {/* Igatpuri Section */}
       {currentUser?.email === 'nitin@navgurukul.org' && currentUser?.role === UserRole.ADMIN && (
-      <section className="space-y-6">
-        <div className="flex items-center justify-between border-b-2 border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
-              <i className="fa-solid fa-campground"></i>
-            </div>
-            <div>
-              <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">Igatpuri Meetup</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Location-specific logistics</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isIgatpuriEnabled ? 'Enabled' : 'Disabled'}</span>
-            <Toggle active={isIgatpuriEnabled} onChange={handleToggleIgatpuri} />
-          </div>
-        </div>
-
-        <div className={`space-y-8 transition-all duration-500 ${isIgatpuriEnabled ? 'opacity-100' : 'opacity-40 grayscale pointer-events-none'}`}>
-          {/* Capacity & Calendar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
-                    <i className="fa-solid fa-chair"></i>
-                  </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white">Location Capacity</h4>
-                </div>
-                <Toggle active={isCapacityEnabled} onChange={handleToggleCapacity} />
-              </div>
-              {isCapacityEnabled && (
-                <div className="space-y-3 animate-in fade-in duration-300">
-                  <Input
-                    label="Total Seats Available"
-                    type="number"
-                    min="0"
-                    value={totalSeats}
-                    onChange={(e) => handleUpdateSeats(Number(e.target.value))}
-                  />
-                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed">System will alert if concurrent bookings exceed this limit.</p>
-                </div>
-              )}
-            </Card>
-
-            <Card className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-xl flex items-center justify-center">
-                    <i className="fa-solid fa-calendar-days"></i>
-                  </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white">Availability Calendar</h4>
-                </div>
-                <Toggle active={isCalendarEnabled} onChange={handleToggleCalendar} />
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium">Toggle visibility of the interactive booking calendar for employees.</p>
-            </Card>
-          </div>
-
-          {/* Approvers List */}
-          <Card className="p-8 space-y-8">
-            <div className="flex items-start gap-4 pb-6 border-b dark:border-slate-800">
-              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center text-xl shadow-sm">
-                <i className="fa-solid fa-user-check"></i>
+        <section className="space-y-6">
+          <div className="flex items-center justify-between border-b-2 border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-emerald-600/20">
+                <i className="fa-solid fa-campground"></i>
               </div>
               <div>
-                <h4 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">Meetup Approvers</h4>
-                <p className="text-sm text-slate-500 mt-1 font-medium">Individuals authorized to confirm location availability for groups.</p>
+                <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">Igatpuri Meetup</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">Location-specific logistics</p>
               </div>
             </div>
+            <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{isIgatpuriEnabled ? 'Enabled' : 'Disabled'}</span>
+              <Toggle active={isIgatpuriEnabled} onChange={handleToggleIgatpuri} />
+            </div>
+          </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              {/* Left: Add New */}
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Authorized Person</h5>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <i className="fa-solid fa-magnifying-glass text-slate-400"></i>
+          <div className={`space-y-8 transition-all duration-500 ${isIgatpuriEnabled ? 'opacity-100' : 'opacity-40 grayscale pointer-events-none'}`}>
+            {/* Capacity & Calendar */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center">
+                      <i className="fa-solid fa-chair"></i>
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Search PNC/Admin users by name or email..."
-                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
-                      value={pncSearch}
-                      onChange={e => setPncSearch(e.target.value)}
+                    <h4 className="font-bold text-slate-800 dark:text-white">Location Capacity</h4>
+                  </div>
+                  <Toggle active={isCapacityEnabled} onChange={handleToggleCapacity} />
+                </div>
+                {isCapacityEnabled && (
+                  <div className="space-y-3 animate-in fade-in duration-300">
+                    <Input
+                      label="Total Seats Available"
+                      type="number"
+                      min="0"
+                      value={totalSeats}
+                      onChange={(e) => handleUpdateSeats(Number(e.target.value))}
                     />
+                    <p className="text-xs text-slate-400 font-medium leading-relaxed">System will alert if concurrent bookings exceed this limit.</p>
+                  </div>
+                )}
+              </Card>
 
-                    {/* Search Results Dropdown */}
-                    {pncSearch.trim() !== '' && filteredPncUsers.length > 0 && (
-                      <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
-                        {filteredPncUsers.map(user => (
-                          <button
-                            key={user.id}
-                            onClick={() => handleAddApprover(user)}
-                            className="w-full flex items-center gap-4 p-4 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all border-b last:border-0 border-slate-100 dark:border-slate-800 group text-left"
-                          >
-                            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-black flex-shrink-0">
-                              {user.name ? user.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{user.name || 'Unnamed User'}</p>
-                              <p className="text-xs text-slate-500 truncate">{user.email}</p>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${user.role === UserRole.ADMIN
-                                ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
-                                : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                }`}>{user.role}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+              <Card className="p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center">
+                      <i className="fa-solid fa-calendar-days"></i>
+                    </div>
+                    <h4 className="font-bold text-slate-800 dark:text-white">Availability Calendar</h4>
+                  </div>
+                  <Toggle active={isCalendarEnabled} onChange={handleToggleCalendar} />
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-medium">Toggle visibility of the interactive booking calendar for employees.</p>
+              </Card>
+            </div>
 
-                    {/* No Results State */}
-                    {pncSearch.trim() !== '' && filteredPncUsers.length === 0 && (
-                      <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 text-center">
-                        <p className="text-sm text-slate-500 font-medium">No users found for "{pncSearch}"</p>
-                        <p className="text-xs text-slate-400 mt-1">Try a different name or email. Only PNC and Admin users can be added.</p>
+            {/* Approvers List */}
+            <Card className="p-8 space-y-8">
+              <div className="flex items-start gap-4 pb-6 border-b dark:border-slate-800">
+                <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center text-xl shadow-sm">
+                  <i className="fa-solid fa-user-check"></i>
+                </div>
+                <div>
+                  <h4 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">Meetup Approvers</h4>
+                  <p className="text-sm text-slate-500 mt-1 font-medium">Individuals authorized to confirm location availability for groups.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {/* Left: Add New */}
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Add Authorized Person</h5>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i className="fa-solid fa-magnifying-glass text-slate-400"></i>
                       </div>
-                    )}
+                      <input
+                        type="text"
+                        placeholder="Search PNC/Admin users by name or email..."
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-11 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                        value={pncSearch}
+                        onChange={e => setPncSearch(e.target.value)}
+                      />
+
+                      {/* Search Results Dropdown */}
+                      {pncSearch.trim() !== '' && filteredPncUsers.length > 0 && (
+                        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+                          {filteredPncUsers.map(user => (
+                            <button
+                              key={user.id}
+                              onClick={() => handleAddApprover(user)}
+                              className="w-full flex items-center gap-4 p-4 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all border-b last:border-0 border-slate-100 dark:border-slate-800 group text-left"
+                            >
+                              <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-black flex-shrink-0">
+                                {user.name ? user.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{user.name || 'Unnamed User'}</p>
+                                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <span className={`text-xs font-black px-2 py-0.5 rounded-full ${user.role === UserRole.ADMIN
+                                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                                  : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                  }`}>{user.role}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* No Results State */}
+                      {pncSearch.trim() !== '' && filteredPncUsers.length === 0 && (
+                        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl p-4 text-center">
+                          <p className="text-sm text-slate-500 font-medium">No users found for "{pncSearch}"</p>
+                          <p className="text-xs text-slate-400 mt-1">Try a different name or email. Only PNC and Admin users can be added.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-800/20 rounded-lg flex gap-4">
+                    <i className="fa-solid fa-circle-info text-emerald-500 mt-1"></i>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400/80 leading-relaxed font-medium">
+                      Approvers will receive notifications for location availability checks and can approve or deny requests directly from their workspace.
+                    </p>
                   </div>
                 </div>
 
-                <div className="p-5 bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-800/20 rounded-2xl flex gap-4">
-                  <i className="fa-solid fa-circle-info text-emerald-500 mt-1"></i>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400/80 leading-relaxed font-medium">
-                    Approvers will receive notifications for location availability checks and can approve or deny requests directly from their workspace.
-                  </p>
-                </div>
-              </div>
+                {/* Right: Current List */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Active Approvers</h5>
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-black">{meetupApprovers.filter(a => a.is_active).length} PERSONS</span>
+                  </div>
 
-              {/* Right: Current List */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Approvers</h5>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-black">{meetupApprovers.filter(a => a.is_active).length} PERSONS</span>
-                </div>
-
-                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {approversLoading ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-4">
-                      <i className="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i>
-                      <span className="text-xs font-black uppercase tracking-widest">Loading List...</span>
-                    </div>
-                  ) : meetupApprovers.length === 0 ? (
-                    <div className="py-16 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] bg-slate-50/50 dark:bg-slate-900/50">
-                      <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">No approvers configured</p>
-                    </div>
-                  ) : (
-                    meetupApprovers.map((a) => (
-                      <div key={a.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 group ${a.is_active ? 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-800 opacity-60'}`}>
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${a.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
-                            {a.name?.charAt(0) || <i className="fa-solid fa-user"></i>}
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-slate-800 dark:text-white leading-none">{a.name || 'Staff'}</p>
-                            <p className="text-xs text-slate-400 font-medium mt-1.5">{a.email}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleToggleApprover(a.id, a.is_active)}
-                            className={`p-2 rounded-lg transition-colors ${a.is_active ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
-                          >
-                            <i className={`fa-solid ${a.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-lg`}></i>
-                          </button>
-                          <button onClick={() => handleDeleteApprover(a.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        </div>
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {approversLoading ? (
+                      <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-4">
+                        <i className="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i>
+                        <span className="text-xs font-black uppercase tracking-widest">Loading List...</span>
                       </div>
-                    ))
-                  )}
+                    ) : meetupApprovers.length === 0 ? (
+                      <div className="py-16 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-900/50">
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">No approvers configured</p>
+                      </div>
+                    ) : (
+                      meetupApprovers.map((a) => (
+                        <div key={a.id} className={`flex items-center justify-between p-4 rounded-lg border transition-all duration-300 group ${a.is_active ? 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-800 opacity-60'}`}>
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-black transition-all ${a.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+                              {a.name?.charAt(0) || <i className="fa-solid fa-user"></i>}
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-slate-800 dark:text-white leading-none">{a.name || 'Staff'}</p>
+                              <p className="text-xs text-slate-400 font-medium mt-1.5">{a.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleToggleApprover(a.id, a.is_active)}
+                              className={`p-2 rounded-lg transition-colors ${a.is_active ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                            >
+                              <i className={`fa-solid ${a.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-lg`}></i>
+                            </button>
+                            <button onClick={() => handleDeleteApprover(a.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        </div>
-      </section>
+            </Card>
+          </div>
+        </section>
       )}
     </div>
   );
@@ -2514,14 +2597,14 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.location.reload()}
-            className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+            className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
             title="Refresh Data"
           >
             <i className="fa-solid fa-sync"></i>
           </button>
           <button
             onClick={() => setIsAddUserModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+            className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-lg text-sm font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
           >
             <i className="fa-solid fa-user-plus"></i>
             Add User
@@ -2533,7 +2616,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
               placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
+              className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
             />
           </div>
         </div>
@@ -2543,7 +2626,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+              <tr className="bg-slate-50 dark:bg-slate-800/50 text-xs font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
                 <th className="px-8 py-6">User Details</th>
                 <th className="px-8 py-6">Status / Role</th>
                 <th className="px-8 py-6 text-right">Update Access</th>
@@ -2556,15 +2639,15 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
                   <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 bg-indigo-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center font-black text-indigo-600 border border-slate-100 dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
-                          {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-2xl" /> : user.name?.charAt(0)}
+                        <div className="w-11 h-11 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center font-black text-indigo-600 border border-slate-100 dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
+                          {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-lg" /> : user.name?.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-bold text-slate-800 dark:text-white leading-tight">{user.name}</p>
                             {isProtectedAdmin && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 select-none">
-                                <i className="fa-solid fa-lock text-[9px]"></i>
+                              <span className="inline-flex items-center gap-1 text-xs font-black px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 select-none">
+                                <i className="fa-solid fa-lock text-xs"></i>
                                 FIXED
                               </span>
                             )}
@@ -2578,15 +2661,15 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
                     </td>
                     <td className="px-8 py-5 text-right">
                       {isProtectedAdmin ? (
-                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl text-xs font-black text-slate-400 dark:text-slate-500 select-none" title="This admin account is protected and cannot be changed">
-                          <i className="fa-solid fa-lock text-[10px]"></i>
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-lg text-xs font-black text-slate-400 dark:text-slate-500 select-none" title="This admin account is protected and cannot be changed">
+                          <i className="fa-solid fa-lock text-xs"></i>
                           Protected Admin
                         </div>
                       ) : (
                         <select
                           value={user.role}
                           onChange={(e) => onUpdateRole(user, e.target.value as UserRole)}
-                          className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-lg px-4 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           disabled={user.id === currentUser.id || (currentUser.role === UserRole.PNC && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.PNC)}
                         >
                           {Object.values(UserRole).filter(role => {
@@ -2631,7 +2714,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => prev - 1)}
-              className="w-10 h-10 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="w-10 h-10 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <i className="fa-solid fa-chevron-left text-xs"></i>
             </button>
@@ -2640,7 +2723,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === page ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                  className={`w-10 h-10 rounded-lg text-xs font-black transition-all ${currentPage === page ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                 >
                   {page}
                 </button>
@@ -2649,7 +2732,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
             <button
               disabled={currentPage === totalPages || totalPages === 0}
               onClick={() => setCurrentPage(prev => prev + 1)}
-              className="w-10 h-10 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="w-10 h-10 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <i className="fa-solid fa-chevron-right text-xs"></i>
             </button>
@@ -2661,12 +2744,12 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
       {isAddUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setIsAddUserModalOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 z-10 overflow-hidden">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-lg shadow-2xl animate-in zoom-in-95 duration-200 z-10 overflow-hidden">
             {/* Modal Header */}
             <div className="px-8 py-6 border-b dark:border-slate-800 bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-900">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-indigo-600/20">
+                  <div className="w-12 h-12 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-xl shadow-lg shadow-indigo-600/20">
                     <i className="fa-solid fa-user-plus"></i>
                   </div>
                   <div>
@@ -2676,7 +2759,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
                 </div>
                 <button
                   onClick={() => setIsAddUserModalOpen(false)}
-                  className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                  className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
                 >
                   <i className="fa-solid fa-xmark text-lg"></i>
                 </button>
@@ -2696,7 +2779,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
                     placeholder="Enter full name"
                     value={newUserName}
                     onChange={(e) => setNewUserName(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                     disabled={isInviting}
                   />
                 </div>
@@ -2714,13 +2797,13 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
                     value={newUserEmail}
                     onChange={(e) => setNewUserEmail(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleInviteUser()}
-                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                     disabled={isInviting}
                   />
                 </div>
               </div>
 
-              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl flex gap-3">
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-lg flex gap-3">
                 <i className="fa-solid fa-circle-info text-indigo-500 mt-0.5 flex-shrink-0"></i>
                 <p className="text-xs text-indigo-700 dark:text-indigo-400/80 leading-relaxed font-medium">
                   An invitation magic link will be sent to the user's email. They can click it to sign in and complete their profile. Their default role will be <span className="font-black">Employee</span>.
@@ -2732,7 +2815,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
             <div className="px-8 py-6 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex gap-3 justify-end">
               <button
                 onClick={() => { setIsAddUserModalOpen(false); setNewUserName(''); setNewUserEmail(''); }}
-                className="px-6 py-2.5 text-sm font-black text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
+                className="px-6 py-2.5 text-sm font-black text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
                 disabled={isInviting}
               >
                 Cancel
@@ -2740,7 +2823,7 @@ const UserRoleManagement = ({ users, onUpdateRole, currentUser }: { users: User[
               <button
                 onClick={handleInviteUser}
                 disabled={isInviting || !newUserEmail.trim()}
-                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-black rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-black rounded-lg shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isInviting ? (
                   <><i className="fa-solid fa-spinner fa-spin"></i> Sending...</>
@@ -2771,7 +2854,7 @@ const Section = ({ title, children, icon }: { title: string, children: React.Rea
 
 const SubHeader = ({ title }: { title: string }) => (
   <div className="md:col-span-2">
-    <h5 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">{title}</h5>
+    <h5 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">{title}</h5>
   </div>
 );
 
@@ -2901,7 +2984,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
   return (
     <div className={`space-y-8 animate-in fade-in duration-500 pb-20 ${isLock ? 'w-full max-w-3xl mx-auto' : ''}`}>
-      <header className="flex flex-col md:flex-row items-center gap-8 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm">
+      <header className="flex flex-col md:flex-row items-center gap-8 bg-white dark:bg-slate-900 p-8 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="relative group">
           <div className={`w-32 h-32 bg-indigo-50 dark:bg-slate-800 rounded-full overflow-hidden border-4 border-white dark:border-slate-900 shadow-xl transition-all group-hover:brightness-90 flex items-center justify-center ${isUploading === 'avatar' ? 'animate-pulse' : ''}`}>
             {isUploading === 'avatar' ? (
@@ -2928,14 +3011,14 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
               <div className="flex items-center gap-3 self-center md:self-start">
                 <button
                   onClick={onToggleTheme}
-                  className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-200 dark:hover:border-indigo-800 rounded-xl transition-all shadow-sm active:scale-95"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-200 dark:hover:border-indigo-800 rounded-lg transition-all shadow-sm active:scale-95"
                   title="Toggle Theme"
                 >
                   {isDarkMode ? <i className="fa-solid fa-sun text-lg"></i> : <i className="fa-solid fa-moon text-lg"></i>}
                 </button>
                 <button
                   onClick={onLogout}
-                  className="px-5 py-2.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                  className="px-5 py-2.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-black uppercase tracking-widest rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-2"
                 >
                   <i className="fa-solid fa-right-from-bracket"></i>
                   Sign Out
@@ -2946,7 +3029,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
           <div className="mt-6">
             <div className="flex justify-between items-end mb-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Profile Completeness</span>
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">Profile Completeness</span>
               <span className={`text-xs font-bold leading-none ${completeness === 100 ? 'text-emerald-500' : 'text-indigo-600'}`}>{completeness}%</span>
             </div>
             <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -2962,9 +3045,9 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
       {/* Warnings & Notices */}
       <div className="space-y-4">
         {isLock && onSkip && policy.isEnforcementEnabled && !minDaysRemaining && (
-          <div className="p-5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-sm">
+          <div className="p-5 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-sm">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+              <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
                 <i className="fa-solid fa-forward-step text-xl text-indigo-500"></i>
               </div>
               <div>
@@ -2972,13 +3055,13 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">You can temporarily skip verification for {policy.temporaryUnlockDays} days. After this window, full verification will be required to maintain access.</p>
               </div>
             </div>
-            <button onClick={onSkip} className="whitespace-nowrap px-6 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 rounded-xl text-xs font-black uppercase hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition-all shadow-sm active:scale-95">Skip for Now</button>
+            <button onClick={onSkip} className="whitespace-nowrap px-6 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 rounded-lg text-xs font-black uppercase hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition-all shadow-sm active:scale-95">Skip for Now</button>
           </div>
         )}
 
         {policy.isEnforcementEnabled && minDaysRemaining !== null && minDaysRemaining > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2">
-            <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
+          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-lg p-5 flex items-start gap-4 animate-in slide-in-from-top-2">
+            <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
               <i className="fa-solid fa-hourglass-half"></i>
             </div>
             <div className="flex-1">
@@ -2991,8 +3074,8 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
         )}
 
         {policy.isEnforcementEnabled && minDaysRemaining === 0 && (
-          <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/50 rounded-2xl p-5 flex items-start gap-4">
-            <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-xl flex items-center justify-center text-rose-600 dark:text-rose-400 flex-shrink-0">
+          <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/50 rounded-lg p-5 flex items-start gap-4">
+            <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-lg flex items-center justify-center text-rose-600 dark:text-rose-400 flex-shrink-0">
               <i className="fa-solid fa-lock"></i>
             </div>
             <div className="flex-1">
@@ -3049,14 +3132,14 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
               <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20"><i className="fa-solid fa-file-shield"></i></div>
               <div>
                 <h4 className="font-bold text-slate-800 dark:text-white text-lg leading-none">Identity Verification</h4>
-                <p className="text-[10px] text-slate-500 mt-1.5 uppercase font-black tracking-widest leading-none">Approval Required</p>
+                <p className="text-xs text-slate-500 mt-1.5 uppercase font-black tracking-widest leading-none">Approval Required</p>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {/* A. Passport Photo */}
-            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-800/30 rounded-[2.5rem] p-8 border border-slate-200/50 dark:border-slate-700/50">
+            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-800/30 rounded-lg p-8 border border-slate-200/50 dark:border-slate-700/50">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h5 className="font-black text-slate-800 dark:text-white text-sm">A. Passport Photo</h5>
@@ -3065,22 +3148,22 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
                 <StatusBadge type="status" value={formData.passportPhoto?.status || VerificationStatus.INCOMPLETE} />
               </div>
 
-              <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 min-h-[220px] group transition-all hover:border-indigo-400">
+              <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 min-h-[220px] group transition-all hover:border-indigo-400">
                 {isUploading === 'passportPhoto' ? (
                   <div className="flex flex-col items-center gap-3">
                     <i className="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-600"></i>
-                    <p className="text-2xs font-bold text-indigo-600 uppercase tracking-widest">Uploading...</p>
+                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Uploading...</p>
                   </div>
                 ) : formData.passportPhoto?.fileUrl ? (
                   <div className="relative group/preview">
-                    <img src={formData.passportPhoto.fileUrl} className="w-40 h-40 rounded-3xl object-cover shadow-2xl border-4 border-white dark:border-slate-800" />
-                    <div className="absolute inset-0 bg-slate-900/40 rounded-3xl opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
+                    <img src={formData.passportPhoto.fileUrl} className="w-40 h-40 rounded-lg object-cover shadow-2xl border-4 border-white dark:border-slate-800" />
+                    <div className="absolute inset-0 bg-slate-900/40 rounded-lg opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
                       <i className="fa-solid fa-eye text-white text-2xl"></i>
                     </div>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-4 text-slate-400">
-                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform"><i className="fa-solid fa-image-portrait"></i></div>
+                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-center text-3xl group-hover:scale-110 transition-transform"><i className="fa-solid fa-image-portrait"></i></div>
                     <p className="text-xs font-medium">No photo uploaded</p>
                   </div>
                 )}
@@ -3088,7 +3171,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
               <div className="mt-8 flex justify-center">
                 {(!formData.passportPhoto?.fileUrl || formData.passportPhoto.status === VerificationStatus.REJECTED || formData.passportPhoto.status === VerificationStatus.PENDING || formData.passportPhoto.status === VerificationStatus.INCOMPLETE) && (
-                  <label className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all cursor-pointer">
+                  <label className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-lg font-bold text-sm shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all cursor-pointer">
                     <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'passportPhoto')} disabled={!!isUploading} />
                     <i className="fa-solid fa-cloud-arrow-up"></i>
                     {formData.passportPhoto?.fileUrl ? 'Replace Photo' : 'Upload Photo'}
@@ -3098,7 +3181,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
             </div>
 
             {/* B. Government ID */}
-            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-800/30 rounded-[2.5rem] p-8 border border-slate-200/50 dark:border-slate-700/50">
+            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-800/30 rounded-lg p-8 border border-slate-200/50 dark:border-slate-700/50">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h5 className="font-black text-slate-800 dark:text-white text-sm">B. Government ID</h5>
@@ -3115,24 +3198,24 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
                   onChange={(e) => setFormData({ ...formData, idProof: { ...(formData.idProof || {}), type: e.target.value as IdProofType, status: formData.idProof?.status || VerificationStatus.INCOMPLETE } })}
                 />
 
-                <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 min-h-[160px] group transition-all hover:border-violet-400">
+                <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 min-h-[160px] group transition-all hover:border-violet-400">
                   {isUploading === 'idProof' ? (
                     <div className="flex flex-col items-center gap-3">
                       <i className="fa-solid fa-circle-notch fa-spin text-3xl text-violet-600"></i>
-                      <p className="text-2xs font-bold text-violet-600 uppercase tracking-widest">Uploading...</p>
+                      <p className="text-xs font-bold text-violet-600 uppercase tracking-widest">Uploading...</p>
                     </div>
                   ) : formData.idProof?.fileUrl ? (
-                    <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full">
-                      <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-violet-600 shadow-sm"><i className="fa-solid fa-file-pdf text-xl"></i></div>
+                    <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full">
+                      <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-lg flex items-center justify-center text-violet-600 shadow-sm"><i className="fa-solid fa-file-pdf text-xl"></i></div>
                       <div className="flex-1 overflow-hidden">
                         <p className="text-xs font-bold text-slate-800 dark:text-white truncate">Document Uploaded</p>
-                        <p className="text-[10px] text-slate-500 font-medium">Click to replace or view</p>
+                        <p className="text-xs text-slate-500 font-medium">Click to replace or view</p>
                       </div>
                       <i className="fa-solid fa-check-circle text-emerald-500"></i>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-4 text-slate-400">
-                      <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform"><i className="fa-solid fa-address-card"></i></div>
+                      <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-center text-3xl group-hover:scale-110 transition-transform"><i className="fa-solid fa-address-card"></i></div>
                       <p className="text-xs font-medium">No document uploaded</p>
                     </div>
                   )}
@@ -3140,7 +3223,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
                 <div className="mt-4 flex justify-center">
                   {(!formData.idProof?.fileUrl || formData.idProof.status === VerificationStatus.REJECTED || formData.idProof.status === VerificationStatus.PENDING || formData.idProof.status === VerificationStatus.INCOMPLETE) && (
-                    <label className="w-full flex items-center justify-center gap-2 bg-violet-600 text-white py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-violet-600/20 hover:bg-violet-700 active:scale-95 transition-all cursor-pointer">
+                    <label className="w-full flex items-center justify-center gap-2 bg-violet-600 text-white py-3.5 rounded-lg font-bold text-sm shadow-xl shadow-violet-600/20 hover:bg-violet-700 active:scale-95 transition-all cursor-pointer">
                       <input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileChange(e, 'idProof')} disabled={!!isUploading} />
                       <i className="fa-solid fa-file-arrow-up"></i>
                       {formData.idProof?.fileUrl ? 'Replace ID' : 'Upload ID Document'}
@@ -3154,7 +3237,7 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
 
         <div className="pt-8 border-t dark:border-slate-800">
-          <button onClick={handleSave} className="w-full bg-indigo-600 text-white py-4 rounded-[1.25rem] font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:translate-y-0 active:scale-95 transition-all">Save Profile Changes</button>
+          <button onClick={handleSave} className="w-full bg-indigo-600 text-white py-4 rounded-lg font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:translate-y-0 active:scale-95 transition-all">Save Profile Changes</button>
         </div>
       </Card>
     </div>
@@ -3450,7 +3533,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
   const toggleDeptSort = (col: typeof deptSort.col) => setDeptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
 
   const SortIcon = ({ col }: { col: typeof deptSort.col }) => (
-    <i className={`fa-solid ml-1 text-[9px] ${deptSort.col === col ? (deptSort.dir === 'asc' ? 'fa-arrow-up text-indigo-500' : 'fa-arrow-down text-indigo-500') : 'fa-arrows-up-down text-slate-300'}`}></i>
+    <i className={`fa-solid ml-1 text-xs ${deptSort.col === col ? (deptSort.dir === 'asc' ? 'fa-arrow-up text-indigo-500' : 'fa-arrow-down text-indigo-500') : 'fa-arrows-up-down text-slate-300'}`}></i>
   );
 
   const uniqueCampuses = Array.from(new Set(requests.map(r => r.requesterCampus).filter(Boolean))) as string[];
@@ -3460,7 +3543,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
   // Department chart renderer
   const renderDeptChart = () => {
     if (deptData.length === 0) return (
-      <div className="h-80 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">No data for selected period.</div>
+      <div className="h-80 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-lg">No data for selected period.</div>
     );
 
     // Shared chart dimensions
@@ -3615,7 +3698,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
       </header>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap gap-4 items-start shadow-sm">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-wrap gap-4 items-start shadow-sm">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mt-2"><i className="fa-solid fa-filter"></i> Filters</div>
 
         {/* Campus multi-select */}
@@ -3629,14 +3712,14 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
             <span className="flex-1 text-left truncate">
               {filters.campuses.length === 0 ? 'All Campuses' : filters.campuses.length === 1 ? filters.campuses[0] : `${filters.campuses.length} Campuses`}
             </span>
-            <i className={`fa-solid fa-chevron-${campusDropOpen ? 'up' : 'down'} text-[9px] text-slate-400`}></i>
+            <i className={`fa-solid fa-chevron-${campusDropOpen ? 'up' : 'down'} text-xs text-slate-400`}></i>
           </button>
           {campusDropOpen && (
-            <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
               <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Campus</span>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Campus</span>
                 {filters.campuses.length > 0 && (
-                  <button onClick={() => setFilters(f => ({ ...f, campuses: [] }))} className="text-[10px] font-bold text-rose-500 hover:text-rose-600">Clear</button>
+                  <button onClick={() => setFilters(f => ({ ...f, campuses: [] }))} className="text-xs font-bold text-rose-500 hover:text-rose-600">Clear</button>
                 )}
               </div>
               <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
@@ -3647,7 +3730,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                     >
-                      <div className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
+                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
                         }`}>
                         {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
                       </div>
@@ -3662,7 +3745,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           {filters.campuses.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {filters.campuses.map(c => (
-                <span key={c} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span key={c} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2 py-0.5 rounded-full">
                   {c}
                   <button onClick={() => setFilters(f => ({ ...f, campuses: f.campuses.filter(x => x !== c) }))} className="hover:text-rose-500 transition-colors"><i className="fa-solid fa-xmark text-[8px]"></i></button>
                 </span>
@@ -3682,14 +3765,14 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
             <span className="flex-1 text-left truncate">
               {filters.departments.length === 0 ? 'All Departments' : filters.departments.length === 1 ? filters.departments[0] : `${filters.departments.length} Departments`}
             </span>
-            <i className={`fa-solid fa-chevron-${deptDropOpen ? 'up' : 'down'} text-[9px] text-slate-400`}></i>
+            <i className={`fa-solid fa-chevron-${deptDropOpen ? 'up' : 'down'} text-xs text-slate-400`}></i>
           </button>
           {deptDropOpen && (
-            <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
               <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Department</span>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Department</span>
                 {filters.departments.length > 0 && (
-                  <button onClick={() => setFilters(f => ({ ...f, departments: [] }))} className="text-[10px] font-bold text-rose-500 hover:text-rose-600">Clear</button>
+                  <button onClick={() => setFilters(f => ({ ...f, departments: [] }))} className="text-xs font-bold text-rose-500 hover:text-rose-600">Clear</button>
                 )}
               </div>
               <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
@@ -3700,7 +3783,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                     >
-                      <div className={`w-4 h-4 rounded flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
+                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
                         }`}>
                         {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
                       </div>
@@ -3715,7 +3798,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           {filters.departments.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {filters.departments.map(d => (
-                <span key={d} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span key={d} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2 py-0.5 rounded-full">
                   {d}
                   <button onClick={() => setFilters(f => ({ ...f, departments: f.departments.filter(x => x !== d) }))} className="hover:text-rose-500 transition-colors"><i className="fa-solid fa-xmark text-[8px]"></i></button>
                 </span>
@@ -3786,7 +3869,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         <Card className="p-6 flex flex-col" style={{ minHeight: '420px' }}>
           <div className="flex justify-between items-center mb-5">
             <h4 className="font-bold text-slate-800 dark:text-white">{isFinancialView ? 'Spend by Department' : 'Volume by Department'}</h4>
-            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
               {(['bar', 'line', 'scatter', 'bubble', 'pie'] as const).map(type => (
                 <button key={type} onClick={() => setDeptChartType(type)} title={type.charAt(0).toUpperCase() + type.slice(1)}
                   className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all ${deptChartType === type ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
@@ -3812,7 +3895,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-white dark:bg-slate-900 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+            <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
               <tr>
                 <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('dept')}>Department <SortIcon col="dept" /></th>
                 <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('count')}># Tickets <SortIcon col="count" /></th>
@@ -3866,7 +3949,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left whitespace-nowrap">
-            <thead className="bg-white dark:bg-slate-900 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+            <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
               <tr>
                 <th className="px-6 py-4">Request ID</th><th className="px-6 py-4">Traveler</th>
                 <th className="px-6 py-4">Dept / Campus</th><th className="px-6 py-4">Route</th>
@@ -3882,7 +3965,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
                   <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
                   <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                  <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">View <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>) : <span className="text-slate-300">—</span>}</td>
+                  <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">View <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>) : <span className="text-slate-300">—</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -3937,13 +4020,13 @@ const IgathpuriAvailabilityModal = ({ onClose, currentUser, onSubmit }: { onClos
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={onClose}></div>
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
         <header className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
           <div>
             <h3 className="text-xl font-black text-slate-900 dark:text-white">Check Availability</h3>
             <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Igathpuri Campus Request</p>
           </div>
-          <button onClick={onClose} className="w-10 h-10 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 flex items-center justify-center">
+          <button onClick={onClose} className="w-10 h-10 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all text-slate-400 flex items-center justify-center">
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>
         </header>
@@ -3990,23 +4073,23 @@ const IgathpuriAvailabilityModal = ({ onClose, currentUser, onSubmit }: { onClos
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Start Date</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Start Date</label>
                 <input
                   type="date"
                   required
                   min={minStartDate}
-                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all"
+                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all"
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value, endDate: e.target.value > formData.endDate ? '' : formData.endDate })}
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">End Date</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">End Date</label>
                 <input
                   type="date"
                   required
                   min={minEndDate}
-                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all"
+                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all"
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                 />
@@ -4014,9 +4097,9 @@ const IgathpuriAvailabilityModal = ({ onClose, currentUser, onSubmit }: { onClos
             </div>
           </div>
 
-          <div className="bg-violet-50 dark:bg-violet-900/10 p-4 rounded-2xl border border-violet-100 dark:border-violet-800/30 flex gap-3">
+          <div className="bg-violet-50 dark:bg-violet-900/10 p-4 rounded-lg border border-violet-100 dark:border-violet-800/30 flex gap-3">
             <i className="fa-solid fa-circle-info text-violet-600 mt-0.5"></i>
-            <p className="text-[10px] text-violet-700 dark:text-violet-400 leading-relaxed font-medium">
+            <p className="text-xs text-violet-700 dark:text-violet-400 leading-relaxed font-medium">
               Your request will be sent to the Igathpuri meetup approvers. Once approved, you can proceed with your travel booking.
             </p>
           </div>
@@ -4024,7 +4107,7 @@ const IgathpuriAvailabilityModal = ({ onClose, currentUser, onSubmit }: { onClos
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+            className="w-full py-4 bg-indigo-600 text-white rounded-lg font-black uppercase tracking-widest text-sm shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
           >
             {isSubmitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
             Submit Request
@@ -4053,7 +4136,7 @@ const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabil
         </h3>
 
         {pending.length === 0 ? (
-          <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+          <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800">
             <p className="text-slate-400 font-bold italic">No pending requests at the moment.</p>
           </div>
         ) : (
@@ -4063,22 +4146,22 @@ const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabil
                 <div className="flex justify-between items-start">
                   <div>
                     <h4 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">{r.fullName}</h4>
-                    <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest">{r.department}</p>
+                    <p className="text-xs font-bold text-violet-500 uppercase tracking-widest">{r.department}</p>
                   </div>
-                  <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-[10px] font-black text-slate-500 uppercase">
+                  <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-xs font-black text-slate-500 uppercase">
                     {r.teamSize} Members
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl">
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
                   <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Duration</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Duration</p>
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
                       {new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Contact</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Contact</p>
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{r.phone}</p>
                   </div>
                 </div>
@@ -4086,13 +4169,13 @@ const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabil
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => onUpdate(r, 'Rejected')}
-                    className="flex-1 py-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-rose-600 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-rose-50 transition-all"
+                    className="flex-1 py-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-rose-600 font-black uppercase tracking-widest text-xs rounded-lg hover:bg-rose-50 transition-all"
                   >
                     Reject
                   </button>
                   <button
                     onClick={() => onUpdate(r, 'Approved')}
-                    className="flex-[2] py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+                    className="flex-[2] py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-lg shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
                   >
                     Approve Availability
                   </button>
@@ -4108,9 +4191,9 @@ const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabil
               <i className="fa-solid fa-history text-slate-400"></i>
               Recent Actions
             </h3>
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] overflow-hidden shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
                   <tr>
                     <th className="px-8 py-5">Requestor</th>
                     <th className="px-8 py-5">Team Size</th>
@@ -4124,7 +4207,7 @@ const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabil
                     <tr key={r.id}>
                       <td className="px-8 py-5">
                         <p className="text-sm font-bold text-slate-800 dark:text-white">{r.fullName}</p>
-                        <p className="text-[10px] text-slate-500 font-medium">{r.email}</p>
+                        <p className="text-xs text-slate-500 font-medium">{r.email}</p>
                       </td>
                       <td className="px-8 py-5">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">
@@ -4137,12 +4220,12 @@ const MeetupApprovalsView = ({ requests, onUpdate }: { requests: MeetupAvailabil
                         </p>
                       </td>
                       <td className="px-8 py-5">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${r.status === 'Approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${r.status === 'Approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                           }`}>
                           {r.status}
                         </span>
                       </td>
-                      <td className="px-8 py-5 text-right text-[10px] font-bold text-slate-400">
+                      <td className="px-8 py-5 text-right text-xs font-bold text-slate-400">
                         {new Date(r.updatedAt).toLocaleDateString()}
                       </td>
                     </tr>
@@ -4950,13 +5033,13 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4 max-w-sm">
-          <div className="w-20 h-20 bg-rose-100 dark:bg-rose-900/20 text-rose-600 rounded-3xl flex items-center justify-center text-3xl mx-auto shadow-xl">
+          <div className="w-20 h-20 bg-rose-100 dark:bg-rose-900/20 text-rose-600 rounded-lg flex items-center justify-center text-3xl mx-auto shadow-xl">
             <i className="fa-solid fa-cloud-bolt"></i>
           </div>
           <h2 className="text-2xl font-black text-slate-800 dark:text-white">Connection Error</h2>
           <p className="text-slate-500 font-medium">We couldn't load your profile. This might be due to a database sync issue or incorrect permissions.</p>
           <div className="flex flex-col gap-3 pt-4">
-            <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all">Retry Connection</button>
+            <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-8 py-4 rounded-lg font-black shadow-xl hover:bg-indigo-700 transition-all">Retry Connection</button>
             <button onClick={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); supabase.auth.signOut(); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold uppercase tracking-widest transition-all">Sign Out & Try Again</button>
           </div>
         </div>
@@ -4972,7 +5055,7 @@ const App: React.FC = () => {
         <Toaster position="top-right" richColors />
         <nav className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-8 flex items-center justify-between transition-colors duration-300">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-600/20">N</div>
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-600/20">N</div>
             <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">Navgurukul Travel Desk</h1>
           </div>
           <button
@@ -5010,8 +5093,8 @@ const App: React.FC = () => {
           {currentUser.role === UserRole.EMPLOYEE && (
             <>
               <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">MY SPACE</p>
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
                 {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
                   <SidebarLink
@@ -5416,44 +5499,84 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 transition-all">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <span className="text-4xl">👋</span>
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              Hey, {user?.name?.split(' ')[0] || 'there'}!
+      {/* Header with gradient mesh background */}
+      <header className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white dark:bg-slate-900 p-5 md:p-8 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden group">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-3xl -mr-20 -mt-20 group-hover:scale-110 transition-transform duration-1000 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/5 dark:bg-fuchsia-500/10 rounded-full blur-3xl -ml-10 -mb-10 group-hover:scale-110 transition-transform duration-1000 pointer-events-none"></div>
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-4 mb-2">
+            <span className="text-3xl md:text-4xl animate-bounce-slow origin-bottom">👋</span>
+            <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              Hey, <span className="bg-gradient-to-r from-indigo-600 to-fuchsia-600 bg-clip-text text-transparent">{user?.name?.split(' ')[0] || 'there'}!</span>
             </h2>
           </div>
-          <p className="text-slate-500 font-medium text-lg italic ml-1.5 opacity-80 decoration-indigo-500/30">
+          <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-lg italic ml-1.5 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
             "{welcomeNote}"
           </p>
         </div>
-        <button onClick={() => onNewRequest()} className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3">
-          <i className="fa-solid fa-plus-circle"></i>
+        <button onClick={() => onNewRequest()} className="relative z-10 w-full md:w-auto bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-8 py-4 rounded-lg font-black shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:from-indigo-500 hover:to-violet-500 hover:-translate-y-1 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3 group overflow-hidden">
+          <div className="absolute inset-0 w-full h-full bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+          <i className="fa-solid fa-plane-departure group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i>
           <span>New Booking</span>
         </button>
       </header>
 
+      {/* Quick Insights Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-amber-500/10 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+          <div className="flex justify-between items-start mb-4">
+            <div className="w-12 h-12 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner group-hover:rotate-12 transition-transform"><i className="fa-solid fa-clock"></i></div>
+            <span className="text-3xl font-black text-slate-800 dark:text-white group-hover:text-amber-600 transition-colors">{activeRequests.length}</span>
+          </div>
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-xs">Active Requests</h4>
+          <p className="text-xs text-slate-500 mt-1 font-medium">Currently in progress</p>
+        </div>
+
+        <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-emerald-500/10 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+          <div className="flex justify-between items-start mb-4">
+            <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shadow-inner group-hover:-rotate-12 transition-transform"><i className="fa-solid fa-suitcase-rolling"></i></div>
+            <span className="text-3xl font-black text-slate-800 dark:text-white group-hover:text-emerald-600 transition-colors">{closedRequests.length}</span>
+          </div>
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-xs">Past Trips</h4>
+          <p className="text-xs text-slate-500 mt-1 font-medium">Completed bookings</p>
+        </div>
+
+        <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-sky-500/10 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+          <div className="flex justify-between items-start mb-4">
+            <div className="w-12 h-12 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform"><i className="fa-solid fa-id-card-clip"></i></div>
+            <span className="text-xl font-black text-slate-800 dark:text-white mt-2 group-hover:text-sky-600 transition-colors">{completeness}%</span>
+          </div>
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-xs">Profile Status</h4>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+            <div className="bg-sky-500 h-full rounded-full transition-all duration-1000" style={{ width: `${completeness}%` }}></div>
+          </div>
+        </div>
+      </div>
+
       {completeness < 100 && (
-        <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-8 rounded-2xl shadow-2xl shadow-indigo-200 dark:shadow-none relative overflow-hidden group border border-white/10">
+        <div className="bg-gradient-to-br from-rose-500 via-rose-600 to-orange-500 p-8 rounded-lg shadow-2xl shadow-rose-500/20 dark:shadow-none relative overflow-hidden group border border-white/10">
           <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-125 group-hover:rotate-12 transition-all duration-700 pointer-events-none">
-            <i className="fa-solid fa-user-astronaut text-9xl"></i>
+            <i className="fa-solid fa-triangle-exclamation text-9xl"></i>
           </div>
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-4">
-              <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-white">Action Required</span>
+              <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-black uppercase tracking-[0.2em] text-white">Action Required</span>
               <div className="h-1.5 w-32 bg-white/20 rounded-full overflow-hidden">
                 <div className="h-full bg-white transition-all duration-1000" style={{ width: `${completeness}%` }}></div>
               </div>
-              <span className="text-white/80 text-xs font-bold">{completeness}% Complete</span>
+              <span className="text-white/90 text-xs font-bold">{completeness}% Complete</span>
             </div>
-            <h3 className="text-2xl font-black text-white mb-3 tracking-tight">Profile Incomplete</h3>
-            <p className="text-indigo-100/80 text-base mb-8 max-w-lg leading-relaxed font-medium">Your identity verification and background details are pending. Complete these now to avoid any delays in your upcoming travel approvals.</p>
+            <h3 className="text-xl font-black text-white mb-3 tracking-tight">Profile Setup Pending</h3>
+            <p className="text-rose-100 text-base mb-8 max-w-lg leading-relaxed font-medium">Your identity verification and background details are pending. Complete these now to avoid any delays in your upcoming travel approvals.</p>
             <button
               onClick={onViewProfile}
-              className="bg-white text-indigo-700 px-8 py-3.5 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-xl active:scale-95"
+              className="bg-white text-rose-600 px-8 py-3.5 rounded-lg text-sm font-black uppercase tracking-widest hover:bg-rose-50 hover:-translate-y-1 transition-all shadow-xl active:scale-95 flex items-center gap-2 w-fit"
             >
-              Finish Setup
+              Finish Setup <i className="fa-solid fa-arrow-right"></i>
             </button>
           </div>
         </div>
@@ -5465,95 +5588,187 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
         mr.attendeeEmails?.some(email => email.toLowerCase() === user?.email?.toLowerCase()) &&
         !requests.some(r => r.purpose === 'Igatpuri Meetup' && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER)
       ).map((mr: MeetupAvailabilityRequest) => (
-        <div key={mr.id} className="bg-gradient-to-r from-emerald-500 to-teal-600 p-1 rounded-3xl shadow-xl shadow-emerald-500/20 animate-in slide-in-from-top-4 duration-500">
-          <div className="bg-white dark:bg-slate-900 rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center text-2xl shadow-inner">
+        <div key={mr.id} className="bg-gradient-to-r from-emerald-500 to-teal-600 p-[2px] rounded-lg shadow-xl shadow-emerald-500/20 animate-in slide-in-from-top-4 duration-500 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover:animate-[shimmer_2s_infinite]"></div>
+          <div className="bg-white dark:bg-slate-900 rounded-lg p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+            <div className="flex items-center gap-6 w-full md:w-auto">
+              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center text-3xl shadow-inner border border-emerald-100 dark:border-emerald-800/50 group-hover:scale-110 transition-transform">
                 <i className="fa-solid fa-map-location-dot"></i>
               </div>
               <div>
                 <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Igatpuri Meetup Visit</h4>
                 <p className="text-sm text-slate-500 font-bold mt-1">
-                  You have been added to a meetup request from <span className="text-emerald-600 underline">{mr.fullName}</span>
+                  You have been added to a meetup request from <span className="text-emerald-600 underline cursor-pointer">{mr.fullName}</span>
                 </p>
-                <div className="flex items-center gap-4 mt-3">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-                    <i className="fa-solid fa-calendar-day text-[10px] text-emerald-500"></i>
-                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase">{new Date(mr.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(mr.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                <div className="flex flex-wrap items-center gap-3 mt-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                    <i className="fa-solid fa-calendar-day text-xs text-emerald-500"></i>
+                    <span className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase">{new Date(mr.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(mr.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2 text-right">
-              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full mb-1">Fill in your details for your Igatpuri visit</p>
+            <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
+              <p className="text-xs font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full border border-emerald-100 dark:border-emerald-800/50 text-center">Action Required</p>
               <button
                 onClick={() => onNewRequest({ startDate: mr.startDate, endDate: mr.endDate })}
-                className="bg-emerald-600 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all w-full md:w-auto"
+                className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-1 active:scale-95 transition-all w-full md:w-auto flex items-center justify-center gap-2"
               >
-                Book Now! <i className="fa-solid fa-plane-departure ml-2"></i>
+                Book Travel <i className="fa-solid fa-arrow-right"></i>
               </button>
             </div>
           </div>
         </div>
       ))}
 
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 px-1">
-          <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center"><i className="fa-solid fa-calendar-check"></i></div>
-          <h3 className="text-xl font-bold text-slate-800 dark:text-white">Active Bookings</h3>
+      {/* Active Bookings Section */}
+      <div className="space-y-6 pt-4">
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center shadow-inner border border-indigo-100 dark:border-indigo-800/50"><i className="fa-solid fa-ticket"></i></div>
+            <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">Active Bookings</h3>
+          </div>
         </div>
 
         {activeRequests.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 transition-all">
-            {activeRequests.map((r: TravelRequest) => {
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 transition-all">
+            {activeRequests.map((r: TravelRequest, idx: number) => {
               const isMeetup = r.purpose === 'Igatpuri Meetup';
+              const themes = [
+                { // Option 1: Midnight Sapphire
+                  name: "Midnight Sapphire",
+                  grad: "from-indigo-50/50 to-white dark:from-indigo-900/40 dark:to-slate-900",
+                  badge: "text-indigo-600 dark:text-indigo-400/80 bg-indigo-100 dark:bg-indigo-500/10",
+                  iconBg: "text-indigo-900 dark:text-white",
+                  iconFg: "text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
+                  review: "text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300",
+                  shadow: "hover:shadow-indigo-500/10"
+                },
+                { // Option 2: Deep Emerald
+                  name: "Deep Emerald",
+                  grad: "from-emerald-50/50 to-white dark:from-emerald-900/40 dark:to-slate-900",
+                  badge: "text-emerald-600 dark:text-emerald-400/80 bg-emerald-100 dark:bg-emerald-500/10",
+                  iconBg: "text-emerald-900 dark:text-white",
+                  iconFg: "text-emerald-500 dark:text-emerald-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-300",
+                  review: "text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300",
+                  shadow: "hover:shadow-emerald-500/10"
+                },
+                { // Option 3: Amber Sunrise
+                  name: "Amber Sunrise",
+                  grad: "from-amber-50/50 to-white dark:from-amber-900/40 dark:to-slate-900",
+                  badge: "text-amber-600 dark:text-amber-400/80 bg-amber-100 dark:bg-amber-500/10",
+                  iconBg: "text-amber-900 dark:text-white",
+                  iconFg: "text-amber-500 dark:text-amber-400 group-hover:text-amber-600 dark:group-hover:text-amber-300",
+                  review: "text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300",
+                  shadow: "hover:shadow-amber-500/10"
+                }
+              ];
+              const theme = themes[idx % 3];
+
               return (
-                <div key={r.id} onClick={() => onView(r)} className={`bg-white dark:bg-slate-900 border ${isMeetup ? 'border-emerald-200 dark:border-emerald-800 shadow-sm' : 'border-slate-200 dark:border-slate-800'} p-4 rounded-2xl hover:shadow-lg ${isMeetup ? 'hover:border-emerald-500/50' : 'hover:border-indigo-500/50'} hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden`}>
-                  <div className={`absolute top-0 right-0 w-20 h-20 ${isMeetup ? 'bg-emerald-500/5' : 'bg-indigo-500/5'} -mr-6 -mt-6 rounded-full group-hover:scale-150 transition-transform duration-700`}></div>
-                  <div className="flex justify-between items-start mb-2 relative z-10">
-                    <span className={`text-[10px] font-black ${isMeetup ? 'text-emerald-500/60' : 'text-indigo-500/60'} font-mono tracking-tighter uppercase`}>{r.submissionId || r.id}</span>
-                    <div className="scale-90 origin-right">
+                <div key={r.id} onClick={() => onView(r)} className={`group relative bg-white dark:bg-slate-900 rounded-md flex flex-col sm:flex-row overflow-hidden border border-slate-200 dark:border-slate-800 cursor-pointer shadow-sm hover:shadow-xl ${theme.shadow} transition-all hover:-translate-y-1 duration-300`}>
+                  
+                  {/* Main Ticket Area */}
+                  <div className={`flex-1 p-5 sm:p-6 relative overflow-hidden bg-gradient-to-br ${theme.grad} border-b sm:border-b-0 sm:border-r border-dashed border-slate-200 dark:border-slate-700`}>
+                    <div className={`absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.03] text-[8rem] pointer-events-none ${theme.iconBg}`}>
+                      <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'}`}></i>
+                    </div>
+                    
+                    <div className="flex justify-between items-center mb-5 relative z-10">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Boarding Pass</span>
+                        {isMeetup && <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"><i className="fa-solid fa-star mr-1"></i> Meetup</span>}
+                      </div>
                       <StatusBadge type="pnc" value={r.pncStatus} />
                     </div>
-                  </div>
-                  <h4 className={`font-black text-lg mb-0.5 text-slate-900 dark:text-white ${isMeetup ? 'group-hover:text-emerald-600' : 'group-hover:text-indigo-600'} transition-colors uppercase tracking-tight leading-tight`}>{r.from} → {r.to}</h4>
-                  <p className="text-xs text-slate-500 mb-3 font-bold flex items-center gap-1.5">
-                    <i className="fa-solid fa-calendar-day text-[10px] text-slate-300"></i>
-                    {new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center relative z-10">
-                    <div className={`flex items-center gap-1.5 text-slate-400 ${isMeetup ? 'group-hover:text-emerald-500' : 'group-hover:text-indigo-500'} transition-colors`}>
-                      <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane-departure' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-xs`}></i>
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{r.mode}</span>
+
+                    <div className="flex items-center justify-between mb-6 relative z-10">
+                      <div className="text-left flex-1">
+                        <p className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{r.from.substring(0, 3)}</p>
+                        <p className="text-xs sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px] sm:max-w-[100px]">{r.from}</p>
+                      </div>
+                      
+                      <div className="flex-[2] flex flex-col items-center justify-center px-2 sm:px-4">
+                        <div className="w-full flex items-center opacity-60">
+                          <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
+                          <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} ${theme.iconFg} mx-2 sm:mx-3 text-sm sm:text-lg group-hover:scale-125 transition-all duration-500`}></i>
+                          <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
+                        </div>
+                      </div>
+
+                      <div className="text-right flex-1">
+                        <p className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{r.to.substring(0, 3)}</p>
+                        <p className="text-xs sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px] sm:max-w-[100px]">{r.to}</p>
+                      </div>
                     </div>
-                    <div className={`w-6 h-6 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-300 ${isMeetup ? 'group-hover:bg-emerald-600' : 'group-hover:bg-indigo-600'} group-hover:text-white transition-all`}><i className="fa-solid fa-arrow-right text-[10px]"></i></div>
+                    
+                    <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-100 dark:border-slate-800/50 relative z-10">
+                      <div>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider mb-0.5">Date</p>
+                        <p className="font-black text-sm text-slate-700 dark:text-slate-200 uppercase truncate">{new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider mb-0.5">Req ID</p>
+                        <p className="font-black text-sm text-slate-700 dark:text-slate-200 uppercase truncate">{r.submissionId || r.id.substring(0, 8)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tear-off Stub */}
+                  <div className="w-full sm:w-28 bg-slate-50 dark:bg-slate-900/50 flex flex-row sm:flex-col justify-between sm:justify-center items-center p-4 sm:p-0 relative overflow-hidden">
+                    <div className="hidden sm:block absolute -left-3 top-[-10px] w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                    <div className="hidden sm:block absolute -left-3 bottom-[-10px] w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                    <div className="block sm:hidden absolute left-[-10px] -top-3 w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                    <div className="block sm:hidden absolute right-[-10px] -top-3 w-6 h-6 bg-slate-50 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+
+                    <div className="flex flex-row sm:flex-col items-center w-full h-full justify-between sm:py-6 relative z-10">
+                      <div className="w-full text-left sm:text-center shrink-0">
+                        {r.hasViolation ? (
+                          <div className="inline-block bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-black px-2 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 animate-pulse">POLICY<br className="hidden sm:block"/> REVIEW</div>
+                        ) : (
+                          <div className="inline-block bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-xs font-black px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">CLEAR</div>
+                        )}
+                      </div>
+                      
+                      <div className="hidden sm:flex w-full h-12 items-center justify-center opacity-20 gap-[2px] rotate-90 my-6">
+                        {[...Array(14)].map((_, i) => (
+                          <div key={i} className={`h-full bg-slate-800 dark:bg-white ${i % 3 === 0 ? 'w-1' : i % 2 === 0 ? 'w-[2px]' : 'w-[1px]'}`}></div>
+                        ))}
+                      </div>
+
+                      <button className={`sm:mt-0 text-xs font-black uppercase ${theme.review} group-hover:translate-x-1 transition-all flex items-center gap-1.5 shrink-0`}>
+                        View <i className="fa-solid fa-arrow-right"></i>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="py-20 text-center space-y-5 bg-white/50 dark:bg-slate-900/30 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl transition-colors">
-            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto text-slate-300 text-3xl shadow-inner"><i className="fa-solid fa-passport"></i></div>
+          <div className="py-24 text-center space-y-6 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-lg transition-colors">
+            <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center mx-auto text-slate-300 dark:text-slate-600 text-4xl shadow-sm border border-slate-100 dark:border-slate-800"><i className="fa-solid fa-ticket-simple"></i></div>
             <div>
-              <h3 className="font-black text-slate-500 dark:text-slate-400 text-lg">No active travel requests</h3>
-              <p className="text-slate-400 text-sm mt-1">When you book travel, it will appear here.</p>
+              <h3 className="font-black text-slate-800 dark:text-white text-xl">No active travel requests</h3>
+              <p className="text-slate-500 text-sm mt-2 font-medium">When you book travel, your digital tickets will appear here.</p>
             </div>
-            <button onClick={() => onNewRequest()} className="text-indigo-600 font-black text-xs uppercase tracking-widest hover:text-indigo-700 transition-colors">Begin New Booking Request</button>
+            <button onClick={() => onNewRequest()} className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-6 py-3 rounded-lg font-black text-xs uppercase tracking-widest hover:bg-indigo-200 dark:hover:bg-indigo-900/50 hover:-translate-y-0.5 transition-all">Begin New Booking Request</button>
           </div>
         )}
       </div>
 
-      <div className="space-y-6 pt-6">
-        <div className="flex items-center gap-3 px-1">
-          <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg flex items-center justify-center"><i className="fa-solid fa-history"></i></div>
-          <h3 className="text-xl font-bold text-slate-800 dark:text-white">Past Requests</h3>
+      {/* Past Requests Section */}
+      <div className="space-y-6 pt-10">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg flex items-center justify-center shadow-inner border border-slate-200 dark:border-slate-700"><i className="fa-solid fa-history"></i></div>
+          <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">Past Requests</h3>
         </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-all">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b dark:border-slate-800">
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm transition-all">
+          <div className="overflow-x-hidden md:overflow-x-auto">
+            <table className="w-full text-left border-collapse block md:table">
+              <thead className="hidden md:table-header-group">
+                <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-sm font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
                   <th className="px-8 py-6">Request ID</th>
                   <th className="px-8 py-6">Destination</th>
                   <th className="px-8 py-6">Travel Date</th>
@@ -5561,24 +5776,39 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                   <th className="px-8 py-6 text-right">Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y dark:divide-slate-800">
+              <tbody className="divide-y dark:divide-slate-800 block md:table-row-group">
                 {closedRequests.map((r: any) => {
                   const isMeetup = r.purpose === 'Igatpuri Meetup';
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                      <td className={`px-8 py-5 font-mono text-xs font-black ${isMeetup ? 'text-emerald-500' : 'text-indigo-500'} group-hover:scale-105 transition-transform origin-left flex items-center gap-2`}>
-                        {isMeetup && <i className="fa-solid fa-star text-[8px] animate-pulse"></i>}
-                        {r.submissionId || r.id}
+                    <tr key={r.id} className="flex flex-col md:table-row hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group p-4 md:p-0">
+                      <td className={`px-4 md:px-8 py-4 md:py-6 text-sm font-black uppercase tracking-widest ${isMeetup ? 'text-emerald-500' : 'text-indigo-500'} flex items-center justify-between md:table-cell gap-3`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isMeetup ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-indigo-50 dark:bg-indigo-900/30'} group-hover:scale-110 transition-transform`}>
+                            <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-sm`}></i>
+                          </div>
+                          {r.submissionId || r.id.substring(0, 8)}
+                        </div>
+                        <span className="md:hidden text-xs text-slate-400 font-bold">REQ ID</span>
                       </td>
-                      <td className="px-8 py-5">
-                        <p className={`font-bold ${isMeetup ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}`}>{r.to}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{r.mode}</p>
+                      <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
+                        <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">DESTINATION</span>
+                        <div className="text-right md:text-left">
+                          <p className={`text-sm font-black uppercase tracking-tight ${isMeetup ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}`}>{r.to}</p>
+                          {isMeetup && <p className="text-sm text-emerald-500 font-bold uppercase tracking-widest mt-1"><i className="fa-solid fa-star mr-1"></i> Meetup</p>}
+                        </div>
                       </td>
-                      <td className="px-8 py-5 text-sm font-bold text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
-                      <td className="px-8 py-5"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                      <td className="px-8 py-5 text-right">
-                        <button onClick={() => onView(r)} className={`w-10 h-10 ${isMeetup ? 'hover:bg-emerald-50 text-emerald-300 hover:text-emerald-600' : 'hover:bg-white dark:hover:bg-slate-700 text-slate-300 hover:text-indigo-600'} rounded-full transition-all shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-slate-100 dark:hover:border-slate-600`}>
-                          <i className="fa-solid fa-arrow-right-long text-sm"></i>
+                      <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
+                        <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">TRAVEL DATE</span>
+                        <span className="text-sm font-bold text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </td>
+                      <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
+                        <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">STATUS</span>
+                        <StatusBadge type="pnc" value={r.pncStatus} />
+                      </td>
+                      <td className="px-4 md:px-8 py-4 md:py-6 block md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50 md:text-right">
+                        <button onClick={() => onView(r)} className={`w-full md:w-10 h-10 ${isMeetup ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-600'} rounded-lg transition-all shadow-sm hover:shadow active:scale-95 border border-slate-200 dark:border-slate-700 hover:border-transparent flex items-center justify-center md:ml-auto group/btn`}>
+                          <span className="md:hidden mr-2 font-black text-xs uppercase tracking-widest">View Details</span>
+                          <i className="fa-solid fa-arrow-right text-sm group-hover/btn:translate-x-0.5 transition-transform"></i>
                         </button>
                       </td>
                     </tr>
@@ -5588,7 +5818,10 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
             </table>
           </div>
           {closedRequests.length === 0 && (
-            <div className="py-16 text-center text-slate-400 font-bold italic opacity-60">No past travel requests found in your history.</div>
+            <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-400">
+              <i className="fa-solid fa-folder-open text-3xl opacity-50"></i>
+              <p className="font-bold italic text-sm">No past travel requests found in your history.</p>
+            </div>
           )}
         </div>
       </div>
@@ -5648,16 +5881,16 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
     <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
       <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Verification Queue</h2>
       {pending.length === 0 ? (
-        <div className="py-24 text-center text-slate-400 font-medium bg-white dark:bg-slate-900 rounded-2xl border dark:border-slate-800 shadow-sm transition-colors duration-300 italic">All caught up! No pending verifications.</div>
+        <div className="py-24 text-center text-slate-400 font-medium bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-800 shadow-sm transition-colors duration-300 italic">All caught up! No pending verifications.</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 transition-all duration-300">
           {pending.map(u => (
-            <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex items-center gap-4 hover:shadow-lg hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all duration-300 cursor-pointer group">
-              <div className="w-14 h-14 bg-indigo-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center font-bold text-indigo-600 text-xl shadow-inner transition-colors duration-300 overflow-hidden">
+            <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-lg flex items-center gap-4 hover:shadow-lg hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all duration-300 cursor-pointer group">
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center font-bold text-indigo-600 text-xl shadow-inner transition-colors duration-300 overflow-hidden">
                 {u.avatar ? (
-                  <img src={u.avatar} className="w-full h-full object-cover rounded-2xl transition-all duration-300" />
+                  <img src={u.avatar} className="w-full h-full object-cover rounded-lg transition-all duration-300" />
                 ) : u.passportPhoto?.fileUrl ? (
-                  <img src={u.passportPhoto.fileUrl} className="w-full h-full object-cover rounded-2xl transition-all duration-300" />
+                  <img src={u.passportPhoto.fileUrl} className="w-full h-full object-cover rounded-lg transition-all duration-300" />
                 ) : (
                   u.name.charAt(0)
                 )}
@@ -5666,7 +5899,7 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
                 <h4 className="font-bold text-slate-800 dark:text-white transition-colors duration-300">{u.name}</h4>
                 <p className="text-xs text-slate-500 font-medium transition-colors duration-300">Pending Docs: {[u.passportPhoto?.status === VerificationStatus.PENDING && 'Passport', u.idProof?.status === VerificationStatus.PENDING && 'ID Proof'].filter(Boolean).join(', ')}</p>
               </div>
-              <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all duration-300 shadow-lg shadow-indigo-600/10">Review Submission</button>
+              <button className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg text-xs font-bold active:scale-95 transition-all duration-300 shadow-lg shadow-indigo-600/10">Review Submission</button>
             </div>
           ))}
         </div>
@@ -5675,7 +5908,7 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
       {selectedUser && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 transition-all duration-500 animate-in fade-in">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setSelectedUser(null)}></div>
-          <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+          <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
             <header className="px-10 py-8 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
               <div>
                 <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Review Submissions</h3>
@@ -5685,7 +5918,7 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
                   <span className="text-xs font-medium text-slate-500">{selectedUser.email}</span>
                 </div>
               </div>
-              <button onClick={() => setSelectedUser(null)} className="p-3 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 border border-transparent hover:border-slate-100 dark:hover:border-slate-700"><i className="fa-solid fa-xmark text-xl"></i></button>
+              <button onClick={() => setSelectedUser(null)} className="p-3 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all text-slate-400 border border-transparent hover:border-slate-100 dark:hover:border-slate-700"><i className="fa-solid fa-xmark text-xl"></i></button>
             </header>
 
             <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-10 max-h-[65vh] overflow-y-auto custom-scrollbar">
@@ -5694,14 +5927,14 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">1. Passport Photo</h4>
                 </div>
-                <div className="h-48 aspect-video mx-auto bg-slate-100 dark:bg-slate-800 rounded-3xl overflow-hidden border-2 border-slate-50 dark:border-slate-700 shadow-inner group relative">
+                <div className="h-48 aspect-video mx-auto bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border-2 border-slate-50 dark:border-slate-700 shadow-inner group relative">
                   {selectedUser.passportPhoto?.fileUrl ? (
                     <>
                       <img src={selectedUser.passportPhoto.fileUrl} className="w-full h-full object-cover transition-all" />
                       <a href={selectedUser.passportPhoto.fileUrl} target="_blank" className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-indigo-600 shadow-md"><i className="fa-solid fa-expand"></i></a>
                     </>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3"><i className="fa-solid fa-camera text-4xl"></i><span className="text-2xs font-bold uppercase">Not Provided</span></div>
+                    <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3"><i className="fa-solid fa-camera text-4xl"></i><span className="text-xs font-bold uppercase">Not Provided</span></div>
                   )}
                 </div>
 
@@ -5710,20 +5943,20 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => setReviewState({ ...reviewState, passportStatus: VerificationStatus.APPROVED })}
-                        className={`py-3 rounded-xl font-bold text-xs transition-all ${reviewState.passportStatus === VerificationStatus.APPROVED ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-600'}`}
+                        className={`py-3 rounded-lg font-bold text-xs transition-all ${reviewState.passportStatus === VerificationStatus.APPROVED ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-600'}`}
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => setReviewState({ ...reviewState, passportStatus: VerificationStatus.REJECTED })}
-                        className={`py-3 rounded-xl font-bold text-xs transition-all ${reviewState.passportStatus === VerificationStatus.REJECTED ? 'bg-rose-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-rose-500/10 hover:text-rose-600'}`}
+                        className={`py-3 rounded-lg font-bold text-xs transition-all ${reviewState.passportStatus === VerificationStatus.REJECTED ? 'bg-rose-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-rose-500/10 hover:text-rose-600'}`}
                       >
                         Reject
                       </button>
                     </div>
                     {reviewState.passportStatus === VerificationStatus.REJECTED && (
                       <textarea
-                        className="w-full p-4 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-xl text-xs font-medium focus:ring-1 focus:ring-rose-500 outline-none transition-all"
+                        className="w-full p-4 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-lg text-xs font-medium focus:ring-1 focus:ring-rose-500 outline-none transition-all"
                         placeholder="Rejection reason (visible to user)..."
                         rows={3}
                         value={reviewState.passportReason}
@@ -5739,14 +5972,14 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">2. Government ID ({selectedUser.idProof?.type || 'Not Set'})</h4>
                 </div>
-                <div className="h-48 aspect-video mx-auto bg-slate-100 dark:bg-slate-800 rounded-3xl overflow-hidden border-2 border-slate-50 dark:border-slate-700 shadow-inner group relative">
+                <div className="h-48 aspect-video mx-auto bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border-2 border-slate-50 dark:border-slate-700 shadow-inner group relative">
                   {selectedUser.idProof?.fileUrl ? (
                     <>
                       <img src={selectedUser.idProof.fileUrl} className="w-full h-full object-cover transition-all" />
                       <a href={selectedUser.idProof.fileUrl} target="_blank" className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-violet-600 shadow-md"><i className="fa-solid fa-expand"></i></a>
                     </>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3"><i className="fa-solid fa-id-card text-4xl"></i><span className="text-2xs font-bold uppercase">Not Provided</span></div>
+                    <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3"><i className="fa-solid fa-id-card text-4xl"></i><span className="text-xs font-bold uppercase">Not Provided</span></div>
                   )}
                 </div>
 
@@ -5755,20 +5988,20 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => setReviewState({ ...reviewState, idStatus: VerificationStatus.APPROVED })}
-                        className={`py-3 rounded-xl font-bold text-xs transition-all ${reviewState.idStatus === VerificationStatus.APPROVED ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-600'}`}
+                        className={`py-3 rounded-lg font-bold text-xs transition-all ${reviewState.idStatus === VerificationStatus.APPROVED ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-600'}`}
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => setReviewState({ ...reviewState, idStatus: VerificationStatus.REJECTED })}
-                        className={`py-3 rounded-xl font-bold text-xs transition-all ${reviewState.idStatus === VerificationStatus.REJECTED ? 'bg-rose-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-rose-500/10 hover:text-rose-600'}`}
+                        className={`py-3 rounded-lg font-bold text-xs transition-all ${reviewState.idStatus === VerificationStatus.REJECTED ? 'bg-rose-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-rose-500/10 hover:text-rose-600'}`}
                       >
                         Reject
                       </button>
                     </div>
                     {reviewState.idStatus === VerificationStatus.REJECTED && (
                       <textarea
-                        className="w-full p-4 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-xl text-xs font-medium focus:ring-1 focus:ring-rose-500 outline-none transition-all"
+                        className="w-full p-4 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-lg text-xs font-medium focus:ring-1 focus:ring-rose-500 outline-none transition-all"
                         placeholder="Rejection reason (visible to user)..."
                         rows={3}
                         value={reviewState.idReason}
@@ -5781,10 +6014,10 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
             </div>
 
             <div className="p-10 border-t dark:border-slate-800 flex gap-4 bg-slate-50/30 dark:bg-slate-800/20">
-              <button onClick={() => setSelectedUser(null)} className="flex-1 py-4 text-slate-500 font-bold rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 text-sm">Cancel Review</button>
+              <button onClick={() => setSelectedUser(null)} className="flex-1 py-4 text-slate-500 font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 text-sm">Cancel Review</button>
               <button
                 onClick={handleSaveAll}
-                className="flex-[2] py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all text-sm uppercase tracking-widest"
+                className="flex-[2] py-4 bg-indigo-600 text-white font-bold rounded-lg shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all text-sm uppercase tracking-widest"
               >
                 Save Decisions & Close
               </button>
@@ -5799,12 +6032,12 @@ const VerificationQueue = ({ users, onUpdateUser }: { users: User[], onUpdateUse
 const SettingsView = ({ isDarkMode, onToggleTheme }: any) => (
   <div className="max-w-xl space-y-8 animate-in fade-in duration-500 transition-all duration-300">
     <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Settings</h2>
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl space-y-8 shadow-sm transition-colors duration-300">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-lg space-y-8 shadow-sm transition-colors duration-300">
       <div className="flex items-center justify-between transition-colors duration-300">
         <div><h4 className="text-lg font-bold text-slate-800 dark:text-white transition-colors duration-300">Dark Mode</h4><p className="text-sm text-slate-500 font-medium transition-colors duration-300">Toggle application appearance for better viewing.</p></div>
         <Toggle active={isDarkMode} onChange={onToggleTheme} />
       </div>
-      <div className="pt-8 border-t dark:border-slate-800 text-center text-2xs font-bold text-slate-400 uppercase tracking-widest transition-colors duration-300">v2.5.0 Stable Build</div>
+      <div className="pt-8 border-t dark:border-slate-800 text-center text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors duration-300">v2.5.0 Stable Build</div>
     </div>
   </div>
 );
@@ -5871,7 +6104,7 @@ const LoadingView = () => {
             }`}></div>
 
           {/* Icon Slider Window */}
-          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-2xl shadow-indigo-600/30 relative z-10 bg-white dark:bg-slate-900">
+          <div className="w-16 h-16 rounded-lg overflow-hidden shadow-2xl shadow-indigo-600/30 relative z-10 bg-white dark:bg-slate-900">
             {renderContent()}
           </div>
         </div>
@@ -5993,7 +6226,7 @@ const AdminQueueView = ({ requests, onView, showAll = false, policies = [] }: an
           <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
             <button
               onClick={() => setSortOrder('newest')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'newest'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sortOrder === 'newest'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
                 }`}
@@ -6003,7 +6236,7 @@ const AdminQueueView = ({ requests, onView, showAll = false, policies = [] }: an
             </button>
             <button
               onClick={() => setSortOrder('oldest')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortOrder === 'oldest'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sortOrder === 'oldest'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
                 }`}
@@ -6015,9 +6248,9 @@ const AdminQueueView = ({ requests, onView, showAll = false, policies = [] }: an
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm transition-colors duration-300">
         <table className="w-full text-left">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Request ID</th><th className="px-6 py-5">Traveler</th><th className="px-6 py-5">Route</th><th className="px-6 py-5">Status</th></tr></thead>
+          <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Request ID</th><th className="px-6 py-5">Traveler</th><th className="px-6 py-5">Route</th><th className="px-6 py-5">Status</th></tr></thead>
           <tbody className="divide-y dark:divide-slate-800 transition-colors duration-300">
             {paginatedRequests.length === 0 ? (
               <tr>
@@ -6038,7 +6271,7 @@ const AdminQueueView = ({ requests, onView, showAll = false, policies = [] }: an
                       {isViolated && (
                         <div className="group/violation relative">
                           <i className="fa-solid fa-triangle-exclamation text-rose-500 animate-pulse"></i>
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover/violation:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover/violation:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                             Policy Violation
                           </div>
                         </div>
@@ -6110,9 +6343,9 @@ const PastRequestsView = ({ requests, onView }: any) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
       <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Past Requests</h2>
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm transition-colors duration-300">
         <table className="w-full text-left">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-2xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Request ID</th><th className="px-6 py-5">Destination</th><th className="px-6 py-5 text-right">Action</th></tr></thead>
+          <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300"><tr><th className="px-6 py-5">Request ID</th><th className="px-6 py-5">Destination</th><th className="px-6 py-5 text-right">Action</th></tr></thead>
           <tbody className="divide-y dark:divide-slate-800 transition-colors duration-300">
             {closedRequests.map((r: any) => (
               <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-300">
@@ -6199,7 +6432,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
 
   const InfoRow = ({ label, value, icon, fullWidth = false }: any) => (
     <div className={`${fullWidth ? 'col-span-2' : ''} space-y-1`}>
-      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+      <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
         {icon && <span className="opacity-50">{icon}</span>}
         {label}
       </p>
@@ -6235,7 +6468,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
               </div>
             )}
           </div>
-          <button onClick={onClose} className="w-9 h-9 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all text-slate-400 flex items-center justify-center">
+          <button onClick={onClose} className="w-9 h-9 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all text-slate-400 flex items-center justify-center">
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>
         </header>
@@ -6244,14 +6477,14 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
         <div className="flex-1 overflow-y-auto p-8 md:p-10 custom-scrollbar space-y-10">
 
           {/* Main Stats Header */}
-          <div className="bg-indigo-600 rounded-2xl p-5 text-white shadow-lg shadow-indigo-600/20 relative overflow-hidden">
+          <div className="bg-indigo-600 rounded-lg p-5 text-white shadow-lg shadow-indigo-600/20 relative overflow-hidden">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
-                <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-wide mb-1 opacity-75">{request.mode}</p>
+                <p className="text-indigo-200 text-xs font-bold uppercase tracking-wide mb-1 opacity-75">{request.mode}</p>
                 <h4 className="text-xl font-black tracking-tight">{request.from} → {request.to}</h4>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10">
-                <p className="text-indigo-100 text-[9px] font-bold uppercase tracking-wider mb-0.5">Departure</p>
+              <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/10">
+                <p className="text-indigo-100 text-xs font-bold uppercase tracking-wider mb-0.5">Departure</p>
                 <p className="text-sm font-black">{new Date(request.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
               </div>
             </div>
@@ -6292,7 +6525,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
 
                 <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
                 <div className="col-span-2 space-y-1">
-                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
                     <i className={`fa-solid ${isPolicyViolated ? 'fa-triangle-exclamation text-rose-500' : 'fa-check-circle text-emerald-500'} opacity-70`}></i>
                     Policy Compliance
                   </p>
@@ -6307,16 +6540,16 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
             {(request.pncStatus === PNCStatus.BOOKED || request.pncStatus === PNCStatus.CLOSED) && (
               <div className="col-span-2">
                 <SectionHeader title="Booking Confirmation" icon={<i className="fa-solid fa-check-circle"></i>} />
-                <div className="grid grid-cols-2 gap-y-6 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800/20">
+                <div className="grid grid-cols-2 gap-y-6 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-lg border border-emerald-100 dark:border-emerald-800/20">
                   <InfoRow label="Ticket Cost" value={`₹ ${request.ticketCost}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} />
                   <InfoRow label="Vendor" value={request.vendorName} icon={<i className="fa-solid fa-shop"></i>} />
                   {request.invoiceUrl ? (
                     <div className="col-span-2">
-                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
+                      <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
                         <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
                       </p>
                       <a href={request.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
-                        View Ticket <i className="fa-solid fa-external-link-alt text-[10px]"></i>
+                        View Ticket <i className="fa-solid fa-external-link-alt text-xs"></i>
                       </a>
                     </div>
                   ) : (
@@ -6360,9 +6593,9 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
                     <div className="pb-6">
                       <p className="text-xs font-black text-slate-900 dark:text-white mb-1 uppercase tracking-tight">{event.event}</p>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-indigo-500/60 font-mono tracking-tighter">{new Date(event.timestamp).toLocaleString()}</span>
+                        <span className="text-xs font-bold text-indigo-500/60 font-mono tracking-tighter">{new Date(event.timestamp).toLocaleString()}</span>
                         <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">by {event.actor}</span>
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">by {event.actor}</span>
                       </div>
                       {event.details && <p className="text-xs text-slate-500 mt-2 font-medium">{event.details}</p>}
                     </div>
@@ -6377,11 +6610,11 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
         <div className="p-8 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20">
           {role === UserRole.PNC ? (
             <div className="space-y-3">
-              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
 
               <div className="relative">
                 <select
-                  className="w-full h-11 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all appearance-none cursor-pointer shadow-sm"
+                  className="w-full h-11 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 font-bold text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all appearance-none cursor-pointer shadow-sm"
                   value={status}
                   onChange={e => setStatus(e.target.value as any)}
                 >
@@ -6397,7 +6630,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
                 <div className="space-y-3 animate-in slide-in-from-top-2 pt-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Ticket Cost (₹)</label>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Ticket Cost (₹)</label>
                       <input
                         type="number"
                         placeholder="0.00"
@@ -6407,7 +6640,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Vendor Name</label>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Vendor Name</label>
                       <input
                         type="text"
                         placeholder="e.g. Indigo"
@@ -6418,7 +6651,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
                     </div>
                   </div>
                   <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Upload Ticket</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Upload Ticket</label>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.png,.jpeg"
@@ -6433,14 +6666,14 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
                 onClick={() => setShowNotes(!showNotes)}
                 className="w-full text-left px-4 py-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
               >
-                <i className={`fa-solid fa-chevron-${showNotes ? 'up' : 'down'} text-[10px]`}></i>
+                <i className={`fa-solid fa-chevron-${showNotes ? 'up' : 'down'} text-xs`}></i>
                 {showNotes ? 'Hide' : 'Add'} Notes / Reason (Optional)
               </button>
 
               {showNotes && (
                 <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
                   <textarea
-                    className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
+                    className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
                     rows={3}
                     placeholder="Add context for this status change (e.g., reason for rejection, booking details, etc.)"
                     value={statusChangeReason}
@@ -6452,7 +6685,7 @@ const RequestDetailOverlay = ({ request, role, onClose, onUpdate, policies = [] 
               <button
                 onClick={handleUpdate}
                 disabled={isUploading}
-                className="w-full bg-indigo-600 text-white h-11 rounded-xl font-bold uppercase tracking-wide text-[11px] shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-indigo-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isUploading ? (
                   <>

@@ -117,10 +117,10 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 transition-all duration-500">
-            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-500">
+            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-md shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-500">
                 <div className="p-8 md:p-10">
                     <header className="text-center mb-8">
-                        <div className="w-16 h-16 rounded-2xl mx-auto overflow-hidden shadow-xl shadow-indigo-600/30 mb-6 transition-transform hover:scale-105 bg-white dark:bg-slate-900">
+                        <div className="w-16 h-16 rounded-md mx-auto overflow-hidden shadow-xl shadow-indigo-600/30 mb-6 transition-transform hover:scale-105 bg-white dark:bg-slate-900">
                             {renderIconContent()}
                         </div>
                         <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
@@ -136,7 +136,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
                     </header>
 
                     {error && (
-                        <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-md flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                             <i className="fa-solid fa-circle-exclamation text-rose-500 mt-0.5"></i>
                             <p className="text-xs font-bold text-rose-700 dark:text-rose-400 leading-relaxed">{error}</p>
                         </div>
@@ -147,7 +147,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
                         <button
                             onClick={handleGoogleLogin}
                             disabled={isSocialLoading}
-                            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-3.5 rounded-2xl font-bold text-slate-700 dark:text-slate-200 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all active:scale-[0.98] disabled:opacity-50"
+                            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-3.5 rounded-md font-bold text-slate-700 dark:text-slate-200 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all active:scale-[0.98] disabled:opacity-50"
                         >
                             {isSocialLoading ? (
                                 <i className="fa-solid fa-spinner fa-spin"></i>
@@ -189,7 +189,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-4 rounded-xl font-bold transition-all active:scale-[0.98] disabled:opacity-50 mt-4 border border-transparent hover:border-slate-300 dark:hover:border-slate-600"
+                                className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-4 rounded-md font-bold transition-all active:scale-[0.98] disabled:opacity-50 mt-4 border border-transparent hover:border-slate-300 dark:hover:border-slate-600"
                             >
                                 {isLoading ? (
                                     <i className="fa-solid fa-spinner fa-spin mr-2"></i>

@@ -43,7 +43,7 @@ const Input = ({
                 readOnly={readOnly}
                 min={min}
                 max={max}
-                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 ${disabled || readOnly
+                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm font-medium transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 ${disabled || readOnly
                     ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800/50'
                     : 'hover:border-slate-300 dark:hover:border-slate-700'
                     }`}

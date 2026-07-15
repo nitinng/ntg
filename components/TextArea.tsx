@@ -30,7 +30,7 @@ const TextArea = ({
                 placeholder={placeholder}
                 disabled={disabled}
                 rows={rows}
-                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-medium transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 ${disabled
+                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm font-medium transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 ${disabled
                     ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800/50'
                     : 'hover:border-slate-300 dark:hover:border-slate-700 text-slate-900 dark:text-white'
                     }`}

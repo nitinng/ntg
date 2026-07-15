@@ -8,9 +8,10 @@ type AuthMode = 'login' | 'forgot' | 'reset';
 interface AuthViewProps {
     initialMode?: AuthMode;
     onFinishReset?: () => void;
+    isEmailLoginEnabled?: boolean;
 }
 
-const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
+const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = true }: AuthViewProps) => {
     const [mode, setMode] = useState<AuthMode>(initialMode);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -181,18 +182,24 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
                                 )}
                                 Continue with Google
                             </button>
-                            
-                            <div className="flex items-center gap-4 py-2 opacity-60">
-                                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">OR</span>
-                                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+                        </div>
+                    )}
+                    
+                    {mode === 'login' && isEmailLoginEnabled && (
+                        <div className="space-y-4 animate-in fade-in duration-300">
+                            <div className="relative my-6">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-slate-200 dark:border-slate-800"></div>
+                                </div>
+                                <div className="relative flex justify-center text-sm">
+                                    <span className="px-2 bg-white dark:bg-slate-900 text-slate-400 font-bold tracking-wider uppercase text-[10px]">Or continue with email</span>
+                                </div>
                             </div>
-                            
-                            <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
+                            <form onSubmit={handleAuth} className="space-y-4">
                                 <Input
                                     label="Email Address"
                                     type="email"
-                                    placeholder="dummy@test.com"
+                                    placeholder="name@navgurukul.org"
                                     required
                                     value={email}
                                     onChange={(e: any) => setEmail(e.target.value)}
@@ -208,7 +215,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
                                 <button
                                     type="submit"
                                     disabled={isLoading || isSocialLoading}
-                                    className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-3.5 rounded-md font-bold transition-all active:scale-[0.98] disabled:opacity-50 mt-2 border border-transparent hover:border-slate-300 dark:hover:border-slate-600"
+                                    className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-3.5 rounded-md font-bold transition-all active:scale-[0.98] disabled:opacity-50 border border-transparent hover:border-slate-300 dark:hover:border-slate-600"
                                 >
                                     {isLoading ? (
                                         <i className="fa-solid fa-spinner fa-spin mr-2"></i>
@@ -217,9 +224,20 @@ const AuthView = ({ initialMode = 'login', onFinishReset }: AuthViewProps) => {
                                     )}
                                     Login with Email
                                 </button>
+                                <div className="text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setMode('forgot')}
+                                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                    >
+                                        Forgot Password?
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     )}
+
+
 
                     {/* Password recovery forms (for forgot/reset flows triggered externally) */}
                     {(mode === 'forgot' || mode === 'reset') && (

@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
           target: 'https://bzjzgykbfqfbbqibxexw.supabase.co',
           changeOrigin: true,
           secure: true,
+          ws: true, // Enable WebSockets proxy for Realtime
           // @ts-ignore - lookup is supported by node-http-proxy
           lookup: reliableSupabaseLookup,
           rewrite: (path) => path.replace(/^\/supabase-api/, ''),

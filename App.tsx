@@ -13,6 +13,7 @@ import TextArea from './components/TextArea';
 
 import MailTemplatesView from './components/MailTemplatesView';
 import PNCBookingModal from './components/PNCBookingModal';
+import ChatView from './components/ChatView';
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
 
@@ -1963,7 +1964,7 @@ const IgathpuriMeetupView = ({
   );
 };
 
-const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled, currentUser }: any) => {
+const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled, isChatEnabled, setIsChatEnabled, currentUser }: any) => {
   const handleUpdateMinAdvanceDays = async (mode: string, days: number) => {
     try {
       const { data, error } = await supabase
@@ -2142,6 +2143,26 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
     } catch (err: any) {
       toast.error("Failed to update status: " + err.message);
       setIsIgatpuriEnabled(!newState); // revert
+    }
+  };
+
+  const handleToggleChat = async () => {
+    const newState = !isChatEnabled;
+    setIsChatEnabled(newState);
+    try {
+      const { error } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'is_chat_enabled',
+          setting_value: newState,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      toast.success(`Chat Support ${newState ? 'enabled' : 'disabled'} globally`);
+    } catch (err: any) {
+      toast.error("Failed to update status: " + err.message);
+      setIsChatEnabled(!newState); // revert
     }
   };
 
@@ -2338,6 +2359,27 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
           )}
         </Card>
       </section>
+
+      {/* Global Modules Section */}
+      {currentUser?.email === 'nitin@navgurukul.org' && currentUser?.role === UserRole.ADMIN && (
+        <section className="space-y-6">
+          <div className="flex items-center justify-between border-b-2 border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-blue-600/20">
+                <i className="fa-solid fa-comments"></i>
+              </div>
+              <div>
+                <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">Global Chat Support</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">Enable or disable chat app-wide</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{isChatEnabled ? 'Enabled' : 'Disabled'}</span>
+              <Toggle active={isChatEnabled} onChange={handleToggleChat} />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Igatpuri Section */}
       {currentUser?.email === 'nitin@navgurukul.org' && currentUser?.role === UserRole.ADMIN && (
@@ -4290,8 +4332,55 @@ const App: React.FC = () => {
   const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
   const [isMeetupApprover, setIsMeetupApprover] = useState(false);
   const [isIgatpuriEnabled, setIsIgatpuriEnabled] = useState(true);
+  const [isChatEnabled, setIsChatEnabled] = useState(true);
 
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  // Fetch Unread Chats
+  useEffect(() => {
+    if (!currentUser) return;
+    const fetchUnread = async () => {
+      let query = supabase.from('chat_threads').select('id, updated_at, last_read_employee, last_read_pnc, employee_id, status');
+      
+      if (currentUser.role === UserRole.EMPLOYEE) {
+        query = query.eq('employee_id', currentUser.id);
+      } else {
+        query = query.neq('employee_id', currentUser.id);
+      }
+      
+      const { data } = await query;
+      if (data) {
+        let count = 0;
+        data.filter(t => t.status !== 'archived').forEach(t => {
+          if (currentUser.role === UserRole.EMPLOYEE) {
+            const lr = t.last_read_employee ? new Date(t.last_read_employee).getTime() : 0;
+            if (new Date(t.updated_at).getTime() > lr) count++;
+          } else {
+             const lr = t.last_read_pnc ? new Date(t.last_read_pnc).getTime() : 0;
+             if (new Date(t.updated_at).getTime() > lr) count++;
+          }
+        });
+        setUnreadChatCount(count);
+      }
+    };
+    fetchUnread();
+    
+    // Listen for real-time thread updates to instantly clear/update badges
+    const globalSub = supabase
+      .channel('chat_global_changes')
+      .on('broadcast', { event: 'update_threads' }, () => {
+         fetchUnread();
+      })
+      .subscribe();
+    
+    // Poll every 15s to keep badge updated across tabs without complex realtime logic in App
+    const interval = setInterval(fetchUnread, 15000);
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(globalSub);
+    };
+  }, [currentUser]);
 
   // Handle Auth State
   useEffect(() => {
@@ -4549,12 +4638,16 @@ const App: React.FC = () => {
         const { data: settingsData, error: settingsError } = await supabase
           .from('meetup_settings')
           .select('*')
-          .in('setting_key', ['is_igatpuri_enabled', 'policy_config']);
+          .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'policy_config']);
 
         if (!settingsError && settingsData) {
           const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
           if (igatpuriSetting) {
             setIsIgatpuriEnabled(igatpuriSetting.setting_value === true || igatpuriSetting.setting_value === 'true');
+          }
+          const chatSetting = settingsData.find(s => s.setting_key === 'is_chat_enabled');
+          if (chatSetting) {
+            setIsChatEnabled(chatSetting.setting_value === true || chatSetting.setting_value === 'true');
           }
           const policySetting = settingsData.find(s => s.setting_key === 'policy_config');
           if (policySetting && policySetting.setting_value) {
@@ -4929,6 +5022,8 @@ const App: React.FC = () => {
           users={users}
           isIgatpuriEnabled={isIgatpuriEnabled}
           setIsIgatpuriEnabled={setIsIgatpuriEnabled}
+          isChatEnabled={isChatEnabled}
+          setIsChatEnabled={setIsChatEnabled}
           currentUser={currentUser}
         />;
       case 'role-management':
@@ -4988,6 +5083,9 @@ const App: React.FC = () => {
           />;
         }
         return renderDashboard();
+      case 'chat':
+        if (!isChatEnabled) return renderDashboard();
+        return <ChatView currentUser={currentUser} requests={requests} onViewRequest={setSelectedRequest} />;
       case 'igathpuri-meetup':
         if (!isIgatpuriEnabled) return renderDashboard();
         return <IgathpuriMeetupView
@@ -5095,6 +5193,7 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                 <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
+                {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
                   <SidebarLink
@@ -5134,6 +5233,7 @@ const App: React.FC = () => {
                 />
                 <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
               </div>
               <div className="space-y-1">

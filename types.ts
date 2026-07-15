@@ -220,3 +220,38 @@ export interface MeetupAvailabilityRequest {
   attendeeEmails?: string[];
   isFinalized?: boolean;
 }
+
+export enum ChatThreadType {
+  EXISTING_REQUEST = 'Existing Request',
+  FUTURE_REQUEST = 'Future Request',
+  OTHERS = 'Others'
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  text: string;
+  timestamp: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentType?: string | null;
+}
+
+export interface ChatThread {
+  id: string;
+  type: ChatThreadType;
+  relatedRequestId?: string; // Optional if FUTURE_REQUEST or OTHERS
+  employeeId?: string; // The user ID of the employee this thread is for
+  employeeName?: string;
+  title: string;
+  status: 'active' | 'archived';
+  lastReadEmployee?: string;
+  lastReadPnc?: string;
+
+  participantIds: string[];
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}

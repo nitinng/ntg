@@ -1964,7 +1964,7 @@ const IgathpuriMeetupView = ({
   );
 };
 
-const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled, isChatEnabled, setIsChatEnabled, currentUser }: any) => {
+const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelModePolicies, users, isIgatpuriEnabled, setIsIgatpuriEnabled, isChatEnabled, setIsChatEnabled, isEmailLoginEnabled, setIsEmailLoginEnabled, currentUser }: any) => {
   const handleUpdateMinAdvanceDays = async (mode: string, days: number) => {
     try {
       const { data, error } = await supabase
@@ -2163,6 +2163,26 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
     } catch (err: any) {
       toast.error("Failed to update status: " + err.message);
       setIsChatEnabled(!newState); // revert
+    }
+  };
+
+  const handleToggleEmailLogin = async () => {
+    const newState = !isEmailLoginEnabled;
+    setIsEmailLoginEnabled(newState);
+    try {
+      const { error } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'is_email_login_enabled',
+          setting_value: newState,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      toast.success(`Email Login ${newState ? 'enabled' : 'disabled'} globally`);
+    } catch (err: any) {
+      toast.error("Failed to update status: " + err.message);
+      setIsEmailLoginEnabled(!newState); // revert
     }
   };
 
@@ -2376,6 +2396,22 @@ const PolicyManagement = ({ policy, setPolicy, travelModePolicies, setTravelMode
             <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
               <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{isChatEnabled ? 'Enabled' : 'Disabled'}</span>
               <Toggle active={isChatEnabled} onChange={handleToggleChat} />
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between border-b-2 border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-amber-600/20">
+                <i className="fa-solid fa-envelope"></i>
+              </div>
+              <div>
+                <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-sm">Email Login</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">Enable or disable email/password login</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{isEmailLoginEnabled ? 'Enabled' : 'Disabled'}</span>
+              <Toggle active={isEmailLoginEnabled} onChange={handleToggleEmailLogin} />
             </div>
           </div>
         </section>
@@ -4333,6 +4369,7 @@ const App: React.FC = () => {
   const [isMeetupApprover, setIsMeetupApprover] = useState(false);
   const [isIgatpuriEnabled, setIsIgatpuriEnabled] = useState(true);
   const [isChatEnabled, setIsChatEnabled] = useState(true);
+  const [isEmailLoginEnabled, setIsEmailLoginEnabled] = useState(true);
 
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -4383,6 +4420,24 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   // Handle Auth State
+  // Fetch global settings (like email login toggle) regardless of session
+  useEffect(() => {
+    const fetchGlobalSettings = async () => {
+      const { data, error } = await supabase
+        .from('meetup_settings')
+        .select('*')
+        .in('setting_key', ['is_email_login_enabled']);
+      
+      if (!error && data) {
+        const emailLoginSetting = data.find(s => s.setting_key === 'is_email_login_enabled');
+        if (emailLoginSetting) {
+          setIsEmailLoginEnabled(emailLoginSetting.setting_value === true || emailLoginSetting.setting_value === 'true');
+        }
+      }
+    };
+    fetchGlobalSettings();
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -4638,7 +4693,7 @@ const App: React.FC = () => {
         const { data: settingsData, error: settingsError } = await supabase
           .from('meetup_settings')
           .select('*')
-          .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'policy_config']);
+          .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config']);
 
         if (!settingsError && settingsData) {
           const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
@@ -4648,6 +4703,10 @@ const App: React.FC = () => {
           const chatSetting = settingsData.find(s => s.setting_key === 'is_chat_enabled');
           if (chatSetting) {
             setIsChatEnabled(chatSetting.setting_value === true || chatSetting.setting_value === 'true');
+          }
+          const emailLoginSetting = settingsData.find(s => s.setting_key === 'is_email_login_enabled');
+          if (emailLoginSetting) {
+            setIsEmailLoginEnabled(emailLoginSetting.setting_value === true || emailLoginSetting.setting_value === 'true');
           }
           const policySetting = settingsData.find(s => s.setting_key === 'policy_config');
           if (policySetting && policySetting.setting_value) {
@@ -5024,6 +5083,8 @@ const App: React.FC = () => {
           setIsIgatpuriEnabled={setIsIgatpuriEnabled}
           isChatEnabled={isChatEnabled}
           setIsChatEnabled={setIsChatEnabled}
+          isEmailLoginEnabled={isEmailLoginEnabled}
+          setIsEmailLoginEnabled={setIsEmailLoginEnabled}
           currentUser={currentUser}
         />;
       case 'role-management':
@@ -5123,7 +5184,7 @@ const App: React.FC = () => {
   };
 
   if (!session || isResettingPassword) {
-    return <AuthView initialMode={isResettingPassword ? 'reset' : 'login'} onFinishReset={() => setIsResettingPassword(false)} />;
+    return <AuthView initialMode={isResettingPassword ? 'reset' : 'login'} onFinishReset={() => setIsResettingPassword(false)} isEmailLoginEnabled={isEmailLoginEnabled} />;
   }
 
   // If loading is finished but fetching the profile failed, show session logout/error

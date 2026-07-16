@@ -5683,6 +5683,23 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
         </button>
       </header>
 
+      {/* Chat Beta Banner */}
+      <div className="bg-gradient-to-r from-indigo-500/10 to-fuchsia-500/10 border border-indigo-200/50 dark:border-indigo-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden group">
+        <div className="absolute inset-0 w-full h-full bg-white/10 dark:bg-white/5 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner">
+            <i className="fa-solid fa-flask text-xl group-hover:rotate-12 transition-transform"></i>
+          </div>
+          <div>
+            <h4 className="font-black text-slate-800 dark:text-white text-sm tracking-tight flex items-center gap-2">
+              Chat Feature is in Beta
+              <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">Beta</span>
+            </h4>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium mt-0.5">We are currently testing the new chat functionality. You might experience occasional bugs or delays.</p>
+          </div>
+        </div>
+      </div>
+
       {/* Quick Insights Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">

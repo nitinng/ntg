@@ -4493,15 +4493,12 @@ const App: React.FC = () => {
     // Check if this is actually a new session or just a tab visibility change
     const sessionToken = session.access_token;
     if (lastSessionRef.current === sessionToken) {
-      console.log('⏭️ Session unchanged - skipping fetchData (tab visibility change)');
       return;
     }
 
-    console.log('🆕 New session detected - fetching data');
     lastSessionRef.current = sessionToken;
 
     const fetchData = async () => {
-      console.log('🔄 fetchData called - this should only happen on initial load or session change');
       setIsLoading(true);
       try {
         // 1. Fetch Profile
@@ -4550,170 +4547,173 @@ const App: React.FC = () => {
         setCurrentUser(mappedUser);
         setBaseRole(profile.role as UserRole);
 
-        // 2. Fetch Requests
-        let query = supabase.from('travel_requests').select('*');
+        // Run subsequent queries in parallel
+        const fetchTravelRequests = async () => {
+          let query = supabase.from('travel_requests').select('*');
+          if (mappedUser.role === UserRole.EMPLOYEE) {
+            query = query.or(`requester_id.eq.${mappedUser.id},approving_manager_email.eq.${mappedUser.email}`);
+          }
+          const { data: reqs, error: reqsError } = await query.order('created_at', { ascending: false });
+          if (reqsError) throw reqsError;
+          const mappedReqs = reqs.map((r: any) => ({
+            id: r.id,
+            submissionId: r.submission_id,
+            timestamp: r.created_at,
+            requesterId: r.requester_id,
+            requesterName: r.requester_name,
+            requesterEmail: r.requester_email,
+            requesterPhone: r.requester_phone,
+            requesterDepartment: r.requester_department,
+            requesterCampus: r.requester_campus,
+            purpose: r.purpose,
+            approvingManagerName: r.approving_manager_name,
+            approvingManagerEmail: r.approving_manager_email,
+            tripType: r.trip_type,
+            mode: r.travel_mode,
+            from: r.from_location,
+            to: r.to_location,
+            dateOfTravel: r.date_of_travel,
+            preferredDepartureWindow: r.preferred_departure_window,
+            returnDate: r.return_date,
+            returnPreferredDepartureWindow: r.return_preferred_departure_window,
+            numberOfTravelers: r.number_of_travelers,
+            travellerNames: r.traveller_names,
+            priority: r.priority,
+            specialRequirements: r.special_requirements,
+            approvalStatus: r.approval_status,
+            pncStatus: r.pnc_status,
+            ticketCost: r.ticket_cost,
+            vendorName: r.vendor_name,
+            invoiceUrl: r.invoice_url,
+            timeline: r.timeline || [],
+            emergencyContactName: r.emergency_contact_name,
+            emergencyContactPhone: r.emergency_contact_phone,
+            emergencyContactRelation: r.emergency_contact_relation,
+            bloodGroup: r.blood_group,
+            medicalConditions: r.medical_conditions,
+            hasViolation: r.has_violation,
+            violationDetails: r.violation_reason,
+            bookedBy: r.booked_by,
+          }));
+          setRequests(mappedReqs);
+        };
 
-        // Employees see their own requests AND requests they need to approve
-        if (mappedUser.role === UserRole.EMPLOYEE) {
-          query = query.or(`requester_id.eq.${mappedUser.id},approving_manager_email.eq.${mappedUser.email}`);
-        }
-
-        const { data: reqs, error: reqsError } = await query.order('created_at', { ascending: false });
-        if (reqsError) throw reqsError;
-
-        // Map snake_case to camelCase for TravelRequest type
-        const mappedReqs = reqs.map((r: any) => ({
-          id: r.id,
-          submissionId: r.submission_id,
-          timestamp: r.created_at,
-          requesterId: r.requester_id,
-          requesterName: r.requester_name,
-          requesterEmail: r.requester_email,
-          requesterPhone: r.requester_phone,
-          requesterDepartment: r.requester_department,
-          requesterCampus: r.requester_campus,
-          purpose: r.purpose,
-          approvingManagerName: r.approving_manager_name,
-          approvingManagerEmail: r.approving_manager_email,
-          tripType: r.trip_type,
-          mode: r.travel_mode,
-          from: r.from_location,
-          to: r.to_location,
-          dateOfTravel: r.date_of_travel,
-          preferredDepartureWindow: r.preferred_departure_window,
-          returnDate: r.return_date,
-          returnPreferredDepartureWindow: r.return_preferred_departure_window,
-          numberOfTravelers: r.number_of_travelers,
-          travellerNames: r.traveller_names,
-          priority: r.priority,
-          specialRequirements: r.special_requirements,
-          approvalStatus: r.approval_status,
-          pncStatus: r.pnc_status,
-          ticketCost: r.ticket_cost,
-          vendorName: r.vendor_name,
-          invoiceUrl: r.invoice_url,
-          timeline: r.timeline || [],
-          emergencyContactName: r.emergency_contact_name,
-          emergencyContactPhone: r.emergency_contact_phone,
-          emergencyContactRelation: r.emergency_contact_relation,
-          bloodGroup: r.blood_group,
-          medicalConditions: r.medical_conditions,
-          hasViolation: r.has_violation,
-          violationDetails: r.violation_reason,
-          bookedBy: r.booked_by, // 'PNC' or 'SELF'
-        }));
-
-        setRequests(mappedReqs);
-
-        // 3. If Admin/PNC, fetch all users
-        if (mappedUser.role === UserRole.ADMIN || mappedUser.role === UserRole.PNC) {
-          const { data: allUsers, error: usersError } = await supabase.from('profiles').select('*');
-          if (!usersError && allUsers) {
-            console.log(`Fetched ${allUsers.length} users for role ${mappedUser.role}`);
-            setUsers(allUsers.map((u: any) => ({
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              role: u.role,
-              department: u.department,
-              campus: u.campus,
-              passportPhoto: u.passport_photo,
-              idProof: u.id_proof,
-              phone: u.phone,
-              emergencyContactName: u.emergency_contact_name,
-              emergencyContactPhone: u.emergency_contact_phone,
-              emergencyContactRelation: u.emergency_contact_relation,
-              bloodGroup: u.blood_group,
-              medicalConditions: u.medical_conditions,
-            })));
+        const fetchAllUsers = async () => {
+          if (mappedUser.role === UserRole.ADMIN || mappedUser.role === UserRole.PNC) {
+            const { data: allUsers, error: usersError } = await supabase.from('profiles').select('*');
+            if (!usersError && allUsers) {
+              setUsers(allUsers.map((u: any) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                role: u.role,
+                department: u.department,
+                campus: u.campus,
+                passportPhoto: u.passport_photo,
+                idProof: u.id_proof,
+                phone: u.phone,
+                emergencyContactName: u.emergency_contact_name,
+                emergencyContactPhone: u.emergency_contact_phone,
+                emergencyContactRelation: u.emergency_contact_relation,
+                bloodGroup: u.blood_group,
+                medicalConditions: u.medical_conditions,
+              })));
+            } else {
+              setUsers([mappedUser]);
+            }
           } else {
-            console.error("Users error:", usersError);
-            // Fallback: at least include self
             setUsers([mappedUser]);
           }
-        } else {
-          // Non-admin only see themselves
-          setUsers([mappedUser]);
-        }
+        };
 
-        // 5. Fetch Meetup Availability Requests
-        const { data: meetupApprovers, error: approverError } = await supabase
-          .from('meetup_approvers')
-          .select('email')
-          .eq('email', mappedUser.email.toLowerCase())
-          .eq('is_active', true);
+        const fetchMeetups = async () => {
+          const { data: meetupApprovers, error: approverError } = await supabase
+            .from('meetup_approvers')
+            .select('email')
+            .eq('email', mappedUser.email.toLowerCase())
+            .eq('is_active', true);
 
-        const userIsApprover = !approverError && meetupApprovers && meetupApprovers.length > 0;
-        setIsMeetupApprover(!!userIsApprover);
+          const userIsApprover = !approverError && meetupApprovers && meetupApprovers.length > 0;
+          setIsMeetupApprover(!!userIsApprover);
 
-        let meetupQuery = supabase.from('meetup_availability_requests').select('*');
-        if (!userIsApprover && mappedUser.role !== UserRole.PNC && mappedUser.role !== UserRole.ADMIN) {
-          meetupQuery = meetupQuery.eq('profile_id', mappedUser.id);
-        }
-
-        const { data: mReqs, error: mReqsError } = await meetupQuery.order('created_at', { ascending: false });
-        if (!mReqsError && mReqs) {
-          setMeetupAvailabilityRequests(mReqs.map((r: any) => ({
-            id: r.id,
-            profileId: r.profile_id,
-            fullName: r.full_name,
-            email: r.email,
-            phone: r.phone,
-            department: r.department,
-            teamSize: r.team_size,
-            startDate: r.start_date,
-            endDate: r.end_date,
-            status: r.status as any,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at,
-            timeline: r.timeline || [],
-            attendeeEmails: r.attendee_emails || [],
-            isFinalized: r.is_finalized || false
-          })));
-        }
-
-        // 6. Fetch Travel Mode Policies
-        const { data: policiesData, error: policiesError } = await supabase
-          .from('travel_mode_policies')
-          .select('*')
-          .order('travel_mode', { ascending: true });
-
-        if (!policiesError && policiesData) {
-          setTravelModePolicies(policiesData.map((p: any) => ({
-            id: p.id,
-            travelMode: p.travel_mode,
-            minAdvanceDays: p.min_advance_days,
-            description: p.description,
-            createdAt: p.created_at,
-            updatedAt: p.updated_at
-          })));
-        }
-
-        // 7. Fetch Meetup Settings
-        const { data: settingsData, error: settingsError } = await supabase
-          .from('meetup_settings')
-          .select('*')
-          .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config']);
-
-        if (!settingsError && settingsData) {
-          const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
-          if (igatpuriSetting) {
-            setIsIgatpuriEnabled(igatpuriSetting.setting_value === true || igatpuriSetting.setting_value === 'true');
+          let meetupQuery = supabase.from('meetup_availability_requests').select('*');
+          if (!userIsApprover && mappedUser.role !== UserRole.PNC && mappedUser.role !== UserRole.ADMIN) {
+            meetupQuery = meetupQuery.eq('profile_id', mappedUser.id);
           }
-          const chatSetting = settingsData.find(s => s.setting_key === 'is_chat_enabled');
-          if (chatSetting) {
-            setIsChatEnabled(chatSetting.setting_value === true || chatSetting.setting_value === 'true');
-          }
-          const emailLoginSetting = settingsData.find(s => s.setting_key === 'is_email_login_enabled');
-          if (emailLoginSetting) {
-            setIsEmailLoginEnabled(emailLoginSetting.setting_value === true || emailLoginSetting.setting_value === 'true');
-          }
-          const policySetting = settingsData.find(s => s.setting_key === 'policy_config');
-          if (policySetting && policySetting.setting_value) {
-            setPolicy(prev => ({ ...prev, ...policySetting.setting_value }));
-          }
-        }
 
+          const { data: mReqs, error: mReqsError } = await meetupQuery.order('created_at', { ascending: false });
+          if (!mReqsError && mReqs) {
+            setMeetupAvailabilityRequests(mReqs.map((r: any) => ({
+              id: r.id,
+              profileId: r.profile_id,
+              fullName: r.full_name,
+              email: r.email,
+              phone: r.phone,
+              department: r.department,
+              teamSize: r.team_size,
+              startDate: r.start_date,
+              endDate: r.end_date,
+              status: r.status as any,
+              createdAt: r.created_at,
+              updatedAt: r.updated_at,
+              timeline: r.timeline || [],
+              attendeeEmails: r.attendee_emails || [],
+              isFinalized: r.is_finalized || false
+            })));
+          }
+        };
+
+        const fetchPolicies = async () => {
+          const { data: policiesData, error: policiesError } = await supabase
+            .from('travel_mode_policies')
+            .select('*')
+            .order('travel_mode', { ascending: true });
+
+          if (!policiesError && policiesData) {
+            setTravelModePolicies(policiesData.map((p: any) => ({
+              id: p.id,
+              travelMode: p.travel_mode,
+              minAdvanceDays: p.min_advance_days,
+              description: p.description,
+              createdAt: p.created_at,
+              updatedAt: p.updated_at
+            })));
+          }
+        };
+
+        const fetchSettings = async () => {
+          const { data: settingsData, error: settingsError } = await supabase
+            .from('meetup_settings')
+            .select('*')
+            .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config']);
+
+          if (!settingsError && settingsData) {
+            const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
+            if (igatpuriSetting) {
+              setIsIgatpuriEnabled(igatpuriSetting.setting_value === true || igatpuriSetting.setting_value === 'true');
+            }
+            const chatSetting = settingsData.find(s => s.setting_key === 'is_chat_enabled');
+            if (chatSetting) {
+              setIsChatEnabled(chatSetting.setting_value === true || chatSetting.setting_value === 'true');
+            }
+            const emailLoginSetting = settingsData.find(s => s.setting_key === 'is_email_login_enabled');
+            if (emailLoginSetting) {
+              setIsEmailLoginEnabled(emailLoginSetting.setting_value === true || emailLoginSetting.setting_value === 'true');
+            }
+            const policySetting = settingsData.find(s => s.setting_key === 'policy_config');
+            if (policySetting && policySetting.setting_value) {
+              setPolicy(prev => ({ ...prev, ...policySetting.setting_value }));
+            }
+          }
+        };
+
+        await Promise.all([
+          fetchTravelRequests(),
+          fetchAllUsers(),
+          fetchMeetups(),
+          fetchPolicies(),
+          fetchSettings()
+        ]);
       } catch (err: any) {
         toast.error("Failed to load data: " + err.message);
       } finally {

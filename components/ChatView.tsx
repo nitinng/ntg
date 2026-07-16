@@ -515,9 +515,10 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
             <h2 className="text-xl font-black text-slate-800 dark:text-white">Messages</h2>
             <button
               onClick={() => setIsNewChatModalOpen(true)}
+              aria-label="Start a new chat"
               className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-600/30 transition-all active:scale-95"
             >
-              <i className="fa-solid fa-plus"></i>
+              <i className="fa-solid fa-plus" aria-hidden="true"></i>
             </button>
           </div>
           
@@ -622,43 +623,46 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
       {activeThread ? (
         <div className={`${!activeThreadId ? 'hidden' : 'flex'} flex-1 flex-col bg-white dark:bg-slate-900 relative`}>
           {/* Chat Header */}
-          <div className="h-16 px-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 z-10 shadow-sm">
-            <div className="flex items-center gap-4">
+          <div className="min-h-[4rem] p-4 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white dark:bg-slate-900 z-10 shadow-sm gap-3 sm:gap-4">
+            <div className="flex items-start sm:items-center gap-3 w-full sm:w-auto">
               <button
                 onClick={() => setActiveThreadId(null)}
-                className="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                aria-label="Back to chat list"
+                className="md:hidden w-8 h-8 flex-shrink-0 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors mt-0.5 sm:mt-0"
               >
-                <i className="fa-solid fa-chevron-left"></i>
+                <i className="fa-solid fa-chevron-left" aria-hidden="true"></i>
               </button>
-              <div>
-                <h3 className="font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  {activeThread.employeeId === currentUser.id ? 'PNC Support Team' : (activeThread.employeeName || activeThread.title)}
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black ${activeThread.type === ChatThreadType.EXISTING_REQUEST ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-black text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+                  <span className="truncate max-w-full">
+                    {activeThread.employeeId === currentUser.id ? 'PNC Support Team' : (activeThread.employeeName || activeThread.title)}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black whitespace-nowrap ${activeThread.type === ChatThreadType.EXISTING_REQUEST ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
                     {activeThread.type}
                   </span>
                   {activeThread.status === 'archived' && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 whitespace-nowrap">
                       Archived
                     </span>
                   )}
                 </h3>
                 {activeThread.type === ChatThreadType.EXISTING_REQUEST && activeThread.relatedRequestId ? (
-                  <p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-widest mt-0.5">
+                  <p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-widest mt-1">
                     ID: {requests.find(r => r.id === activeThread.relatedRequestId)?.submissionId || requests.find(r => r.id === activeThread.relatedRequestId)?.id}
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  <p className="text-xs text-slate-500 font-medium mt-1 truncate">
                     {activeThread.title}
                   </p>
                 )}
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto pl-11 sm:pl-0">
               {activeThread.status === 'active' && currentUser.role !== UserRole.EMPLOYEE && (
                 <button
                   onClick={() => handleToggleArchive(activeThread.id, 'active')}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap flex-1 sm:flex-none"
                 >
                   <i className="fa-solid fa-box-archive"></i> Close
                 </button>
@@ -666,7 +670,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
               {activeThread.status === 'archived' && (
                 <button
                   onClick={() => handleToggleArchive(activeThread.id, 'archived')}
-                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap flex-1 sm:flex-none"
                 >
                   <i className="fa-solid fa-box-open"></i> Unarchive
                 </button>
@@ -678,7 +682,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                     const req = requests.find(r => r.id === activeThread.relatedRequestId);
                     if (req) onViewRequest(req);
                   }}
-                  className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                  className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap flex-1 sm:flex-none"
                 >
                   <i className="fa-solid fa-eye"></i> View Request
                 </button>

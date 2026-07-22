@@ -31,7 +31,6 @@ const SAMPLE_REQUEST: TravelRequest = {
     ticketCost: 4500,
     vendorName: 'Indigo',
     hasViolation: false,
-    comments: [],
     timeline: [],
     emergencyContactName: 'Ravi Sharma',
     emergencyContactPhone: '9876543211',

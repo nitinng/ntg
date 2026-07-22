@@ -142,7 +142,7 @@ export interface TravelRequest {
   hasViolation: boolean;
   violationDetails?: string;
   lateBookingReason?: string;
-  comments: string[];
+  statusChangeReason?: string;
 
   // Finance & PNC Tracker Data
   costCenter?: string;

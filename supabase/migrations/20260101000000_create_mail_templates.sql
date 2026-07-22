@@ -1,27 +1,41 @@
--- Create Mail Templates Table
+-- ============================================================
+-- Mail Templates: Full Setup
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS public.mail_templates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  body TEXT NOT NULL,
-  status_trigger TEXT UNIQUE, -- e.g., 'Approved', 'Rejected'
+  subject TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  status_trigger TEXT,
+  is_draft BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS
+-- Partial unique index: only published (non-draft) templates need a unique status_trigger
+CREATE UNIQUE INDEX IF NOT EXISTS mail_templates_published_unique
+  ON public.mail_templates (status_trigger)
+  WHERE is_draft = FALSE;
+
+-- Enable Row Level Security
 ALTER TABLE public.mail_templates ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
--- Everyone (Authenticated) can view templates (PNC needs to view, Admin needs to view)
-CREATE POLICY "Staff view all templates" ON public.mail_templates FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC'))
-);
+-- RLS: PNC and Admin can view
+DROP POLICY IF EXISTS "Staff view all templates" ON public.mail_templates;
+CREATE POLICY "Staff view all templates"
+  ON public.mail_templates FOR SELECT
+  USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC'))
+  );
 
--- Only Admin can insert, update, delete
-CREATE POLICY "Admins manage templates" ON public.mail_templates FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
-);
+-- RLS: Admin manage templates
+DROP POLICY IF EXISTS "Admins manage templates" ON public.mail_templates;
+CREATE POLICY "Admins manage templates"
+  ON public.mail_templates FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
+  );
 
 -- Insert Default Templates
 INSERT INTO public.mail_templates (name, subject, status_trigger, body) VALUES
@@ -211,4 +225,5 @@ INSERT INTO public.mail_templates (name, subject, status_trigger, body) VALUES
     
     <p style="color: #333; font-size: 14px; line-height: 1.6;">Thank you for using the Navgurukul Travel Desk. We hope you had a safe journey!</p>
   </div>'
-);
+)
+ON CONFLICT (status_trigger) WHERE is_draft = FALSE DO NOTHING;

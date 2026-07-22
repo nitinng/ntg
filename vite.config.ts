@@ -3,10 +3,14 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import dns from 'node:dns';
 
-// Custom DNS lookup to bypass broken ISP-assigned IP for Supabase
+/**
+ * CRITICAL: Supabase Same-Origin Proxy & Custom DNS Lookup
+ * This proxy and DNS lookup workaround resolves ISP-level DNS/routing failures reaching *.supabase.co directly (e.g. Jio/Airtel edge DNS degradation in India).
+ * DO NOT remove or "simplify" this proxy or the matching vercel.json rewrite without verifying that the underlying network/DNS resolution issue is resolved.
+ */
 const reliableSupabaseLookup = (hostname: string, options: any, callback: any) => {
   if (hostname === 'bzjzgykbfqfbbqibxexw.supabase.co') {
-    // Force the connection to Cloudflare's stable global IP instead of the broken ISP edge (49.44.x.x)
+    // Force the connection to Cloudflare's stable global IP instead of broken ISP edge IP
     return callback(null, '104.18.38.10', 4);
   }
   return dns.lookup(hostname, options, callback);
@@ -48,5 +52,19 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       include: ['react', 'react-dom'],
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@supabase') || id.includes('supabase')) {
+                return 'vendor-supabase';
+              }
+              return 'vendor';
+            }
+          }
+        }
+      }
+    }
   };
 });

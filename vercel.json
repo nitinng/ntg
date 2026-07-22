@@ -1,4 +1,5 @@
 {
+    "//": "CRITICAL: Same-origin Supabase proxy to bypass ISP DNS/connectivity issues reaching supabase.co directly. DO NOT REMOVE without testing.",
     "rewrites": [
         {
             "source": "/supabase-api/:path*",

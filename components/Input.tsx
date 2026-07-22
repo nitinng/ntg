@@ -4,6 +4,7 @@ interface InputProps {
     label?: string;
     value: string | number;
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
     type?: string;
     placeholder?: string;
     disabled?: boolean;
@@ -18,6 +19,7 @@ const Input = ({
     label,
     value,
     onChange = () => { },
+    onBlur,
     type = 'text',
     placeholder = '',
     disabled = false,
@@ -38,6 +40,7 @@ const Input = ({
                 type={type}
                 value={value ?? ''}
                 onChange={onChange}
+                onBlur={onBlur}
                 placeholder={placeholder}
                 disabled={disabled}
                 readOnly={readOnly}

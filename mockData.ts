@@ -106,7 +106,6 @@ const generateMockRequests = (): TravelRequest[] => {
       hasViolation: true,
       violationDetails: 'Flight: Less than 15 days notice',
       lateBookingReason: 'Emergency program support needed',
-      comments: ['Approved for urgent program need'],
       costCenter: 'CC-PROG-01',
       budgetCode: 'BDG-2025-Q4',
       timeline: [
@@ -140,7 +139,6 @@ const generateMockRequests = (): TravelRequest[] => {
       pncStatus: PNCStatus.CLOSED,
       priority: Priority.LOW,
       hasViolation: false,
-      comments: [],
       pnr: 'PNR123456',
       vendorName: 'MakeMyTrip',
       ticketCost: 4500,
@@ -176,7 +174,6 @@ const generateMockRequests = (): TravelRequest[] => {
       pncStatus: PNCStatus.NOT_STARTED,
       priority: Priority.MEDIUM,
       hasViolation: false,
-      comments: [],
       timeline: [
         { id: 'e7', timestamp: '2024-11-12T09:00:00Z', actor: 'Verification Test User', event: 'Request Submitted' }
       ],

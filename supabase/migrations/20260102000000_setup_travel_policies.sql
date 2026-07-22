@@ -18,10 +18,12 @@ ON CONFLICT (travel_mode) DO NOTHING;
 -- Enable RLS for policies
 ALTER TABLE travel_mode_policies ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Everyone can read travel mode policies" ON travel_mode_policies;
 CREATE POLICY "Everyone can read travel mode policies"
   ON travel_mode_policies FOR SELECT
   TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Admins and PNC can update policies" ON travel_mode_policies;
 CREATE POLICY "Admins and PNC can update policies"
   ON travel_mode_policies FOR UPDATE
   TO authenticated

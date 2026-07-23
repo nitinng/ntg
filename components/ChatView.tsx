@@ -580,10 +580,10 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex -space-x-3 flex-shrink-0 items-center relative top-0.5">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-[10px] font-bold border-2 border-white dark:border-slate-800 z-10 shadow-sm ${isMyThread ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-2xs font-bold border-2 border-white dark:border-slate-800 z-10 shadow-sm ${isMyThread ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
                           {displayInitials}
                         </div>
-                        <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-[10px] font-bold border-2 border-white dark:border-slate-800 shadow-sm">
+                        <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-2xs font-bold border-2 border-white dark:border-slate-800 shadow-sm">
                           {isMyThread ? currentUser.name.substring(0,2).toUpperCase() : 'PN'}
                         </div>
                       </div>
@@ -594,13 +594,13 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                           </p>
                           <div className="flex items-center gap-2">
                             {isUnread && <div className="w-2 h-2 rounded-full bg-rose-500"></div>}
-                            <span className={`text-[10px] whitespace-nowrap ${isUnread ? 'font-black text-indigo-600 dark:text-indigo-400' : 'font-bold text-slate-400'}`}>
+                            <span className={`text-2xs whitespace-nowrap ${isUnread ? 'font-black text-indigo-600 dark:text-indigo-400' : 'font-bold text-slate-400'}`}>
                               {new Date(thread.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
                         </div>
                         {thread.type === ChatThreadType.EXISTING_REQUEST && thread.relatedRequestId && (
-                          <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1 truncate">
+                          <p className="text-2xs font-mono text-slate-400 uppercase tracking-widest mb-1 truncate">
                             ID: {requests.find(r => r.id === thread.relatedRequestId)?.submissionId || requests.find(r => r.id === thread.relatedRequestId)?.id}
                           </p>
                         )}
@@ -637,11 +637,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                   <span className="truncate max-w-full">
                     {activeThread.employeeId === currentUser.id ? 'PNC Support Team' : (activeThread.employeeName || activeThread.title)}
                   </span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black whitespace-nowrap ${activeThread.type === ChatThreadType.EXISTING_REQUEST ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-2xs uppercase tracking-widest font-black whitespace-nowrap ${activeThread.type === ChatThreadType.EXISTING_REQUEST ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
                     {activeThread.type}
                   </span>
                   {activeThread.status === 'archived' && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 whitespace-nowrap">
+                    <span className="px-2 py-0.5 rounded-full text-2xs uppercase tracking-widest font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 whitespace-nowrap">
                       Archived
                     </span>
                   )}
@@ -724,19 +724,19 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                       {showUnreadDivider && (
                         <div id="unread-divider" className="flex items-center gap-4 my-6 opacity-70">
                           <div className="h-px bg-rose-500 flex-1"></div>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-rose-500">New Messages</span>
+                          <span className="text-2xs font-black uppercase tracking-widest text-rose-500">New Messages</span>
                           <div className="h-px bg-rose-500 flex-1"></div>
                         </div>
                       )}
                       <div className={`flex gap-3 group hover:bg-slate-100/50 dark:hover:bg-slate-800/50 px-2 py-1 -mx-2 rounded-lg transition-colors ${!isGrouped ? 'mt-4' : ''}`}>
                       {/* Avatar */}
                       {!isGrouped ? (
-                        <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-white text-[13px] font-black shadow-sm ${msg.senderRole === UserRole.EMPLOYEE ? 'bg-indigo-500' : 'bg-emerald-500'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-white text-xs font-black shadow-sm ${msg.senderRole === UserRole.EMPLOYEE ? 'bg-indigo-500' : 'bg-emerald-500'}`}>
                           {initials}
                         </div>
                       ) : (
                         <div className="w-10 flex-shrink-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-[9px] font-bold text-slate-400">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-2xs font-bold text-slate-400">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       )}
 
@@ -746,7 +746,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                           <div className="flex items-baseline gap-2 mb-1">
                             <span className="font-bold text-slate-900 dark:text-white">{msg.senderName}</span>
                             {msg.senderRole !== UserRole.EMPLOYEE && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                              <span className="px-1.5 py-0.5 rounded text-2xs font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                                 {msg.senderRole}
                               </span>
                             )}
@@ -755,7 +755,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                         )}
                         
                         {msg.text && (
-                          <p className="text-slate-800 dark:text-slate-200 text-[14px] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                         )}
                         
                         {/* Attachment rendering */}
@@ -772,7 +772,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                                 </div>
                                 <div className="flex-1 min-w-0 pr-4">
                                   <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate group-hover/file:text-indigo-600 transition-colors">{msg.attachmentName}</p>
-                                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-0.5">Attachment</p>
+                                  <p className="text-2xs text-slate-500 uppercase tracking-widest font-black mt-0.5">Attachment</p>
                                 </div>
                                 <i className="fa-solid fa-download text-slate-400 group-hover/file:text-indigo-600 transition-colors mr-2"></i>
                               </a>
@@ -851,7 +851,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                       }
                     }}
                     placeholder="Message team... (Enter to send, Shift+Enter for new line)"
-                    className="w-full bg-transparent border-none px-4 py-3 text-[14px] focus:ring-0 resize-none outline-none min-h-[44px] max-h-32 custom-scrollbar text-slate-800 dark:text-slate-200"
+                    className="w-full bg-transparent border-none px-4 py-3 text-sm focus:ring-0 resize-none outline-none min-h-[44px] max-h-32 custom-scrollbar text-slate-800 dark:text-slate-200"
                     rows={1}
                   />
                 </div>

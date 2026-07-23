@@ -8,6 +8,8 @@ interface NavbarProps {
   onOpenProfile: () => void;
   onToggleSidebar?: () => void;
   isSidebarOpen?: boolean;
+  isDarkMode: boolean;
+  onToggleTheme: () => void;
 }
 
 export const Navbar = ({
@@ -16,7 +18,9 @@ export const Navbar = ({
   onToggleRole,
   onOpenProfile,
   onToggleSidebar,
-  isSidebarOpen
+  isSidebarOpen,
+  isDarkMode,
+  onToggleTheme
 }: NavbarProps) => {
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
 
@@ -109,6 +113,14 @@ export const Navbar = ({
         )}
       </div>
       <div className="flex items-center gap-4">
+        <button
+          onClick={onToggleTheme}
+          className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-transparent hover:border-indigo-500/20 transition-all duration-300 shadow-sm"
+          aria-label="Toggle Dark Mode"
+        >
+          <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} text-lg`}></i>
+        </button>
+
         <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800 transition-colors duration-300">
           <div className="text-right hidden sm:block">
             <p className="text-base font-bold text-slate-800 dark:text-white leading-none">{currentUser.name}</p>

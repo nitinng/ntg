@@ -13,16 +13,22 @@ module.exports = {
         sans: ['Roboto', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Arial', 'sans-serif'],
       },
       fontSize: {
-        '2xs': ['0.6875rem', { lineHeight: '1.4' }],
-        'xs': ['0.75rem', { lineHeight: '1.4' }],
-        'sm': ['0.875rem', { lineHeight: '1.4' }],
-        'base': ['1rem', { lineHeight: '1.5' }],
-        'lg': ['1.125rem', { lineHeight: '1.5' }],
-        'xl': ['1.25rem', { lineHeight: '1.3' }],
-        '2xl': ['1.5rem', { lineHeight: '1.2' }],
-        '3xl': ['1.875rem', { lineHeight: '1.2' }],
-        '4xl': ['2.25rem', { lineHeight: '1.2' }],
-        '5xl': ['3rem', { lineHeight: '1.2' }],
+        // Graduated scale-down: smallest steps (2xs/xs) are kept at their
+        // original size since they're already near the legibility floor
+        // (badges, captions, labels). Reduction grows toward the larger
+        // steps, where the "feels too big" impression mostly comes from.
+        // Do NOT replace this with a flat html{font-size:%} root scale —
+        // that shrinks 2xs/xs below ~11px and makes them unreadable.
+        '2xs': ['0.6875rem', { lineHeight: '1.4' }],  // 11px (unchanged)
+        'xs': ['0.75rem', { lineHeight: '1.4' }],      // 12px (unchanged)
+        'sm': ['0.8125rem', { lineHeight: '1.4' }],    // 13px (was 14px)
+        'base': ['0.9375rem', { lineHeight: '1.5' }],  // 15px (was 16px)
+        'lg': ['1.0625rem', { lineHeight: '1.5' }],    // 17px (was 18px)
+        'xl': ['1.125rem', { lineHeight: '1.3' }],     // 18px (was 20px)
+        '2xl': ['1.375rem', { lineHeight: '1.2' }],    // 22px (was 24px)
+        '3xl': ['1.6875rem', { lineHeight: '1.2' }],   // 27px (was 30px)
+        '4xl': ['2rem', { lineHeight: '1.2' }],        // 32px (was 36px)
+        '5xl': ['2.625rem', { lineHeight: '1.2' }],    // 42px (was 48px)
       },
       colors: {
         indigo: {

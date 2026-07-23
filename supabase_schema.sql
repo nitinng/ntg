@@ -59,7 +59,12 @@ CREATE TABLE IF NOT EXISTS public.travel_requests (
   ticket_cost NUMERIC,
   vendor_name TEXT,
   timeline JSONB DEFAULT '[]',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  resubmission_count INTEGER DEFAULT 0 NOT NULL,
+  on_hold_since TIMESTAMPTZ,
+  cancelled_reason TEXT,
+  status_change_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 2b. Request Counters for Readable IDs
@@ -129,25 +134,37 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.travel_requests ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Users can see/update their own; Staff can view all; Admins/PNC update all
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Staff (Admin/PNC) can view all profiles
+DROP POLICY IF EXISTS "Staff view all profiles" ON public.profiles;
 CREATE POLICY "Staff view all profiles" ON public.profiles FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC'))
 );
 
 -- Admin can update anything, PNC can update profiles (checks role in UI)
+DROP POLICY IF EXISTS "Staff update all profiles" ON public.profiles;
 CREATE POLICY "Staff update all profiles" ON public.profiles FOR UPDATE USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC'))
 );
 
 -- Requests: Employee sees own, Admin/PNC/Finance see all
+DROP POLICY IF EXISTS "Employees view own requests" ON public.travel_requests;
 CREATE POLICY "Employees view own requests" ON public.travel_requests FOR SELECT USING (auth.uid() = requester_id);
+
+DROP POLICY IF EXISTS "Employees insert own requests" ON public.travel_requests;
 CREATE POLICY "Employees insert own requests" ON public.travel_requests FOR INSERT WITH CHECK (auth.uid() = requester_id);
+
+DROP POLICY IF EXISTS "Admins view all requests" ON public.travel_requests;
 CREATE POLICY "Admins view all requests" ON public.travel_requests FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC', 'Finance'))
 );
+
+DROP POLICY IF EXISTS "Admins update all requests" ON public.travel_requests;
 CREATE POLICY "Admins update all requests" ON public.travel_requests FOR UPDATE USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC', 'Finance'))
 );

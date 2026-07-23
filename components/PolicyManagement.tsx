@@ -65,6 +65,33 @@ export const PolicyManagement = ({
         updated_at: new Date().toISOString()
       }, { onConflict: 'setting_key' });
       if (error) throw error;
+
+      // Sync specific SLA TAT target hours changes to the dedicated public.sla_configs table
+      if (updates.tatApprovalHours !== undefined) {
+        await supabase.from('sla_configs').upsert({
+          stage: 'Approval Pending',
+          target_hours: updates.tatApprovalHours,
+          escalation_hours: updates.tatApprovalHours * 2,
+          owner_role: 'Manager'
+        }, { onConflict: 'stage' });
+      }
+      if (updates.tatProcessingHours !== undefined) {
+        await supabase.from('sla_configs').upsert({
+          stage: 'Processing',
+          target_hours: updates.tatProcessingHours,
+          escalation_hours: updates.tatProcessingHours * 2,
+          owner_role: 'PNC'
+        }, { onConflict: 'stage' });
+      }
+      if (updates.tatBookingHours !== undefined) {
+        await supabase.from('sla_configs').upsert({
+          stage: 'Booked',
+          target_hours: updates.tatBookingHours,
+          escalation_hours: updates.tatBookingHours * 2,
+          owner_role: 'PNC'
+        }, { onConflict: 'stage' });
+      }
+
       toast.success("Policy saved successfully");
     } catch (err: any) {
       toast.error("Failed to save policy: " + err.message);
@@ -402,6 +429,33 @@ export const PolicyManagement = ({
                   </div>
                   <Toggle active={policy.isEnforcementEnabled} onChange={() => handleUpdatePolicy({ isEnforcementEnabled: !policy.isEnforcementEnabled })} />
                 </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-8">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Turnaround Time (SLA) Targets</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Input
+                  label="Manager Approval TAT (Hours)"
+                  type="number"
+                  value={policy.tatApprovalHours || 24}
+                  onChange={e => setPolicy({ ...policy, tatApprovalHours: parseInt(e.target.value) || 0 })}
+                  onBlur={() => handleUpdatePolicy({ tatApprovalHours: policy.tatApprovalHours })}
+                />
+                <Input
+                  label="PNC Processing TAT (Hours)"
+                  type="number"
+                  value={policy.tatProcessingHours || 48}
+                  onChange={e => setPolicy({ ...policy, tatProcessingHours: parseInt(e.target.value) || 0 })}
+                  onBlur={() => handleUpdatePolicy({ tatProcessingHours: policy.tatProcessingHours })}
+                />
+                <Input
+                  label="Ticketing Fulfillment TAT (Hours)"
+                  type="number"
+                  value={policy.tatBookingHours || 72}
+                  onChange={e => setPolicy({ ...policy, tatBookingHours: parseInt(e.target.value) || 0 })}
+                  onBlur={() => handleUpdatePolicy({ tatBookingHours: policy.tatBookingHours })}
+                />
               </div>
             </div>
           </Card>

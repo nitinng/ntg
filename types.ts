@@ -76,8 +76,11 @@ export enum PNCStatus {
   REJECTED_BY_MANAGER = 'Rejected by Manager',
   APPROVED = 'Approved',
   PROCESSING = 'Processing',
-  BOOKED = 'Booked',
+  ON_HOLD = 'On Hold',
   REJECTED_BY_PNC = 'Rejected by PNC',
+  BOOKED = 'Booked',
+  CANCELLED_BY_EMPLOYEE = 'Cancelled by Employee',
+  CANCELLED_BY_PNC = 'Cancelled by PNC',
   CLOSED = 'Closed'
 }
 
@@ -143,6 +146,9 @@ export interface TravelRequest {
   violationDetails?: string;
   lateBookingReason?: string;
   statusChangeReason?: string;
+  resubmissionCount?: number;
+  onHoldSince?: string;
+  cancelledReason?: string;
 
   // Finance & PNC Tracker Data
   costCenter?: string;
@@ -172,6 +178,10 @@ export interface PolicyConfig {
   isIdRequired: boolean;
   isEnforcementEnabled: boolean;
   temporaryUnlockDays: number; // Days to unlock access after document upload, even without approval
+  // Turnaround Time (TAT) in hours
+  tatApprovalHours: number;
+  tatProcessingHours: number;
+  tatBookingHours: number;
 }
 
 export interface TravelModePolicy {

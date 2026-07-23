@@ -24,6 +24,8 @@ export const RequestDetailOverlay = ({
   const [status, setStatus] = useState(request.pncStatus);
   const [statusChangeReason, setStatusChangeReason] = useState('');
   const [showNotes, setShowNotes] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [showCancellationForm, setShowCancellationForm] = useState(false);
 
   // Booking Details State
   const [ticketCost, setTicketCost] = useState<string | number>(request.ticketCost || '');
@@ -40,6 +42,19 @@ export const RequestDetailOverlay = ({
   const handleUpdate = async () => {
     try {
       let finalStatus = status;
+
+      // Force a reason for rejection or cancellation
+      const requiresReason = 
+        status === PNCStatus.REJECTED_BY_PNC ||
+        status === PNCStatus.CANCELLED_BY_PNC ||
+        status === PNCStatus.CANCELLED_BY_EMPLOYEE ||
+        status === PNCStatus.REJECTED_BY_MANAGER;
+
+      if (requiresReason && !statusChangeReason.trim()) {
+        toast.error(`Please provide a reason for the ${status} action.`);
+        setShowNotes(true);
+        return;
+      }
 
       setIsUploading(true);
       let invoiceUrl = request.invoiceUrl;
@@ -67,6 +82,7 @@ export const RequestDetailOverlay = ({
         ...request,
         pncStatus: finalStatus,
         statusChangeReason: finalStatus === PNCStatus.CLOSED ? (statusChangeReason || 'Auto-closed after booking details completed') : statusChangeReason,
+        cancelledReason: (finalStatus === PNCStatus.CANCELLED_BY_EMPLOYEE || finalStatus === PNCStatus.CANCELLED_BY_PNC) ? statusChangeReason : request.cancelledReason,
         ticketCost: status === PNCStatus.BOOKED ? parseFloat(ticketCost.toString()) : request.ticketCost,
         vendorName: status === PNCStatus.BOOKED ? vendorName : request.vendorName,
         invoiceUrl: status === PNCStatus.BOOKED ? invoiceUrl : request.invoiceUrl
@@ -77,6 +93,28 @@ export const RequestDetailOverlay = ({
       setIsUploading(false);
       console.error("Update failed:", error);
       toast.error("Failed to update request: " + error.message);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!cancellationReason.trim()) {
+      toast.error("Please enter a reason for cancelling this request.");
+      return;
+    }
+    try {
+      setIsUploading(true);
+      await onUpdate({
+        ...request,
+        pncStatus: PNCStatus.CANCELLED_BY_EMPLOYEE,
+        statusChangeReason: cancellationReason,
+        cancelledReason: cancellationReason
+      });
+      setIsUploading(false);
+      onClose();
+    } catch (error: any) {
+      setIsUploading(false);
+      console.error(error);
+      toast.error("Failed to cancel request: " + error.message);
     }
   };
 
@@ -347,11 +385,73 @@ export const RequestDetailOverlay = ({
                 )}
               </button>
             </div>
+          ) : role === UserRole.EMPLOYEE &&
+            request.pncStatus !== PNCStatus.CANCELLED_BY_EMPLOYEE &&
+            request.pncStatus !== PNCStatus.CANCELLED_BY_PNC &&
+            request.pncStatus !== PNCStatus.CLOSED ? (
+            <div className="space-y-4 w-full">
+              {!showCancellationForm ? (
+                <button
+                  onClick={() => setShowCancellationForm(true)}
+                  className="w-full bg-rose-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-95 transition-all"
+                >
+                  <i className="fa-solid fa-circle-xmark mr-2"></i> Cancel Request
+                </button>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Cancel Request Reason</label>
+                      <button 
+                        onClick={() => setShowCancellationForm(false)} 
+                        className="text-xs font-black text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 uppercase tracking-widest"
+                      >
+                        Back
+                      </button>
+                    </div>
+                    <textarea
+                      className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
+                      rows={3}
+                      placeholder="Please provide a reason for cancelling this travel request (required)..."
+                      value={cancellationReason}
+                      onChange={e => setCancellationReason(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={handleCancelRequest}
+                    disabled={isUploading}
+                    className="w-full bg-rose-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isUploading ? (
+                      <>
+                        <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> Cancelling...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-check mr-2"></i> Confirm Cancellation
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-2">
-              <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
-              <StatusBadge type="pnc" value={request.pncStatus} />
-              <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
+            <div className="flex flex-col items-center justify-center gap-2 py-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
+                <StatusBadge type="pnc" value={request.pncStatus} />
+                <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
+              </div>
+              {request.cancelledReason && (
+                <p className="text-xs text-rose-500 dark:text-rose-400 font-bold mt-1 text-center bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                  Reason: {request.cancelledReason}
+                </p>
+              )}
+              {request.statusChangeReason && request.pncStatus === PNCStatus.REJECTED_BY_PNC && (
+                <p className="text-xs text-rose-500 dark:text-rose-400 font-bold mt-1 text-center bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                  Rejection Reason: {request.statusChangeReason}
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -2649,7 +2649,10 @@ const App: React.FC = () => {
     isPassportRequired: true,
     isIdRequired: true,
     isEnforcementEnabled: true,
-    temporaryUnlockDays: 7
+    temporaryUnlockDays: 7,
+    tatApprovalHours: 24,
+    tatProcessingHours: 48,
+    tatBookingHours: 72
   });
 
   const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
@@ -2669,13 +2672,13 @@ const App: React.FC = () => {
     if (!currentUser) return;
     const fetchUnread = async () => {
       let query = supabase.from('chat_threads').select('id, updated_at, last_read_employee, last_read_pnc, employee_id, status');
-      
+
       if (currentUser.role === UserRole.EMPLOYEE) {
         query = query.eq('employee_id', currentUser.id);
       } else {
         query = query.neq('employee_id', currentUser.id);
       }
-      
+
       const { data } = await query;
       if (data) {
         let count = 0;
@@ -2684,23 +2687,23 @@ const App: React.FC = () => {
             const lr = t.last_read_employee ? new Date(t.last_read_employee).getTime() : 0;
             if (new Date(t.updated_at).getTime() > lr) count++;
           } else {
-             const lr = t.last_read_pnc ? new Date(t.last_read_pnc).getTime() : 0;
-             if (new Date(t.updated_at).getTime() > lr) count++;
+            const lr = t.last_read_pnc ? new Date(t.last_read_pnc).getTime() : 0;
+            if (new Date(t.updated_at).getTime() > lr) count++;
           }
         });
         setUnreadChatCount(count);
       }
     };
     fetchUnread();
-    
+
     // Listen for real-time thread updates to instantly clear/update badges
     const globalSub = supabase
       .channel('chat_global_changes')
       .on('broadcast', { event: 'update_threads' }, () => {
-         fetchUnread();
+        fetchUnread();
       })
       .subscribe();
-    
+
     // Poll every 15s to keep badge updated across tabs without complex realtime logic in App
     const interval = setInterval(fetchUnread, 15000);
     return () => {
@@ -2717,7 +2720,7 @@ const App: React.FC = () => {
         .from('meetup_settings')
         .select('*')
         .in('setting_key', ['is_email_login_enabled']);
-      
+
       if (!error && data) {
         const emailLoginSetting = data.find(s => s.setting_key === 'is_email_login_enabled');
         if (emailLoginSetting) {
@@ -3327,7 +3330,7 @@ const App: React.FC = () => {
         return <AdminDashboard requests={requests} users={users} onTabChange={handleTabChange} />;
       }
       if (currentUser.role === UserRole.PNC) {
-        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} />;
+        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
         return <AnalyticsView requests={requests} currentUser={currentUser} />;
@@ -3501,18 +3504,27 @@ const App: React.FC = () => {
   if (isLocked) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
         <nav className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-8 flex items-center justify-between transition-colors duration-300">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-600/20">N</div>
             <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">Navgurukul Travel Desk</h1>
           </div>
-          <button
-            onClick={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); supabase.auth.signOut(); }}
-            className="text-xs font-bold text-slate-400 hover:text-rose-600 uppercase tracking-widest transition-all duration-300 px-3 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-transparent hover:border-indigo-500/20 transition-all duration-300 shadow-sm"
+              aria-label="Toggle Dark Mode"
+            >
+              <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} text-lg`}></i>
+            </button>
+            <button
+              onClick={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); supabase.auth.signOut(); }}
+              className="text-xs font-bold text-slate-400 hover:text-rose-600 uppercase tracking-widest transition-all duration-300 px-3 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg"
+            >
+              Sign Out
+            </button>
+          </div>
         </nav>
         <div className="flex-1 flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/50 via-transparent to-transparent dark:from-indigo-900/10 transition-colors duration-300">
           <OnboardingView
@@ -3530,7 +3542,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
       <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
-      <Navbar currentUser={currentUser!} baseRole={baseRole} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onToggleRole={(r) => {
+      <Navbar currentUser={currentUser!} baseRole={baseRole} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onToggleRole={(r) => {
         // Mock role toggle for demo, usually role is static from DB
         sessionStorage.setItem('currentRole', r);
         setCurrentUser(prev => prev ? { ...prev, role: r } : null);
@@ -3944,34 +3956,60 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
     r.pncStatus !== PNCStatus.BOOKED &&
     r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
     r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER &&
+    r.pncStatus !== PNCStatus.CANCELLED_BY_EMPLOYEE &&
+    r.pncStatus !== PNCStatus.CANCELLED_BY_PNC &&
     r.pncStatus !== PNCStatus.CLOSED
   );
   const closedRequests = requests.filter((r: TravelRequest) =>
     r.pncStatus === PNCStatus.BOOKED ||
     r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
     r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+    r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
+    r.pncStatus === PNCStatus.CANCELLED_BY_PNC ||
     r.pncStatus === PNCStatus.CLOSED
   );
+
+  const [pastRequestsTab, setPastRequestsTab] = useState<string>('All');
+
+  const availableStatuses = useMemo(() => {
+    const statuses = new Set<string>();
+    closedRequests.forEach(r => {
+      if (r.pncStatus) {
+        statuses.add(r.pncStatus);
+      }
+    });
+    return Array.from(statuses);
+  }, [closedRequests]);
+
+  useEffect(() => {
+    if (pastRequestsTab !== 'All' && !availableStatuses.includes(pastRequestsTab)) {
+      setPastRequestsTab('All');
+    }
+  }, [availableStatuses, pastRequestsTab]);
+
+  const displayedClosedRequests = useMemo(() => {
+    if (pastRequestsTab === 'All') return closedRequests;
+    return closedRequests.filter(r => r.pncStatus === pastRequestsTab);
+  }, [closedRequests, pastRequestsTab]);
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 transition-all">
       {/* Header with gradient mesh background */}
-      <header className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white dark:bg-slate-900 p-5 md:p-8 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden group">
+      <header className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white dark:bg-slate-900 px-2 py-3 md:py-4 md:px-8 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden group">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-3xl -mr-20 -mt-20 group-hover:scale-110 transition-transform duration-1000 pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/5 dark:bg-fuchsia-500/10 rounded-full blur-3xl -ml-10 -mb-10 group-hover:scale-110 transition-transform duration-1000 pointer-events-none"></div>
 
         <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-2">
+          <div className="flex items-center gap-2 mb-2">
             <span className="text-3xl md:text-4xl animate-bounce-slow origin-bottom">👋</span>
-            <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Hey, <span className="bg-gradient-to-r from-indigo-600 to-fuchsia-600 bg-clip-text text-transparent">{user?.name?.split(' ')[0] || 'there'}!</span>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Hey, <span className="bg-gradient-to-r from-indigo-600 to-fuchsia-600 bg-clip-text text-transparent">{user?.name?.split(' ')[0] || 'there'}!</span>
             </h2>
           </div>
-          <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-lg italic ml-1.5 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
+          <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-base italic ml-1.5 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
             "{welcomeNote}"
           </p>
         </div>
-        <button onClick={() => onNewRequest()} className="relative z-10 w-full md:w-auto bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-8 py-4 rounded-lg font-black shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:from-indigo-500 hover:to-violet-500 hover:-translate-y-1 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3 group overflow-hidden">
+        <button onClick={() => onNewRequest()} className="relative z-10 w-full md:w-auto bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-8 py-2 rounded-lg font-black shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:from-indigo-500 hover:to-violet-500 hover:-translate-y-1 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3 group overflow-hidden">
           <div className="absolute inset-0 w-full h-full bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
           <i className="fa-solid fa-plane-departure group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i>
           <span>New Booking</span>
@@ -3979,18 +4017,18 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
       </header>
 
       {/* Chat Beta Banner */}
-      <div className="bg-gradient-to-r from-indigo-500/10 to-fuchsia-500/10 border border-indigo-200/50 dark:border-indigo-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden group">
+      <div className="bg-gradient-to-r from-indigo-500/10 to-fuchsia-500/10 border border-indigo-200/50 dark:border-indigo-500/20 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden group">
         <div className="absolute inset-0 w-full h-full bg-white/10 dark:bg-white/5 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
         <div className="flex items-center gap-4 relative z-10">
           <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner">
             <i className="fa-solid fa-flask text-xl group-hover:rotate-12 transition-transform"></i>
           </div>
           <div>
-            <h4 className="font-black text-slate-800 dark:text-white text-sm tracking-tight flex items-center gap-2">
+            <h4 className="font-black text-slate-800 dark:text-white text-md tracking-tight flex items-center gap-2">
               Chat Feature is in Beta
-              <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">Beta</span>
+              <span className="bg-indigo-600 text-white text-2xs px-2 py-0.5 rounded-lg font-bold uppercase tracking-wider shadow-sm">Beta</span>
             </h4>
-            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium mt-0.5">We are currently testing the new chat functionality. You might experience occasional bugs or delays.</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium mt-0.5">We are currently testing the new chat functionality. You might experience occasional bugs or delays.</p>
           </div>
         </div>
       </div>
@@ -4003,8 +4041,8 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
             <div className="w-12 h-12 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner group-hover:rotate-12 transition-transform"><i className="fa-solid fa-clock"></i></div>
             <span className="text-3xl font-black text-slate-800 dark:text-white group-hover:text-amber-600 transition-colors">{activeRequests.length}</span>
           </div>
-          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-xs">Active Requests</h4>
-          <p className="text-xs text-slate-500 mt-1 font-medium">Currently in progress</p>
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-sm">Active Requests</h4>
+          <p className="text-sm text-slate-500 mt-1 font-medium">Currently in progress</p>
         </div>
 
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
@@ -4013,17 +4051,17 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
             <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shadow-inner group-hover:-rotate-12 transition-transform"><i className="fa-solid fa-suitcase-rolling"></i></div>
             <span className="text-3xl font-black text-slate-800 dark:text-white group-hover:text-emerald-600 transition-colors">{closedRequests.length}</span>
           </div>
-          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-xs">Past Trips</h4>
-          <p className="text-xs text-slate-500 mt-1 font-medium">Completed bookings</p>
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-sm">Past Trips</h4>
+          <p className="text-sm text-slate-500 mt-1 font-medium">Completed bookings</p>
         </div>
 
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
           <div className="absolute right-0 top-0 w-32 h-32 bg-sky-500/10 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
           <div className="flex justify-between items-start mb-4">
             <div className="w-12 h-12 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform"><i className="fa-solid fa-id-card-clip"></i></div>
-            <span className="text-xl font-black text-slate-800 dark:text-white mt-2 group-hover:text-sky-600 transition-colors">{completeness}%</span>
+            <span className="text-3xl font-black text-slate-800 dark:text-white group-hover:text-sky-600 transition-colors">{completeness}%</span>
           </div>
-          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-xs">Profile Status</h4>
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest text-sm">Profile Status</h4>
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
             <div className="bg-sky-500 h-full rounded-full transition-all duration-1000" style={{ width: `${completeness}%` }}></div>
           </div>
@@ -4140,17 +4178,17 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
 
               return (
                 <div key={r.id} onClick={() => onView(r)} className={`group relative bg-white dark:bg-slate-900 rounded-md flex flex-col sm:flex-row overflow-hidden border border-slate-200 dark:border-slate-800 cursor-pointer shadow-sm hover:shadow-xl ${theme.shadow} transition-all hover:-translate-y-1 duration-300`}>
-                  
+
                   {/* Main Ticket Area */}
                   <div className={`flex-1 p-5 sm:p-6 relative overflow-hidden bg-gradient-to-br ${theme.grad} border-b sm:border-b-0 sm:border-r border-dashed border-slate-200 dark:border-slate-700`}>
                     <div className={`absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.03] text-[8rem] pointer-events-none ${theme.iconBg}`}>
                       <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'}`}></i>
                     </div>
-                    
+
                     <div className="flex justify-between items-center mb-5 relative z-10">
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Boarding Pass</span>
-                        {isMeetup && <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"><i className="fa-solid fa-star mr-1"></i> Meetup</span>}
+                        <span className={`text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Boarding Pass</span>
+                        {isMeetup && <span className="text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"><i className="fa-solid fa-star mr-1"></i> Meetup</span>}
                       </div>
                       <StatusBadge type="pnc" value={r.pncStatus} />
                     </div>
@@ -4160,7 +4198,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                         <p className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{r.from.substring(0, 3)}</p>
                         <p className="text-xs sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px] sm:max-w-[100px]">{r.from}</p>
                       </div>
-                      
+
                       <div className="flex-[2] flex flex-col items-center justify-center px-2 sm:px-4">
                         <div className="w-full flex items-center opacity-60">
                           <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
@@ -4174,7 +4212,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                         <p className="text-xs sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px] sm:max-w-[100px]">{r.to}</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-100 dark:border-slate-800/50 relative z-10">
                       <div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider mb-0.5">Date</p>
@@ -4197,12 +4235,12 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                     <div className="flex flex-row sm:flex-col items-center w-full h-full justify-between sm:py-6 relative z-10">
                       <div className="w-full text-left sm:text-center shrink-0">
                         {r.hasViolation ? (
-                          <div className="inline-block bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-black px-2 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 animate-pulse">POLICY<br className="hidden sm:block"/> REVIEW</div>
+                          <div className="inline-block bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-2xs font-black px-2 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 animate-pulse">POLICY<br className="hidden sm:block" /> REVIEW</div>
                         ) : (
-                          <div className="inline-block bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-xs font-black px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">CLEAR</div>
+                          <div className="inline-block bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-2xs font-black px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">CLEAR</div>
                         )}
                       </div>
-                      
+
                       <div className="hidden sm:flex w-full h-12 items-center justify-center opacity-20 gap-[2px] rotate-90 my-6">
                         {[...Array(14)].map((_, i) => (
                           <div key={i} className={`h-full bg-slate-800 dark:bg-white ${i % 3 === 0 ? 'w-1' : i % 2 === 0 ? 'w-[2px]' : 'w-[1px]'}`}></div>
@@ -4237,11 +4275,42 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
           <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">Past Requests</h3>
         </div>
 
+        {availableStatuses.length > 0 && (
+          <div className="flex flex-wrap gap-2 bg-slate-150/40 dark:bg-slate-800/40 p-1.5 rounded-lg max-w-fit border border-slate-200/50 dark:border-slate-800/50">
+            <button
+              onClick={() => setPastRequestsTab('All')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                pastRequestsTab === 'All'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+              }`}
+            >
+              All ({closedRequests.length})
+            </button>
+            {availableStatuses.map(status => {
+              const count = closedRequests.filter(r => r.pncStatus === status).length;
+              return (
+                <button
+                  key={status}
+                  onClick={() => setPastRequestsTab(status)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                    pastRequestsTab === status
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {status} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm transition-all">
           <div className="overflow-x-hidden md:overflow-x-auto">
             <table className="w-full text-left border-collapse block md:table">
               <thead className="hidden md:table-header-group">
-                <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-sm font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-xs font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
                   <th className="px-8 py-6">Request ID</th>
                   <th className="px-8 py-6">Destination</th>
                   <th className="px-8 py-6">Travel Date</th>
@@ -4250,7 +4319,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-800 block md:table-row-group">
-                {closedRequests.map((r: any) => {
+                {displayedClosedRequests.map((r: any) => {
                   const isMeetup = r.purpose === 'Igatpuri Meetup';
                   return (
                     <tr key={r.id} className="flex flex-col md:table-row hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group p-4 md:p-0">
@@ -4267,7 +4336,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                         <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">DESTINATION</span>
                         <div className="text-right md:text-left">
                           <p className={`text-sm font-black uppercase tracking-tight ${isMeetup ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}`}>{r.to}</p>
-                          {isMeetup && <p className="text-sm text-emerald-500 font-bold uppercase tracking-widest mt-1"><i className="fa-solid fa-star mr-1"></i> Meetup</p>}
+                          {isMeetup && <p className="text-xs text-emerald-500 font-bold uppercase tracking-widest mt-1"><i className="fa-solid fa-star mr-1"></i> Meetup</p>}
                         </div>
                       </td>
                       <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">

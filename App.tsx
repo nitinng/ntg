@@ -41,6 +41,8 @@ const WELCOME_NOTES = [
 
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 const PNCDashboard = React.lazy(() => import('./components/PNCDashboard'));
+const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagement'));
+const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
 const FinanceDashboard = React.lazy(() => import('./components/FinanceDashboard'));
 const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprovalsView'));
 const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
@@ -2652,7 +2654,11 @@ const App: React.FC = () => {
     temporaryUnlockDays: 7,
     tatApprovalHours: 24,
     tatProcessingHours: 48,
-    tatBookingHours: 72
+    tatBookingHours: 72,
+    cancellationPncNgCover: 100,
+    cancellationPncEmpCover: 0,
+    cancellationEmpNgCover: 50,
+    cancellationEmpEmpCover: 50
   });
 
   const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
@@ -2875,8 +2881,11 @@ const App: React.FC = () => {
             specialRequirements: r.special_requirements,
             approvalStatus: r.approval_status,
             pncStatus: r.pnc_status,
-            ticketCost: r.ticket_cost,
+            costCenter: r.cost_center,
+            budgetCode: r.budget_code,
             vendorName: r.vendor_name,
+            ticketCost: r.ticket_cost,
+            travelLegs: r.split_tickets || undefined,
             invoiceUrl: r.invoice_url,
             timeline: r.timeline || [],
             emergencyContactName: r.emergency_contact_name,
@@ -3361,6 +3370,18 @@ const App: React.FC = () => {
       case 'all-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} />;
+            case 'advances':
+        if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN) {
+          return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
+            const req = requests.find((r: TravelRequest) => r.id === id);
+            if (req) {
+              setSelectedRequest(req);
+            }
+          }} />;
+        }
+        return renderDashboard();
+      case 'cancellations':
+        return <CancellationsDashboard currentUser={currentUser} />;
       case 'verification':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VerificationQueue users={users} onUpdateUser={handleUpdateUser} />;
@@ -3556,6 +3577,7 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                 <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
+               <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                 {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
@@ -3596,6 +3618,8 @@ const App: React.FC = () => {
                 />
                 <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
+               <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                 {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
               </div>
@@ -3817,6 +3841,7 @@ const App: React.FC = () => {
                     pnc_status: updated.pncStatus,
                     status_change_reason: updated.statusChangeReason || null,
                     ticket_cost: updated.ticketCost || null,
+                    split_tickets: updated.travelLegs || null,
                     vendor_name: updated.vendorName || null,
                     invoice_url: updated.invoiceUrl || null,
                     timeline: newTimeline,
@@ -3890,9 +3915,10 @@ const App: React.FC = () => {
 
                 approval_status: ApprovalStatus.APPROVED, // Auto-approved since PNC is booking
                 pnc_status: PNCStatus.CLOSED, // Closed immediately as details are entered
-
-                ticket_cost: parseFloat(data.ticketCost),
+                budget_code: data.budgetCode,
                 vendor_name: data.vendorName,
+                ticket_cost: parseFloat(data.ticketCost),
+                split_tickets: data.travelLegs || null,
                 invoice_url: invoiceUrl,
                 booked_by: 'SELF', // Booking handled by employee directly
 
@@ -3929,9 +3955,11 @@ const App: React.FC = () => {
                   from: newRequest.from_location,
                   to: newRequest.to_location,
                   dateOfTravel: newRequest.date_of_travel,
-                  pncStatus: PNCStatus.CLOSED,
-                  ticketCost: newRequest.ticket_cost,
+                  budgetCode: newRequest.budget_code,
                   vendorName: newRequest.vendor_name,
+                  ticketCost: newRequest.ticket_cost,
+                  travelLegs: newRequest.split_tickets || undefined,
+                  pncStatus: PNCStatus.CLOSED,
                   invoiceUrl: newRequest.invoice_url
                 } as any,
                 ...prev
@@ -3951,23 +3979,66 @@ const App: React.FC = () => {
 // --- Shared Display Sub-components ---
 
 const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, completeness, onViewProfile, user, meetupRequests = [], onNavigateToMeetup, isIgatpuriEnabled = false }: { requests: TravelRequest[], onNewRequest: (context?: any) => void, onView: (r: TravelRequest) => void, isWarningVisible: boolean, completeness: number, onViewProfile: () => void, user: User, meetupRequests: MeetupAvailabilityRequest[], onNavigateToMeetup: () => void, isIgatpuriEnabled?: boolean }) => {
+  const [cancellationOwed, setCancellationOwed] = useState(0);
+  useEffect(() => {
+    const fetchOwed = async () => {
+      const { data } = await supabase
+        .from('cancellation_records')
+        .select('employee_owed_amount')
+        .eq('status', 'Pending Refund');
+        
+      if (data) {
+        const total = data.reduce((sum, r) => sum + (Number(r.employee_owed_amount) || 0), 0);
+        setCancellationOwed(total);
+      }
+    };
+    fetchOwed();
+  }, []);
+
   const welcomeNote = useMemo(() => WELCOME_NOTES[Math.floor(Math.random() * WELCOME_NOTES.length)], []);
-  const activeRequests = requests.filter((r: TravelRequest) =>
-    r.pncStatus !== PNCStatus.BOOKED &&
-    r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
-    r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER &&
-    r.pncStatus !== PNCStatus.CANCELLED_BY_EMPLOYEE &&
-    r.pncStatus !== PNCStatus.CANCELLED_BY_PNC &&
-    r.pncStatus !== PNCStatus.CLOSED
-  );
-  const closedRequests = requests.filter((r: TravelRequest) =>
-    r.pncStatus === PNCStatus.BOOKED ||
-    r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
-    r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
-    r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
-    r.pncStatus === PNCStatus.CANCELLED_BY_PNC ||
-    r.pncStatus === PNCStatus.CLOSED
-  );
+  const isTravelDatePassed = (r: TravelRequest) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let travelDate = new Date(r.dateOfTravel);
+    if (r.tripType === TripType.ROUND_TRIP && r.returnDate) {
+      travelDate = new Date(r.returnDate);
+    }
+    
+    return travelDate < today;
+  };
+
+  const activeRequests = requests.filter((r: TravelRequest) => {
+    const isCancelledOrRejected = 
+      r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
+      r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_PNC;
+
+    if (isCancelledOrRejected) return false;
+
+    if (r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED) {
+      return !isTravelDatePassed(r);
+    }
+
+    return true;
+  });
+
+  const closedRequests = requests.filter((r: TravelRequest) => {
+    const isCancelledOrRejected = 
+      r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
+      r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_PNC;
+
+    if (isCancelledOrRejected) return true;
+
+    if (r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED) {
+      return isTravelDatePassed(r);
+    }
+
+    return false;
+  });
 
   const [pastRequestsTab, setPastRequestsTab] = useState<string>('All');
 

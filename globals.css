@@ -470,3 +470,6 @@ small,
 }
 foreignObject > div, foreignObject > div > span, .edgeLabel, .edgeLabel span { background-color: transparent !important; }
 
+
+.funnel-trapezoid { position: relative; z-index: 1; } .funnel-trapezoid::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 0.5rem; transform: perspective(200px) rotateX(-15deg); transform-origin: top; }
+

@@ -462,6 +462,70 @@ export const PolicyManagement = ({
         </section>
       )}
 
+      {/* Cancellation Policy (Admin & PNC) */}
+      {(currentUser.role === UserRole.ADMIN || currentUser.role === 'PNC') && (
+        <section className="space-y-4">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Cancellation Policy Splits</h3>
+          <Card className="p-8 space-y-8">
+            <div>
+              <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-4">When Cancelled by PNC</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                <Input
+                  label="NavGurukul Coverage (%)"
+                  type="number"
+                  value={policy.cancellationPncNgCover || 0}
+                  onChange={e => {
+                    let val = parseInt(e.target.value) || 0;
+                    val = val > 100 ? 100 : val < 0 ? 0 : val;
+                    setPolicy({ ...policy, cancellationPncNgCover: val, cancellationPncEmpCover: 100 - val });
+                  }}
+                  onBlur={() => handleUpdatePolicy({ cancellationPncNgCover: policy.cancellationPncNgCover, cancellationPncEmpCover: 100 - policy.cancellationPncNgCover })}
+                />
+                <Input
+                  label="Employee Coverage (%)"
+                  type="number"
+                  value={policy.cancellationPncEmpCover || 0}
+                  onChange={e => {
+                    let val = parseInt(e.target.value) || 0;
+                    val = val > 100 ? 100 : val < 0 ? 0 : val;
+                    setPolicy({ ...policy, cancellationPncEmpCover: val, cancellationPncNgCover: 100 - val });
+                  }}
+                  onBlur={() => handleUpdatePolicy({ cancellationPncNgCover: 100 - policy.cancellationPncEmpCover, cancellationPncEmpCover: policy.cancellationPncEmpCover })}
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-8">
+              <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-4">When Cancelled by Employee</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                <Input
+                  label="NavGurukul Coverage (%)"
+                  type="number"
+                  value={policy.cancellationEmpNgCover || 0}
+                  onChange={e => {
+                    let val = parseInt(e.target.value) || 0;
+                    val = val > 100 ? 100 : val < 0 ? 0 : val;
+                    setPolicy({ ...policy, cancellationEmpNgCover: val, cancellationEmpEmpCover: 100 - val });
+                  }}
+                  onBlur={() => handleUpdatePolicy({ cancellationEmpNgCover: policy.cancellationEmpNgCover, cancellationEmpEmpCover: 100 - policy.cancellationEmpNgCover })}
+                />
+                <Input
+                  label="Employee Coverage (%)"
+                  type="number"
+                  value={policy.cancellationEmpEmpCover || 0}
+                  onChange={e => {
+                    let val = parseInt(e.target.value) || 0;
+                    val = val > 100 ? 100 : val < 0 ? 0 : val;
+                    setPolicy({ ...policy, cancellationEmpEmpCover: val, cancellationEmpNgCover: 100 - val });
+                  }}
+                  onBlur={() => handleUpdatePolicy({ cancellationEmpNgCover: 100 - policy.cancellationEmpEmpCover, cancellationEmpEmpCover: policy.cancellationEmpEmpCover })}
+                />
+              </div>
+            </div>
+          </Card>
+        </section>
+      )}
+
       {/* Igathpuri Meetup Configuration */}
       {isIgatpuriEnabled && (
         <section className="space-y-4">

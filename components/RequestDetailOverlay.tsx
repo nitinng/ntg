@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { TravelRequest, PNCStatus, UserRole, TripType } from '../types';
+import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry } from '../types';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { checkPolicyViolation } from '../utils/policyUtils';
+import CancellationModal from './CancellationModal';
 
 interface RequestDetailOverlayProps {
   request: TravelRequest;
@@ -31,7 +32,36 @@ export const RequestDetailOverlay = ({
   const [ticketCost, setTicketCost] = useState<string | number>(request.ticketCost || '');
   const [vendorName, setVendorName] = useState(request.vendorName || '');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [invoiceUrl, setInvoiceUrl] = useState(request.invoiceUrl || '');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Split Travel State
+  const [isSplitTravel, setIsSplitTravel] = useState(request.travelLegs && request.travelLegs.length > 0 ? true : false);
+  const [legs, setLegs] = useState<any[]>(request.travelLegs || []);
+
+  // Advance tracking state
+  const [purchasedAgainstAdvance, setPurchasedAgainstAdvance] = useState(!!request.advanceId);
+  const [activeAdvances, setActiveAdvances] = useState<Advance[]>([]);
+  const [selectedAdvanceId, setSelectedAdvanceId] = useState<string>(request.advanceId || '');
+
+  const isAnyAdvanceRequired = purchasedAgainstAdvance || (isSplitTravel && legs.some(t => t.purchasedAgainstAdvance));
+
+  React.useEffect(() => {
+    if (isAnyAdvanceRequired && activeAdvances.length === 0) {
+      const fetchAdvances = async () => {
+        const { data, error } = await supabase.from('advances').select('*');
+        if (error) {
+          console.error("Error fetching advances:", error);
+        }
+        if (data) {
+          // Filter in memory to handle potential nulls in is_settled
+          const validAdvances = data.filter(adv => adv.is_settled !== true && adv.amount_left > 0);
+          setActiveAdvances(validAdvances);
+        }
+      }
+      fetchAdvances();
+    }
+  }, [isAnyAdvanceRequired]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -42,8 +72,7 @@ export const RequestDetailOverlay = ({
   const handleUpdate = async () => {
     try {
       let finalStatus = status;
-
-      // Force a reason for rejection or cancellation
+      const isBookingStatus = status === PNCStatus.BOOKED || status === PNCStatus.CLOSED;
       const requiresReason = 
         status === PNCStatus.REJECTED_BY_PNC ||
         status === PNCStatus.CANCELLED_BY_PNC ||
@@ -55,37 +84,118 @@ export const RequestDetailOverlay = ({
         setShowNotes(true);
         return;
       }
+      
+      let finalTicketCost = ticketCost;
+      let finalVendorName = vendorName;
+      let finalInvoiceUrl = invoiceUrl;
+      let advanceIdToSave = request.advanceId;
 
-      setIsUploading(true);
-      let invoiceUrl = request.invoiceUrl;
+      if (isBookingStatus) {
+        if (isSplitTravel) {
+          if (legs.length === 0) {
+            toast.error("Please add at least one ticket for split travel");
+            setIsUploading(false);
+            return;
+          }
+          const hasEmptyFields = legs.some(t => !t.origin || !t.destination || !t.ticketCost || !t.vendorName || !t.invoiceUrl);
+          if (hasEmptyFields) {
+            toast.error("Please fill all fields and upload invoices for all split tickets.");
+            setIsUploading(false);
+            return;
+          }
+          
+          finalTicketCost = legs.reduce((acc, t) => acc + Number(t.ticketCost), 0);
+          finalVendorName = 'Multiple Vendors (Split)';
+          finalInvoiceUrl = legs[0].invoiceUrl; 
+          
+          const { data: { user } } = await supabase.auth.getUser();
+          const userEmail = user?.email || 'Unknown User';
+          
+          for (const ticket of legs) {
+            if (ticket.purchasedAgainstAdvance && ticket.advanceId && !ticket.processed_advance) {
+              const selectedAdv = activeAdvances.find(a => a.id === ticket.advanceId);
+              if (selectedAdv) {
+                const cost = Number(ticket.ticketCost);
+                const newAmountLeft = selectedAdv.amount_left - cost;
+                
+                const newChangelogEntry: AdvanceChangelogEntry = {
+                  timestamp: new Date().toISOString(),
+                  user: userEmail,
+                  action: 'Ticket Purchased',
+                  details: `Leg (${ticket.fromLocation} to ${ticket.toLocation}) for Ticket ${request.submissionId || request.id} purchased for ₹${cost}. Active balance: ₹${newAmountLeft}.`,
+                  relatedTicketId: request.id,
+                  relatedTicketSubmissionId: request.submissionId
+                };
 
-      if (invoiceFile && status === PNCStatus.BOOKED) {
-        const fileExt = invoiceFile.name.split('.').pop();
-        const fileName = `${request.id}_invoice_${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('invoices')
-          .upload(fileName, invoiceFile);
+                const { error: advError } = await supabase.from('advances').update({
+                  amount_left: newAmountLeft,
+                  changelog: [...(selectedAdv.changelog || []), newChangelogEntry]
+                }).eq('id', ticket.advanceId);
+                
+                if (advError) {
+                  console.error("Failed to deduct from advance:", advError);
+                  toast.error(`Failed to deduct from advance for leg ${ticket.fromLocation}-${ticket.toLocation}`);
+                } else {
+                  selectedAdv.amount_left = newAmountLeft;
+                  selectedAdv.changelog = [...(selectedAdv.changelog || []), newChangelogEntry];
+                  ticket.processed_advance = true; // prevent double deduction if re-saved
+                }
+              }
+            }
+          }
+          
+          // Removed auto-close logic
+        } else {
+          if (!ticketCost || !vendorName || !invoiceUrl) {
+            toast.error("Please provide ticket cost, vendor name, and upload the invoice before setting status to Booked or Closed.");
+            setIsUploading(false);
+            return;
+          }
+          // Removed auto-close logic
 
-        if (uploadError) throw uploadError;
+          if (purchasedAgainstAdvance && selectedAdvanceId && ticketCost && !request.advanceId) {
+            advanceIdToSave = selectedAdvanceId;
+            const selectedAdv = activeAdvances.find(a => a.id === selectedAdvanceId);
+            if (selectedAdv) {
+              const cost = parseFloat(ticketCost.toString());
+              const newAmountLeft = selectedAdv.amount_left - cost;
+              
+              const { data: { user } } = await supabase.auth.getUser();
+              const userEmail = user?.email || 'Unknown User';
+              
+              const newChangelogEntry: AdvanceChangelogEntry = {
+                timestamp: new Date().toISOString(),
+                user: userEmail,
+                action: 'Ticket Purchased',
+                details: `Ticket ${request.submissionId || request.id} purchased for ₹${cost}. Active balance: ₹${newAmountLeft}. Ticket booked on ${new Date().toLocaleDateString()}.`,
+                relatedTicketId: request.id,
+                relatedTicketSubmissionId: request.submissionId
+              };
 
-        const { data } = supabase.storage.from('invoices').getPublicUrl(fileName);
-        invoiceUrl = data.publicUrl;
-      }
+              const { error: advError } = await supabase.from('advances').update({
+                amount_left: newAmountLeft,
+                changelog: [...(selectedAdv.changelog || []), newChangelogEntry]
+              }).eq('id', selectedAdvanceId);
 
-      // Auto-close if all details are present
-      if (status === PNCStatus.BOOKED && ticketCost && vendorName && invoiceUrl) {
-        finalStatus = PNCStatus.CLOSED;
-        toast.success("All booking details verified. Request automatically closed!");
+              if (advError) {
+                console.error("Failed to deduct from advance:", advError);
+                toast.error("Failed to deduct from advance.");
+              }
+            }
+          }
+        }
       }
 
       await onUpdate({
         ...request,
         pncStatus: finalStatus,
-        statusChangeReason: finalStatus === PNCStatus.CLOSED ? (statusChangeReason || 'Auto-closed after booking details completed') : statusChangeReason,
+        statusChangeReason: statusChangeReason,
         cancelledReason: (finalStatus === PNCStatus.CANCELLED_BY_EMPLOYEE || finalStatus === PNCStatus.CANCELLED_BY_PNC) ? statusChangeReason : request.cancelledReason,
-        ticketCost: status === PNCStatus.BOOKED ? parseFloat(ticketCost.toString()) : request.ticketCost,
-        vendorName: status === PNCStatus.BOOKED ? vendorName : request.vendorName,
-        invoiceUrl: status === PNCStatus.BOOKED ? invoiceUrl : request.invoiceUrl
+        ticketCost: isBookingStatus ? parseFloat(finalTicketCost.toString()) : request.ticketCost,
+        vendorName: isBookingStatus ? finalVendorName : request.vendorName,
+        invoiceUrl: isBookingStatus ? finalInvoiceUrl : request.invoiceUrl,
+        travelLegs: isBookingStatus && isSplitTravel ? legs : request.travelLegs,
+        advanceId: advanceIdToSave
       });
 
       setIsUploading(false);
@@ -96,27 +206,7 @@ export const RequestDetailOverlay = ({
     }
   };
 
-  const handleCancelRequest = async () => {
-    if (!cancellationReason.trim()) {
-      toast.error("Please enter a reason for cancelling this request.");
-      return;
-    }
-    try {
-      setIsUploading(true);
-      await onUpdate({
-        ...request,
-        pncStatus: PNCStatus.CANCELLED_BY_EMPLOYEE,
-        statusChangeReason: cancellationReason,
-        cancelledReason: cancellationReason
-      });
-      setIsUploading(false);
-      onClose();
-    } catch (error: any) {
-      setIsUploading(false);
-      console.error(error);
-      toast.error("Failed to cancel request: " + error.message);
-    }
-  };
+  // handleCancelRequest removed as it is now handled by CancellationModal
 
   const InfoRow = ({ label, value, icon, fullWidth = false }: any) => (
     <div className={`${fullWidth ? 'col-span-2' : ''} space-y-1`}>
@@ -138,9 +228,9 @@ export const RequestDetailOverlay = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end transition-all duration-300">
-      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-all duration-300" onClick={onClose}></div>
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full flex flex-col animate-in slide-in-from-right transition-all duration-300 shadow-2xl border-l border-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-all duration-300">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-all duration-300" onClick={onClose}></div>
+      <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 max-h-[95vh] rounded-2xl flex flex-col animate-in zoom-in-95 transition-all duration-300 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
 
         {/* Header */}
         <header className="px-6 py-4 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
@@ -228,22 +318,59 @@ export const RequestDetailOverlay = ({
             {(request.pncStatus === PNCStatus.BOOKED || request.pncStatus === PNCStatus.CLOSED) && (
               <div className="col-span-2">
                 <SectionHeader title="Booking Confirmation" icon={<i className="fa-solid fa-check-circle"></i>} />
-                <div className="grid grid-cols-2 gap-y-6 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-lg border border-emerald-100 dark:border-emerald-800/20">
-                  <InfoRow label="Ticket Cost" value={`₹ ${request.ticketCost}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} />
-                  <InfoRow label="Vendor" value={request.vendorName} icon={<i className="fa-solid fa-shop"></i>} />
-                  {request.invoiceUrl ? (
-                    <div className="col-span-2">
-                      <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
-                        <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
-                      </p>
-                      <a href={request.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
-                        View Ticket <i className="fa-solid fa-external-link-alt text-xs"></i>
-                      </a>
+                
+                {request.travelLegs && request.travelLegs.length > 0 ? (
+                  <div className="space-y-4">
+                    {request.travelLegs.map((ticket, index) => (
+                      <div key={index} className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-lg border border-emerald-100 dark:border-emerald-800/20">
+                        <h4 className="text-sm font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-3 pb-2 border-b border-emerald-200/50 dark:border-emerald-800/50 flex items-center">
+                          <i className="fa-solid fa-route mr-2"></i> Leg {index + 1}: {ticket.fromLocation} to {ticket.toLocation}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-y-4 gap-x-6">
+                          <InfoRow label="Mode" value={ticket.travelMode} icon={<i className={`fa-solid ${ticket.travelMode === 'Flight' ? 'fa-plane' : ticket.travelMode === 'Train' ? 'fa-train' : 'fa-bus'}`}></i>} />
+                          <InfoRow label="Vendor" value={ticket.vendorName || '—'} icon={<i className="fa-solid fa-shop"></i>} />
+                          <InfoRow label="Ticket Cost" value={`₹ ${ticket.ticketCost}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} />
+                          
+                          <div className="col-span-1">
+                            <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
+                              <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
+                            </p>
+                            {ticket.invoiceUrl ? (
+                              <a href={ticket.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                                View Leg {index + 1} <i className="fa-solid fa-external-link-alt text-xs"></i>
+                              </a>
+                            ) : (
+                              <span className="text-sm font-bold text-slate-800 dark:text-white">Not Uploaded</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Summary row */}
+                    <div className="flex justify-between items-center bg-slate-100 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <span className="text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest">Total Trip Cost</span>
+                      <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">₹ {request.travelLegs.reduce((sum, t) => sum + (Number(t.ticketCost) || 0), 0).toLocaleString()}</span>
                     </div>
-                  ) : (
-                    <InfoRow label="Ticket" value="Not Uploaded" icon={<i className="fa-solid fa-file-invoice"></i>} />
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-y-6 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-lg border border-emerald-100 dark:border-emerald-800/20">
+                    <InfoRow label="Ticket Cost" value={`₹ ${request.ticketCost}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} />
+                    <InfoRow label="Vendor" value={request.vendorName} icon={<i className="fa-solid fa-shop"></i>} />
+                    {request.invoiceUrl ? (
+                      <div className="col-span-2">
+                        <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
+                          <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
+                        </p>
+                        <a href={request.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                          View Ticket <i className="fa-solid fa-external-link-alt text-xs"></i>
+                        </a>
+                      </div>
+                    ) : (
+                      <InfoRow label="Ticket" value="Not Uploaded" icon={<i className="fa-solid fa-file-invoice"></i>} />
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -291,11 +418,10 @@ export const RequestDetailOverlay = ({
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer Actions */}
-        <div className="p-8 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20">
-          {role === UserRole.PNC ? (
+        {/* Actions Area */}
+        <div className="mt-8 pt-8 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800">
+            {role === UserRole.PNC ? (
             <div className="space-y-3">
               <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
 
@@ -313,39 +439,198 @@ export const RequestDetailOverlay = ({
               </div>
 
               {/* Conditional Inputs for Booked Status */}
-              {status === PNCStatus.BOOKED && (
+              {(status === PNCStatus.BOOKED || status === PNCStatus.CLOSED) && (
                 <div className="space-y-3 animate-in slide-in-from-top-2 pt-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Ticket Cost (₹)</label>
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm focus:border-indigo-600 outline-none"
-                        value={ticketCost}
-                        onChange={e => setTicketCost(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Vendor Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Indigo"
-                        className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm focus:border-indigo-600 outline-none"
-                        value={vendorName}
-                        onChange={e => setVendorName(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Upload Ticket</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.png,.jpeg"
-                      onChange={handleFileChange}
-                      className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                  <label className="flex items-center gap-2 cursor-pointer mb-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-lg transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-900/40">
+                    <input 
+                      type="checkbox" 
+                      checked={isSplitTravel}
+                      onChange={(e) => setIsSplitTravel(e.target.checked)}
+                      className="w-5 h-5 text-indigo-600 rounded border-slate-300"
                     />
-                  </div>
+                    <span className="text-sm font-bold text-indigo-900 dark:text-indigo-200">Is it a split travel / has multiple tickets to upload?</span>
+                  </label>
+
+                  {isSplitTravel ? (
+                    <div className="space-y-4">
+                      {legs.map((ticket, index) => (
+                        <div key={ticket.id || index} className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                          <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                            <span className="text-sm font-black text-indigo-600 uppercase tracking-widest"><i className="fa-solid fa-ticket mr-2"></i> Leg {index + 1}</span>
+                            <button onClick={() => setLegs(legs.filter((_, i) => i !== index))} className="text-rose-500 hover:text-rose-700 text-xs font-bold px-2 py-1 bg-rose-50 dark:bg-rose-900/20 rounded-md">
+                              <i className="fa-solid fa-trash mr-1"></i> Remove
+                            </button>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">From</label>
+                              <input type="text" placeholder="e.g. DEL" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.fromLocation || ''} onChange={e => { const newT = [...legs]; newT[index].origin = e.target.value; setLegs(newT); }} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">To</label>
+                              <input type="text" placeholder="e.g. BOM" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.toLocation || ''} onChange={e => { const newT = [...legs]; newT[index].destination = e.target.value; setLegs(newT); }} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">Mode</label>
+                              <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.travelMode || ''} onChange={e => { const newT = [...legs]; newT[index].travel_mode = e.target.value; setLegs(newT); }}>
+                                <option value="Flight">Flight</option>
+                                <option value="Train">Train</option>
+                                <option value="Bus">Bus</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">Cost (₹)</label>
+                              <input type="number" placeholder="0" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.ticketCost || ''} onChange={e => { const newT = [...legs]; newT[index].ticketCost = e.target.value; setLegs(newT); }} />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-500 block mb-1">Vendor</label>
+                              <input type="text" placeholder="Indigo" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.vendorName || ''} onChange={e => { const newT = [...legs]; newT[index].vendorName = e.target.value; setLegs(newT); }} />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-1">Upload Ticket</label>
+                            {ticket.invoiceUrl ? (
+                              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/30 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                <i className="fa-solid fa-check-circle"></i> Ticket Uploaded
+                                <button onClick={() => { const newT = [...legs]; newT[index].invoiceUrl = ''; setLegs(newT); }} className="text-xs text-rose-500 ml-auto p-1 hover:bg-rose-100 rounded"><i className="fa-solid fa-xmark text-lg"></i></button>
+                              </div>
+                            ) : (
+                              <input type="file" accept=".pdf,.jpg,.png" className="w-full text-xs file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" onChange={async (e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  const file = e.target.files[0];
+                                  const fileExt = file.name.split('.').pop();
+                                  const fileName = `split_${request.id}_${Date.now()}.${fileExt}`;
+                                  
+                                  const toastId = toast.loading("Uploading ticket...");
+                                  const { error: uploadError } = await supabase.storage.from('invoices').upload(fileName, file);
+                                  if (!uploadError) {
+                                    const { data } = supabase.storage.from('invoices').getPublicUrl(fileName);
+                                    const newT = [...legs];
+                                    newT[index].invoiceUrl = data.publicUrl;
+                                    setLegs(newT);
+                                    toast.success("Ticket uploaded successfully!", { id: toastId });
+                                  } else { 
+                                    toast.error("Upload failed", { id: toastId }); 
+                                  }
+                                }
+                              }} />
+                            )}
+                          </div>
+
+                          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                            <label className="flex items-center gap-2 cursor-pointer mb-3">
+                              <input type="checkbox" checked={ticket.purchasedAgainstAdvance || false} onChange={e => { const newT = [...legs]; newT[index].purchasedAgainstAdvance = e.target.checked; setLegs(newT); }} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600" />
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased against advance</span>
+                            </label>
+                            {ticket.purchasedAgainstAdvance && (
+                              <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none cursor-pointer" value={ticket.advanceId || ''} onChange={e => { const newT = [...legs]; newT[index].advanceId = e.target.value; setLegs(newT); }}>
+                                <option value="">-- Select an Active Advance --</option>
+                                {activeAdvances.map(adv => (
+                                  <option key={adv.id} value={adv.id}>{adv.advance_code || adv.id.substring(0,8)} - Balance ₹{adv.amount_left.toLocaleString()}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <button onClick={() => setLegs([...legs, { id: Date.now().toString(), travelMode: 'Flight', purchasedAgainstAdvance: false }])} className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-slate-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm">
+                        <i className="fa-solid fa-plus-circle text-lg"></i> Add Next Ticket
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Ticket Cost (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm focus:border-indigo-600 outline-none"
+                            value={ticketCost}
+                            onChange={e => setTicketCost(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Vendor Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Indigo"
+                            className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm focus:border-indigo-600 outline-none"
+                            value={vendorName}
+                            onChange={e => setVendorName(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Upload Ticket</label>
+                        {invoiceUrl ? (
+                          <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/30 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                            <i className="fa-solid fa-check-circle"></i> Ticket Uploaded
+                            <button onClick={() => setInvoiceUrl('')} className="text-xs text-rose-500 ml-auto p-1 hover:bg-rose-100 rounded"><i className="fa-solid fa-xmark text-lg"></i></button>
+                          </div>
+                        ) : (
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.png,.jpeg"
+                            onChange={async (e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                const file = e.target.files[0];
+                                const fileExt = file.name.split('.').pop();
+                                const fileName = `${request.id}_invoice_${Date.now()}.${fileExt}`;
+                                const toastId = toast.loading("Uploading ticket...");
+                                const { error: uploadError } = await supabase.storage.from('invoices').upload(fileName, file);
+                                if (!uploadError) {
+                                  const { data } = supabase.storage.from('invoices').getPublicUrl(fileName);
+                                  setInvoiceUrl(data.publicUrl);
+                                  toast.success("Ticket uploaded successfully!", { id: toastId });
+                                } else { 
+                                  toast.error("Upload failed", { id: toastId }); 
+                                }
+                              }
+                            }}
+                            className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                          />
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t dark:border-slate-800">
+                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                          <input 
+                            type="checkbox" 
+                            checked={purchasedAgainstAdvance}
+                            onChange={(e) => setPurchasedAgainstAdvance(e.target.checked)}
+                            disabled={!!request.advanceId}
+                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600"
+                          />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased against advance</span>
+                        </label>
+
+                        {purchasedAgainstAdvance && (
+                          <div className="animate-in slide-in-from-top-2">
+                            <select
+                              className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all cursor-pointer disabled:opacity-50"
+                              value={selectedAdvanceId}
+                              onChange={(e) => setSelectedAdvanceId(e.target.value)}
+                              disabled={!!request.advanceId}
+                            >
+                              <option value="">-- Select an Active Advance --</option>
+                              {activeAdvances.map(adv => (
+                                <option key={adv.id} value={adv.id}>
+                                  {adv.advance_code || adv.id.substring(0,8)} - Balance ₹{adv.amount_left.toLocaleString()} / (Total ₹{adv.amount_received.toLocaleString()})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -398,41 +683,18 @@ export const RequestDetailOverlay = ({
                   <i className="fa-solid fa-circle-xmark mr-2"></i> Cancel Request
                 </button>
               ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Cancel Request Reason</label>
-                      <button 
-                        onClick={() => setShowCancellationForm(false)} 
-                        className="text-xs font-black text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 uppercase tracking-widest"
-                      >
-                        Back
-                      </button>
-                    </div>
-                    <textarea
-                      className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
-                      rows={3}
-                      placeholder="Please provide a reason for cancelling this travel request (required)..."
-                      value={cancellationReason}
-                      onChange={e => setCancellationReason(e.target.value)}
-                    />
-                  </div>
-                  <button
-                    onClick={handleCancelRequest}
-                    disabled={isUploading}
-                    className="w-full bg-rose-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    {isUploading ? (
-                      <>
-                        <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> Cancelling...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fa-solid fa-check mr-2"></i> Confirm Cancellation
-                      </>
-                    )}
-                  </button>
-                </div>
+                <CancellationModal 
+                  request={request}
+                  legs={request.travelLegs || []}
+                  role={role}
+                  onClose={() => setShowCancellationForm(false)}
+                  onSuccess={() => {
+                     setShowCancellationForm(false);
+                     onClose();
+                     // trigger a refresh ideally
+                     window.location.reload(); 
+                  }}
+                />
               )}
             </div>
           ) : (
@@ -457,7 +719,8 @@ export const RequestDetailOverlay = ({
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default RequestDetailOverlay;

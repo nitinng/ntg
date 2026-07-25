@@ -10,27 +10,29 @@
     /* Font Family */
     --font-primary: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
 
-    /* Text Sizes */
+    /* Text Sizes — kept in sync with tailwind.config.js's fontSize scale.
+       Graduated reduction: 2xs/xs unchanged (already near legibility floor),
+       reduction grows toward the larger steps. */
     --text-2xs: 0.6875rem;
     /* 11px - Badges, tags */
     --text-xs: 0.75rem;
     /* 12px - Labels, timestamps, metadata */
-    --text-sm: 0.875rem;
-    /* 14px - Secondary text, captions */
-    --text-base: 1rem;
-    /* 16px - Body text, paragraphs */
-    --text-lg: 1.125rem;
-    /* 18px - Emphasized body text */
-    --text-xl: 1.25rem;
-    /* 20px - Section subheadings */
-    --text-2xl: 1.5rem;
-    /* 24px - Page subheadings */
-    --text-3xl: 1.875rem;
-    /* 30px - Page titles (H1) */
-    --text-4xl: 2.25rem;
-    /* 36px - Hero headings */
-    --text-5xl: 3rem;
-    /* 48px - Large marketing headlines */
+    --text-sm: 0.8125rem;
+    /* 13px - Secondary text, captions */
+    --text-base: 0.9375rem;
+    /* 15px - Body text, paragraphs */
+    --text-lg: 1.0625rem;
+    /* 17px - Emphasized body text */
+    --text-xl: 1.125rem;
+    /* 18px - Section subheadings */
+    --text-2xl: 1.375rem;
+    /* 22px - Page subheadings */
+    --text-3xl: 1.6875rem;
+    /* 27px - Page titles (H1) */
+    --text-4xl: 2rem;
+    /* 32px - Hero headings */
+    --text-5xl: 2.625rem;
+    /* 42px - Large marketing headlines */
 
     /* Line Heights */
     --leading-tight: 1.2;
@@ -56,7 +58,205 @@
 
 
 html {
-    /* font-size: 90%; removed for typography standardization */
+    /* Sizing is now handled per-step in tailwind.config.js's fontSize scale
+       (graduated reduction, smallest steps protected) — do not add a flat
+       font-size percentage here, it double-shrinks already-small text
+       (badges/captions) below a comfortable reading size. */
+}
+
+body {
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Heading styles */
+h1 {
+    font-size: var(--text-3xl);
+    line-height: var(--leading-tight);
+    font-weight: 700;
+}
+
+h2 {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-snug);
+    font-weight: 700;
+}
+
+h3 {
+    font-size: var(--text-xl);
+    line-height: var(--leading-snug);
+    font-weight: 600;
+}
+
+h4 {
+    font-size: var(--text-lg);
+    line-height: var(--leading-normal);
+    font-weight: 600;
+}
+
+/* Button styles */
+button {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    font-weight: 500;
+}
+
+/* Input & Select styles */
+input,
+select,
+textarea {
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    font-weight: 400;
+}
+
+/* Label styles */
+label {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    font-weight: 500;
+}
+
+/* Small text (captions, helper text) */
+small,
+.text-small {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+}
+
+/* Extra small text (timestamps, metadata) */
+.text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+}
+
+/* Dark mode scrollbar */
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(71, 85, 105, 0.7);
+}
+
+/* Animation utilities */
+@keyframes zoom-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.animate-in {
+    animation: zoom-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+@keyframes slide-in-from-bottom {
+    from {
+        transform: translateY(1rem);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.slide-in-from-bottom-4 {
+    animation: slide-in-from-bottom 0.4s ease-out;
+}
+
+/* --- Responsive Media Queries --- */
+
+@media (max-width: 768px) {
+
+    /* Top navigation bar should remain fixed and not overflow */
+    .app-navbar {
+        position: fixed !important;
+        top: 0 !important;
+        width: 100% !important;
+        z-index: 50 !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Fixed top nav pushes content down */
+    .flex-1.flex.flex-col.md\:flex-row {
+        margin-top: 4rem !important;
+        /* Height of the navbar */
+    }
+
+    /* Sidebar navigation collapse into a hamburger menu */
+    .app-sidebar {
+        position: fixed !important;
+        top: 4rem !important;
+        /* Below navbar */
+        left: -100% !important;
+        width: 250px !important;
+        height: calc(100vh - 4rem) !important;
+        z-index: 45 !important;
+        display: block !important;
+        transition: left 0.3s ease-in-out !important;
+        margin: 0 !important;
+    }
+
+    .app-sidebar.sidebar-open {
+        left: 0 !important;
+        box-shadow: 10px 0 20px rgba(0, 0, 0, 0.1);
+    }
+}
+
+@media (max-width: 480px) {
+
+    /* Dashboard content area should have appropriate padding on smaller screens */
+    .app-main {
+        padding: 1.25rem 1rem !important;
+    }
+
+    /* All booking cards should stack vertically in a single column on mobile instead of the current 3-column grid */
+    /* Sizing is now handled per-step in tailwind.config.js's fontSize scale
+       (graduated reduction, smallest steps protected) — do not add a flat
+       font-size percentage here, it double-shrinks already-small text
+       (badges/captions) below a comfortable reading size. */
 }
 
 body {
@@ -252,3 +452,21 @@ small,
         grid-template-columns: 1fr !important;
     }
 }
+
+/* Mermaid Diagram Overrides */
+.node rect {
+    rx: 8px !important;
+    ry: 8px !important;
+}
+
+/* Nuke the internal Mermaid SVG backgrounds for edges so they don't clash with our HTML */
+.edgeLabel rect,
+.label-container rect,
+.edge-label-bg,
+.edgeLabel {
+    fill: transparent !important;
+    stroke: transparent !important;
+    background-color: transparent !important;
+}
+foreignObject > div, foreignObject > div > span, .edgeLabel, .edgeLabel span { background-color: transparent !important; }
+

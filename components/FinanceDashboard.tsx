@@ -96,13 +96,13 @@ export const FinanceDashboard = ({ requests }: FinanceDashboardProps) => {
                 <div className="flex flex-col items-end gap-1.5">
                   <span className="font-bold text-slate-900 dark:text-white">₹{r.ticketCost?.toLocaleString()}</span>
                   {r.paymentStatus === PaymentStatus.PAID ? (
-                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><i className="fa-solid fa-check"></i> Paid</span>
+                    <span className="text-2xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><i className="fa-solid fa-check"></i> Paid</span>
                   ) : r.paymentStatus === PaymentStatus.PENDING ? (
-                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><i className="fa-regular fa-clock"></i> Pending</span>
+                    <span className="text-2xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><i className="fa-regular fa-clock"></i> Pending</span>
                   ) : r.paymentStatus === PaymentStatus.REIMBURSED ? (
-                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"><i className="fa-solid fa-arrow-rotate-left"></i> Reimbursed</span>
+                    <span className="text-2xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"><i className="fa-solid fa-arrow-rotate-left"></i> Reimbursed</span>
                   ) : (
-                    <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{r.paymentStatus || 'N/A'}</span>
+                    <span className="text-2xs uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{r.paymentStatus || 'N/A'}</span>
                   )}
                 </div>
               </div>

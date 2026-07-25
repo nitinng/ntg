@@ -192,7 +192,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = 
                                     <div className="w-full border-t border-slate-200 dark:border-slate-800"></div>
                                 </div>
                                 <div className="relative flex justify-center text-sm">
-                                    <span className="px-2 bg-white dark:bg-slate-900 text-slate-400 font-bold tracking-wider uppercase text-[10px]">Or continue with email</span>
+                                    <span className="px-2 bg-white dark:bg-slate-900 text-slate-400 font-bold tracking-wider uppercase text-2xs">Or continue with email</span>
                                 </div>
                             </div>
                             <form onSubmit={handleAuth} className="space-y-4">

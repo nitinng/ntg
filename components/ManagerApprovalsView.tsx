@@ -16,7 +16,7 @@ const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) =>
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-black text-slate-400 font-mono uppercase">{request.submissionId || request.id}</span>
-            {request.hasViolation && <span className="text-xs font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-lg border border-rose-200">Policy Violation</span>}
+            {request.hasViolation && <span className="text-2xs font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-lg border border-rose-200">Policy Violation</span>}
           </div>
           <h3 className="text-2xl font-black text-slate-900 dark:text-white">Approval Request</h3>
         </div>
@@ -153,7 +153,7 @@ export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsVie
                   </div>
                   
                   <div className="flex justify-between items-center mb-5 relative z-10">
-                    <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Option { (idx % 4) + 1 }: {theme.name}</span>
+                    <span className={`text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Option { (idx % 4) + 1 }: {theme.name}</span>
                     <span className="font-mono text-xs font-bold text-slate-500 tracking-wider">{r.submissionId || r.id}</span>
                   </div>
 
@@ -199,9 +199,9 @@ export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsVie
                   <div className="flex flex-row sm:flex-col items-center w-full h-full justify-between sm:py-6 relative z-10">
                     <div className="w-full text-left sm:text-center shrink-0">
                       {r.hasViolation ? (
-                        <div className="inline-block bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-black px-2 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 animate-pulse">POLICY<br className="hidden sm:block"/> REVIEW</div>
+                        <div className="inline-block bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-2xs font-black px-2 py-1 rounded-md border border-rose-200 dark:border-rose-500/30 animate-pulse">POLICY<br className="hidden sm:block"/> REVIEW</div>
                       ) : (
-                        <div className="inline-block bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-xs font-black px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">CLEAR</div>
+                        <div className="inline-block bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-2xs font-black px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20">CLEAR</div>
                       )}
                     </div>
                     

@@ -4033,8 +4033,9 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
       r.pncStatus === PNCStatus.CANCELLED_BY_PNC;
 
     if (isCancelledOrRejected) return false;
+    if (r.pncStatus === PNCStatus.CLOSED) return false;
 
-    if (r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED) {
+    if (r.pncStatus === PNCStatus.BOOKED) {
       return !isTravelDatePassed(r);
     }
 
@@ -4049,8 +4050,9 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
       r.pncStatus === PNCStatus.CANCELLED_BY_PNC;
 
     if (isCancelledOrRejected) return true;
+    if (r.pncStatus === PNCStatus.CLOSED) return true;
 
-    if (r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED) {
+    if (r.pncStatus === PNCStatus.BOOKED) {
       return isTravelDatePassed(r);
     }
 

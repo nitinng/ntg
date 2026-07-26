@@ -137,7 +137,7 @@ export const RequestDetailOverlay = ({
             setIsUploading(false);
             return;
           }
-          const hasEmptyFields = legs.some(t => !t.origin || !t.destination || !t.ticketCost || !t.vendorName || !t.invoiceUrl);
+          const hasEmptyFields = legs.some(t => !t.fromLocation || !t.toLocation || !t.travelMode || !t.ticketCost || !t.vendorName || !t.invoiceUrl);
           if (hasEmptyFields) {
             toast.error("Please fill all fields and upload invoices for all split tickets.");
             setIsUploading(false);
@@ -514,18 +514,18 @@ export const RequestDetailOverlay = ({
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="text-xs font-bold text-slate-500 block mb-1">From</label>
-                              <input type="text" placeholder="e.g. DEL" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.fromLocation || ''} onChange={e => { const newT = [...legs]; newT[index].origin = e.target.value; setLegs(newT); }} />
+                              <input type="text" placeholder="e.g. DEL" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.fromLocation || ''} onChange={e => { const newT = [...legs]; newT[index].fromLocation = e.target.value; setLegs(newT); }} />
                             </div>
                             <div>
                               <label className="text-xs font-bold text-slate-500 block mb-1">To</label>
-                              <input type="text" placeholder="e.g. BOM" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.toLocation || ''} onChange={e => { const newT = [...legs]; newT[index].destination = e.target.value; setLegs(newT); }} />
+                              <input type="text" placeholder="e.g. BOM" className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.toLocation || ''} onChange={e => { const newT = [...legs]; newT[index].toLocation = e.target.value; setLegs(newT); }} />
                             </div>
                           </div>
 
                           <div className="grid grid-cols-3 gap-4">
                             <div>
                               <label className="text-xs font-bold text-slate-500 block mb-1">Mode</label>
-                              <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.travelMode || ''} onChange={e => { const newT = [...legs]; newT[index].travel_mode = e.target.value; setLegs(newT); }}>
+                              <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm focus:border-indigo-600 outline-none font-medium" value={ticket.travelMode || ''} onChange={e => { const newT = [...legs]; newT[index].travelMode = e.target.value; setLegs(newT); }}>
                                 <option value="Flight">Flight</option>
                                 <option value="Train">Train</option>
                                 <option value="Bus">Bus</option>

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import {
-  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest
+  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest, Department
 } from './types';
 import { mockUsers, initialRequests } from './mockData';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -44,6 +44,7 @@ const PNCDashboard = React.lazy(() => import('./components/PNCDashboard'));
 const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagement'));
 const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
 const CancellationRequestsQueue = React.lazy(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
+const DepartmentManagement = React.lazy(() => import('./components/DepartmentManagement').then(module => ({ default: module.DepartmentManagement })));
 const FinanceDashboard = React.lazy(() => import('./components/FinanceDashboard'));
 const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprovalsView'));
 const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
@@ -1229,7 +1230,7 @@ const SubHeader = ({ title }: { title: string }) => (
   </div>
 );
 
-const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, onToggleTheme, onLogout }: any) => {
+const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, onToggleTheme, onLogout, departments = [] }: any) => {
   const [formData, setFormData] = useState(user);
 
   // Sync internal state if prop changes (important for role toggles)
@@ -1469,7 +1470,13 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
         {/* Org Details */}
         <Section title="Professional Details" icon="fa-briefcase">
-          <Input label="Department" value={formData.department || ''} onChange={(e: any) => setFormData({ ...formData, department: e.target.value })} />
+          <Select
+            label="Department"
+            value={formData.department || ''}
+            options={departments.map((d: any) => ({ label: d.name, value: d.name }))}
+            placeholder="Select department..."
+            onChange={(e: any) => setFormData({ ...formData, department: e.target.value })}
+          />
           <Input label="Campus / Location" value={formData.campus || ''} onChange={(e: any) => setFormData({ ...formData, campus: e.target.value })} />
           <Input label="Approving Manager Name" value={formData.managerName || ''} onChange={(e: any) => setFormData({ ...formData, managerName: e.target.value })} />
           <Input label="Approving Manager Email" value={formData.managerEmail || ''} onChange={(e: any) => setFormData({ ...formData, managerEmail: e.target.value })} />
@@ -2663,6 +2670,7 @@ const App: React.FC = () => {
   });
 
   const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const [meetupAvailabilityRequests, setMeetupAvailabilityRequests] = useState<MeetupAvailabilityRequest[]>([]);
   const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
@@ -3010,12 +3018,30 @@ const App: React.FC = () => {
           }
         };
 
+        const fetchDepartments = async () => {
+          const { data: deptData, error: deptError } = await supabase
+            .from('departments')
+            .select('*')
+            .order('name', { ascending: true });
+
+          if (!deptError && deptData) {
+            setDepartments(deptData.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              hod_name: d.hod_name,
+              created_at: d.created_at,
+              updated_at: d.updated_at
+            })));
+          }
+        };
+
         await Promise.all([
           fetchTravelRequests(),
           fetchAllUsers(),
           fetchMeetups(),
           fetchPolicies(),
-          fetchSettings()
+          fetchSettings(),
+          fetchDepartments()
         ]);
       } catch (err: any) {
         toast.error("Failed to load data: " + err.message);
@@ -3383,6 +3409,9 @@ const App: React.FC = () => {
         return renderDashboard();
       case 'cancellations':
         return <CancellationsDashboard currentUser={currentUser} />;
+      case 'departments':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <DepartmentManagement departments={departments} setDepartments={setDepartments} />;
       case 'cancellation-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return (
@@ -3416,7 +3445,7 @@ const App: React.FC = () => {
       case 'profile':
         return (
           <div className="max-w-4xl mx-auto transition-all duration-300">
-            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} />
+            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} departments={departments} />
           </div>
         );
       case 'settings':
@@ -3563,6 +3592,7 @@ const App: React.FC = () => {
             onUpdate={handleUpdateUser}
             isLock={true}
             onSkip={handleSkipVerification}
+            departments={departments}
           />
         </div>
       </div>
@@ -3659,6 +3689,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
               </div>
 
             </>
@@ -3688,6 +3719,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
               </div>
 
             </>
@@ -3718,6 +3750,7 @@ const App: React.FC = () => {
           currentUser={currentUser!}
           policies={travelModePolicies}
           meetupContext={meetupContext}
+          departments={departments}
           onSubmit={async (data: any) => {
             try {
               // Create temporary request object to check for violations
@@ -3888,6 +3921,7 @@ const App: React.FC = () => {
           currentUser={currentUser!}
           employees={users} // Pass all users for selection
           policies={travelModePolicies}
+          departments={departments}
           onSubmit={async (data: any) => {
             try {
               let invoiceUrl = null;

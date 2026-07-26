@@ -344,3 +344,11 @@ export interface Advance {
   created_at: string;
   updated_at: string;
 }
+
+export interface Department {
+  id: string;
+  name: string;
+  hod_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}

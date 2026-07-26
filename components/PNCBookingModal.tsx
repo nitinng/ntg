@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus, Department } from '../types';
 import Input from './Input';
 import Select from './Select';
 
@@ -10,15 +10,18 @@ interface PNCBookingModalProps {
     currentUser: User; // The PNC user
     employees: User[]; // List of all employees to select from
     policies: TravelModePolicy[];
+    departments?: Department[];
 }
 
-const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }: PNCBookingModalProps) => {
+const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, departments = [] }: PNCBookingModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
     // Filter out only employees for the dropdown if needed, or show all
     // For simplicity, showing all users as options
     const employeeOptions = employees.map(u => ({ label: `${u.name} (${u.email})`, value: u.id }));
+
+    const departmentOptions = (departments || []).map(d => ({ label: d.name, value: d.name }));
 
     const [data, setData] = useState({
         requesterId: '',
@@ -171,9 +174,11 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                                         value={data.requesterPhone}
                                         onChange={(e: any) => handleInputChange('requesterPhone', e.target.value)}
                                     />
-                                    <Input
+                                    <Select
                                         label="Department"
                                         value={data.requesterDepartment}
+                                        options={departmentOptions}
+                                        placeholder="Select department..."
                                         onChange={(e: any) => handleInputChange('requesterDepartment', e.target.value)}
                                     />
                                 </div>

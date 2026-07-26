@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy, Department } from '../types';
 import Input from './Input';
 import Select from './Select';
 
@@ -12,9 +12,10 @@ interface NewRequestModalProps {
         startDate: string;
         endDate: string;
     } | null;
+    departments?: Department[];
 }
 
-const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext }: NewRequestModalProps) => {
+const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext, departments = [] }: NewRequestModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
@@ -32,6 +33,8 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
     const bloodGroupOptions = [
         'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'
     ].map(g => ({ label: g, value: g }));
+
+    const departmentOptions = (departments || []).map(d => ({ label: d.name, value: d.name }));
 
     const [data, setData] = useState({
         requesterName: currentUser.name,
@@ -183,9 +186,11 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
                                         value={data.requesterPhone}
                                         onChange={(e: any) => handleInputChange('requesterPhone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                                     />
-                                    <Input
+                                    <Select
                                         label="Department"
                                         value={data.requesterDepartment}
+                                        options={departmentOptions}
+                                        placeholder="Select department..."
                                         onChange={(e: any) => handleInputChange('requesterDepartment', e.target.value)}
                                     />
                                 </div>

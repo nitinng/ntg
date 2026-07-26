@@ -352,3 +352,9 @@ export interface Department {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface TestingSettings {
+  admin: boolean;
+  pnc: boolean;
+  employee: boolean;
+}

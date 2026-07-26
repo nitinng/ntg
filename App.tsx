@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import {
-  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest, Department
+  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest, Department, TestingSettings
 } from './types';
 import { mockUsers, initialRequests } from './mockData';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -45,6 +45,7 @@ const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagemen
 const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
 const CancellationRequestsQueue = React.lazy(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
 const DepartmentManagement = React.lazy(() => import('./components/DepartmentManagement').then(module => ({ default: module.DepartmentManagement })));
+const TestingSettingsView = React.lazy(() => import('./components/TestingSettingsView').then(module => ({ default: module.TestingSettingsView })));
 const FinanceDashboard = React.lazy(() => import('./components/FinanceDashboard'));
 const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprovalsView'));
 const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
@@ -2671,6 +2672,11 @@ const App: React.FC = () => {
 
   const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [testingSettings, setTestingSettings] = useState<TestingSettings>({
+    admin: true,
+    pnc: true,
+    employee: true
+  });
 
   const [meetupAvailabilityRequests, setMeetupAvailabilityRequests] = useState<MeetupAvailabilityRequest[]>([]);
   const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
@@ -2996,7 +3002,7 @@ const App: React.FC = () => {
           const { data: settingsData, error: settingsError } = await supabase
             .from('meetup_settings')
             .select('*')
-            .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config']);
+            .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config', 'testing_mandatory_toggles']);
 
           if (!settingsError && settingsData) {
             const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
@@ -3014,6 +3020,10 @@ const App: React.FC = () => {
             const policySetting = settingsData.find(s => s.setting_key === 'policy_config');
             if (policySetting && policySetting.setting_value) {
               setPolicy(prev => ({ ...prev, ...policySetting.setting_value }));
+            }
+            const testingMandatorySetting = settingsData.find(s => s.setting_key === 'testing_mandatory_toggles');
+            if (testingMandatorySetting && testingMandatorySetting.setting_value) {
+              setTestingSettings(testingMandatorySetting.setting_value);
             }
           }
         };
@@ -3412,6 +3422,9 @@ const App: React.FC = () => {
       case 'departments':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <DepartmentManagement departments={departments} setDepartments={setDepartments} />;
+      case 'testing-settings':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <TestingSettingsView settings={testingSettings} onUpdateSettings={setTestingSettings} />;
       case 'cancellation-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return (
@@ -3690,6 +3703,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                 <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
               </div>
 
             </>
@@ -3720,6 +3734,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                 <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
               </div>
 
             </>
@@ -3751,6 +3766,7 @@ const App: React.FC = () => {
           policies={travelModePolicies}
           meetupContext={meetupContext}
           departments={departments}
+          testingSettings={testingSettings}
           onSubmit={async (data: any) => {
             try {
               // Create temporary request object to check for violations
@@ -3922,6 +3938,7 @@ const App: React.FC = () => {
           employees={users} // Pass all users for selection
           policies={travelModePolicies}
           departments={departments}
+          testingSettings={testingSettings}
           onSubmit={async (data: any) => {
             try {
               let invoiceUrl = null;

@@ -873,8 +873,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   });
                   setCurrentPage(1);
                 }}
-                className="w-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group"
-                style={{ clipPath: 'polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%)', height: '90px' }}
+                className="w-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group rounded-lg h-[90px]"
               >
                 <span className="text-xs font-black uppercase tracking-widest opacity-90">Received</span>
                 <span className="text-3xl font-black mt-0.5 tracking-tight group-hover:scale-105 transition-transform">{countReceived}</span>
@@ -903,8 +902,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   });
                   setCurrentPage(1);
                 }}
-                className="w-[84%] bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group border-2 border-dashed border-amber-300 dark:border-amber-700/50"
-                style={{ clipPath: 'polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%)', height: '90px' }}
+                className="w-[84%] bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group border-2 border-dashed border-amber-300 dark:border-amber-700/50 rounded-lg h-[90px]"
               >
                 {currentlyBreachedApproval > 0 && (
                   <span className="absolute top-2 right-6 bg-rose-600 text-white text-3xs font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-md border border-rose-400">
@@ -931,8 +929,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   });
                   setCurrentPage(1);
                 }}
-                className="w-[75%] bg-gradient-to-r from-indigo-500 via-indigo-600 to-violet-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group"
-                style={{ clipPath: 'polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%)', height: '90px' }}
+                className="w-[75%] bg-gradient-to-r from-indigo-500 via-indigo-600 to-violet-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group rounded-lg h-[90px]"
               >
                 {currentlyBreachedProcessing > 0 && (
                   <span className="absolute top-2 right-6 bg-rose-600 text-white text-3xs font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-md border border-rose-400">
@@ -959,8 +956,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   });
                   setCurrentPage(1);
                 }}
-                className="w-[60%] bg-gradient-to-r from-blue-500 to-indigo-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group"
-                style={{ clipPath: 'polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%)', height: '90px' }}
+                className="w-[60%] bg-gradient-to-r from-blue-500 to-indigo-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group rounded-lg h-[90px]"
               >
                 {currentlyBreachedBooked > 0 && (
                   <span className="absolute top-2 right-6 bg-rose-600 text-white text-3xs font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-md border border-rose-400">
@@ -987,8 +983,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   });
                   setCurrentPage(1);
                 }}
-                className="w-[45%] bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group"
-                style={{ clipPath: 'polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%)', height: '90px' }}
+                className="w-[45%] bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-98 transition-all cursor-pointer flex flex-col items-center justify-center py-5 text-white shadow-lg relative group rounded-lg h-[90px]"
               >
                 <span className="text-xs font-black uppercase tracking-widest opacity-90">Closed</span>
                 <span className="text-3xl font-black mt-0.5 tracking-tight group-hover:scale-105 transition-transform">{countClosed}</span>

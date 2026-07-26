@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus, Department, TestingSettings } from '../types';
 import Input from './Input';
 import Select from './Select';
+import { toast } from 'sonner';
 
 interface PNCBookingModalProps {
     onClose: () => void;
@@ -10,15 +11,19 @@ interface PNCBookingModalProps {
     currentUser: User; // The PNC user
     employees: User[]; // List of all employees to select from
     policies: TravelModePolicy[];
+    departments?: Department[];
+    testingSettings?: TestingSettings;
 }
 
-const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }: PNCBookingModalProps) => {
+const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, departments = [], testingSettings }: PNCBookingModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
     // Filter out only employees for the dropdown if needed, or show all
     // For simplicity, showing all users as options
     const employeeOptions = employees.map(u => ({ label: `${u.name} (${u.email})`, value: u.id }));
+
+    const departmentOptions = (departments || []).map(d => ({ label: d.name, value: d.name }));
 
     const [data, setData] = useState({
         requesterId: '',
@@ -87,6 +92,101 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
 
     const nextStep = () => setStep(s => Math.min(s + 1, totalSteps));
     const prevStep = () => setStep(s => Math.max(s - 1, 1));
+
+    const validationActive = (() => {
+        if (!testingSettings) return true;
+        if (currentUser.role === 'Admin') return testingSettings.admin;
+        if (currentUser.role === 'PNC') return testingSettings.pnc;
+        return testingSettings.employee;
+    })();
+
+    const validateStep = (currentStep: number): boolean => {
+        if (!validationActive) return true;
+
+        if (currentStep === 1) {
+            if (!data.requesterName.trim()) {
+                toast.error("Full Name is required");
+                return false;
+            }
+            if (!data.requesterEmail.trim()) {
+                toast.error("Email Address is required");
+                return false;
+            }
+            if (!data.requesterPhone.trim()) {
+                toast.error("Phone Number is required");
+                return false;
+            }
+            if (!data.purpose.trim()) {
+                toast.error("Purpose of Travel is required");
+                return false;
+            }
+        } else if (currentStep === 2) {
+            if (!data.from.trim()) {
+                toast.error("Departure From location is required");
+                return false;
+            }
+            if (!data.to.trim()) {
+                toast.error("Departure To location is required");
+                return false;
+            }
+            if (!data.dateOfTravel) {
+                toast.error("Departure Date is required");
+                return false;
+            }
+            if (data.tripType === TripType.ROUND_TRIP) {
+                const retFrom = data.returnFrom || data.to;
+                const retTo = data.returnTo || data.from;
+                if (!retFrom.trim()) {
+                    toast.error("Return From location is required");
+                    return false;
+                }
+                if (!retTo.trim()) {
+                    toast.error("Return To location is required");
+                    return false;
+                }
+                if (!data.returnDate) {
+                    toast.error("Return Date is required");
+                    return false;
+                }
+            }
+        } else if (currentStep === 3) {
+            if (!data.ticketCost) {
+                toast.error("Ticket Cost is required");
+                return false;
+            }
+            if (!data.vendorName.trim()) {
+                toast.error("Vendor Name is required");
+                return false;
+            }
+            if (!data.invoiceFile) {
+                toast.error("Ticket copy invoice file is required");
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const handleNextStep = () => {
+        if (validateStep(step)) {
+            nextStep();
+        }
+    };
+
+    const handleSubmit = () => {
+        if (validateStep(3)) {
+            // Provide database inserts fallbacks for optional validations
+            const finalData = {
+                ...data,
+                purpose: data.purpose.trim() || 'Testing Booking',
+                from: data.from.trim() || '—',
+                to: data.to.trim() || '—',
+                dateOfTravel: data.dateOfTravel || new Date().toISOString().split('T')[0],
+                ticketCost: data.ticketCost || '0',
+                vendorName: data.vendorName.trim() || 'Testing Vendor'
+            };
+            onSubmit(finalData);
+        }
+    };
 
     const progress = (step / totalSteps) * 100;
 
@@ -171,9 +271,11 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                                         value={data.requesterPhone}
                                         onChange={(e: any) => handleInputChange('requesterPhone', e.target.value)}
                                     />
-                                    <Input
+                                    <Select
                                         label="Department"
                                         value={data.requesterDepartment}
+                                        options={departmentOptions}
+                                        placeholder="Select department..."
                                         onChange={(e: any) => handleInputChange('requesterDepartment', e.target.value)}
                                     />
                                 </div>
@@ -372,7 +474,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
 
                     {step < totalSteps ? (
                         <button
-                            onClick={nextStep}
+                            onClick={handleNextStep}
                             className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/30 active:scale-[0.98] transition-all"
                         >
                             Continue
@@ -380,9 +482,8 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies }
                         </button>
                     ) : (
                         <button
-                            onClick={() => onSubmit(data)}
-                            disabled={!data.ticketCost || !data.vendorName || !data.invoiceFile}
-                            className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-md shadow-lg shadow-emerald-600/25 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={handleSubmit}
+                            className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-md shadow-lg shadow-emerald-600/25 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.98] transition-all"
                         >
                             <i className="fa-solid fa-check mr-2"></i>
                             Submit Past Booking

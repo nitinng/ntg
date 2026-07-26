@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import {
-  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest
+  TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest, Department, TestingSettings
 } from './types';
 import { mockUsers, initialRequests } from './mockData';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -17,6 +17,7 @@ import PNCBookingModal from './components/PNCBookingModal';
 const ChatView = React.lazy(() => import('./components/ChatView'));
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
+import { queueEmailsForTransition } from './utils/emailQueueUtils';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -41,6 +42,11 @@ const WELCOME_NOTES = [
 
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 const PNCDashboard = React.lazy(() => import('./components/PNCDashboard'));
+const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagement'));
+const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
+const CancellationRequestsQueue = React.lazy(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
+const DepartmentManagement = React.lazy(() => import('./components/DepartmentManagement').then(module => ({ default: module.DepartmentManagement })));
+const TestingSettingsView = React.lazy(() => import('./components/TestingSettingsView').then(module => ({ default: module.TestingSettingsView })));
 const FinanceDashboard = React.lazy(() => import('./components/FinanceDashboard'));
 const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprovalsView'));
 const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
@@ -1226,7 +1232,7 @@ const SubHeader = ({ title }: { title: string }) => (
   </div>
 );
 
-const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, onToggleTheme, onLogout }: any) => {
+const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, onToggleTheme, onLogout, departments = [] }: any) => {
   const [formData, setFormData] = useState(user);
 
   // Sync internal state if prop changes (important for role toggles)
@@ -1466,7 +1472,13 @@ const OnboardingView = ({ user, policy, onUpdate, isLock, onSkip, isDarkMode, on
 
         {/* Org Details */}
         <Section title="Professional Details" icon="fa-briefcase">
-          <Input label="Department" value={formData.department || ''} onChange={(e: any) => setFormData({ ...formData, department: e.target.value })} />
+          <Select
+            label="Department"
+            value={formData.department || ''}
+            options={departments.map((d: any) => ({ label: d.name, value: d.name }))}
+            placeholder="Select department..."
+            onChange={(e: any) => setFormData({ ...formData, department: e.target.value })}
+          />
           <Input label="Campus / Location" value={formData.campus || ''} onChange={(e: any) => setFormData({ ...formData, campus: e.target.value })} />
           <Input label="Approving Manager Name" value={formData.managerName || ''} onChange={(e: any) => setFormData({ ...formData, managerName: e.target.value })} />
           <Input label="Approving Manager Email" value={formData.managerEmail || ''} onChange={(e: any) => setFormData({ ...formData, managerEmail: e.target.value })} />
@@ -2621,6 +2633,57 @@ const checkPolicyViolation = (request: TravelRequest, policies: TravelModePolicy
   return daysDifference < policy.minAdvanceDays;
 };
 
+const mapDbRequest = (r: any): TravelRequest => ({
+  id: r.id,
+  submissionId: r.submission_id || r.submissionId || '',
+  timestamp: r.created_at || r.timestamp || '',
+  requesterId: r.requester_id || r.requesterId || '',
+  requesterName: r.requester_name || r.requesterName || '',
+  requesterEmail: r.requester_email || r.requesterEmail || '',
+  requesterPhone: r.requester_phone || r.requesterPhone || '',
+  requesterDepartment: r.requester_department || r.requesterDepartment || '',
+  requesterCampus: r.requester_campus || r.requesterCampus || '',
+  purpose: r.purpose || '',
+  approvingManagerName: r.approving_manager_name || r.approvingManagerName || '',
+  approvingManagerEmail: r.approving_manager_email || r.approvingManagerEmail || '',
+  tripType: r.trip_type || r.tripType || TripType.ONE_WAY,
+  mode: r.travel_mode || r.mode || TravelMode.FLIGHT,
+  from: r.from_location || r.from || '',
+  to: r.to_location || r.to || '',
+  dateOfTravel: r.date_of_travel || r.dateOfTravel || '',
+  preferredDepartureWindow: r.preferred_departure_window || r.preferredDepartureWindow || '',
+  returnDate: r.return_date || r.returnDate || '',
+  returnPreferredDepartureWindow: r.return_preferred_departure_window || r.returnPreferredDepartureWindow || '',
+  numberOfTravelers: r.number_of_travelers || r.numberOfTravelers || 1,
+  travellerNames: r.traveller_names || r.travellerNames || '',
+  priority: r.priority || Priority.MEDIUM,
+  specialRequirements: r.special_requirements || r.specialRequirements || '',
+  approvalStatus: r.approval_status || r.approvalStatus || ApprovalStatus.PENDING,
+  pncStatus: r.pnc_status || r.pncStatus || PNCStatus.NOT_STARTED,
+  costCenter: r.cost_center || r.costCenter || '',
+  budgetCode: r.budget_code || r.budgetCode || '',
+  vendorName: r.vendor_name || r.vendorName || '',
+  ticketCost: r.ticket_cost || r.ticketCost || 0,
+  travelLegs: r.split_tickets || r.travelLegs || undefined,
+  invoiceUrl: r.invoice_url || r.invoiceUrl || '',
+  timeline: r.timeline || [],
+  emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
+  emergencyContactPhone: r.emergency_contact_phone || r.emergencyContactPhone || '',
+  emergencyContactRelation: r.emergency_contact_relation || r.emergencyContactRelation || '',
+  bloodGroup: r.blood_group || r.bloodGroup || '',
+  medicalConditions: r.medical_conditions || r.medicalConditions || '',
+  hasViolation: r.has_violation || r.hasViolation || false,
+  violationDetails: r.violation_reason || r.violationDetails || '',
+  bookedBy: r.booked_by || r.bookedBy || '',
+  resubmissionCount: r.resubmission_count || r.resubmissionCount || 0,
+  onHoldSince: r.on_hold_since || r.onHoldSince,
+  cancelledReason: r.cancelled_reason || r.cancelledReason,
+  statusChangeReason: r.status_change_reason || r.statusChangeReason,
+  infoRequested: r.info_requested || r.infoRequested,
+  employeeResponse: r.employee_response || r.employeeResponse,
+  advanceId: r.advance_id || r.advanceId,
+});
+
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -2636,6 +2699,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<TravelRequest | null>(null);
   const [isPNCBookingModalOpen, setIsPNCBookingModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [baseRole, setBaseRole] = useState<UserRole | null>(null);
@@ -2652,10 +2716,20 @@ const App: React.FC = () => {
     temporaryUnlockDays: 7,
     tatApprovalHours: 24,
     tatProcessingHours: 48,
-    tatBookingHours: 72
+    tatBookingHours: 72,
+    cancellationPncNgCover: 100,
+    cancellationPncEmpCover: 0,
+    cancellationEmpNgCover: 50,
+    cancellationEmpEmpCover: 50
   });
 
   const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [testingSettings, setTestingSettings] = useState<TestingSettings>({
+    admin: true,
+    pnc: true,
+    employee: true
+  });
 
   const [meetupAvailabilityRequests, setMeetupAvailabilityRequests] = useState<MeetupAvailabilityRequest[]>([]);
   const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
@@ -2848,46 +2922,7 @@ const App: React.FC = () => {
           }
           const { data: reqs, error: reqsError } = await query.order('created_at', { ascending: false });
           if (reqsError) throw reqsError;
-          const mappedReqs = reqs.map((r: any) => ({
-            id: r.id,
-            submissionId: r.submission_id,
-            timestamp: r.created_at,
-            requesterId: r.requester_id,
-            requesterName: r.requester_name,
-            requesterEmail: r.requester_email,
-            requesterPhone: r.requester_phone,
-            requesterDepartment: r.requester_department,
-            requesterCampus: r.requester_campus,
-            purpose: r.purpose,
-            approvingManagerName: r.approving_manager_name,
-            approvingManagerEmail: r.approving_manager_email,
-            tripType: r.trip_type,
-            mode: r.travel_mode,
-            from: r.from_location,
-            to: r.to_location,
-            dateOfTravel: r.date_of_travel,
-            preferredDepartureWindow: r.preferred_departure_window,
-            returnDate: r.return_date,
-            returnPreferredDepartureWindow: r.return_preferred_departure_window,
-            numberOfTravelers: r.number_of_travelers,
-            travellerNames: r.traveller_names,
-            priority: r.priority,
-            specialRequirements: r.special_requirements,
-            approvalStatus: r.approval_status,
-            pncStatus: r.pnc_status,
-            ticketCost: r.ticket_cost,
-            vendorName: r.vendor_name,
-            invoiceUrl: r.invoice_url,
-            timeline: r.timeline || [],
-            emergencyContactName: r.emergency_contact_name,
-            emergencyContactPhone: r.emergency_contact_phone,
-            emergencyContactRelation: r.emergency_contact_relation,
-            bloodGroup: r.blood_group,
-            medicalConditions: r.medical_conditions,
-            hasViolation: r.has_violation,
-            violationDetails: r.violation_reason,
-            bookedBy: r.booked_by,
-          }));
+          const mappedReqs = reqs.map((r: any) => mapDbRequest(r));
           setRequests(mappedReqs);
         };
 
@@ -2978,7 +3013,7 @@ const App: React.FC = () => {
           const { data: settingsData, error: settingsError } = await supabase
             .from('meetup_settings')
             .select('*')
-            .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config']);
+            .in('setting_key', ['is_igatpuri_enabled', 'is_chat_enabled', 'is_email_login_enabled', 'policy_config', 'testing_mandatory_toggles']);
 
           if (!settingsError && settingsData) {
             const igatpuriSetting = settingsData.find(s => s.setting_key === 'is_igatpuri_enabled');
@@ -2997,6 +3032,27 @@ const App: React.FC = () => {
             if (policySetting && policySetting.setting_value) {
               setPolicy(prev => ({ ...prev, ...policySetting.setting_value }));
             }
+            const testingMandatorySetting = settingsData.find(s => s.setting_key === 'testing_mandatory_toggles');
+            if (testingMandatorySetting && testingMandatorySetting.setting_value) {
+              setTestingSettings(testingMandatorySetting.setting_value);
+            }
+          }
+        };
+
+        const fetchDepartments = async () => {
+          const { data: deptData, error: deptError } = await supabase
+            .from('departments')
+            .select('*')
+            .order('name', { ascending: true });
+
+          if (!deptError && deptData) {
+            setDepartments(deptData.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              hod_name: d.hod_name,
+              created_at: d.created_at,
+              updated_at: d.updated_at
+            })));
           }
         };
 
@@ -3005,7 +3061,8 @@ const App: React.FC = () => {
           fetchAllUsers(),
           fetchMeetups(),
           fetchPolicies(),
-          fetchSettings()
+          fetchSettings(),
+          fetchDepartments()
         ]);
       } catch (err: any) {
         toast.error("Failed to load data: " + err.message);
@@ -3361,6 +3418,32 @@ const App: React.FC = () => {
       case 'all-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} />;
+            case 'advances':
+        if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN) {
+          return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
+            const req = requests.find((r: TravelRequest) => r.id === id);
+            if (req) {
+              setSelectedRequest(req);
+            }
+          }} />;
+        }
+        return renderDashboard();
+      case 'cancellations':
+        return <CancellationsDashboard currentUser={currentUser} />;
+      case 'departments':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <DepartmentManagement departments={departments} setDepartments={setDepartments} />;
+      case 'testing-settings':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <TestingSettingsView settings={testingSettings} onUpdateSettings={setTestingSettings} />;
+      case 'cancellation-requests':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return (
+          <CancellationRequestsQueue
+            requests={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED)}
+            onView={setSelectedRequest}
+          />
+        );
       case 'verification':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VerificationQueue users={users} onUpdateUser={handleUpdateUser} />;
@@ -3386,7 +3469,7 @@ const App: React.FC = () => {
       case 'profile':
         return (
           <div className="max-w-4xl mx-auto transition-all duration-300">
-            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} />
+            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} departments={departments} />
           </div>
         );
       case 'settings':
@@ -3397,19 +3480,26 @@ const App: React.FC = () => {
           return <ManagerApprovalsView
             requests={pendingApprovals}
             currentUser={currentUser}
-            onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus) => {
+            onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus, rejectReason?: string) => {
               try {
+                const reason = rejectReason || 'Manager Action';
+                const newTimeline = [
+                  ...updatedReq.timeline,
+                  {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    actor: currentUser.name,
+                    event: `Status changed to: ${newStatus}`,
+                    details: reason
+                  }
+                ];
+
                 const { error } = await supabase
                   .from('travel_requests')
                   .update({
                     pnc_status: newStatus,
-                    timeline: [...updatedReq.timeline, {
-                      id: Date.now().toString(),
-                      timestamp: new Date().toISOString(),
-                      actor: currentUser.name,
-                      event: `Status changed to: ${newStatus}`,
-                      details: 'Manager Action'
-                    }]
+                    status_change_reason: reason,
+                    timeline: newTimeline
                   })
                   .eq('id', updatedReq.id);
 
@@ -3418,17 +3508,16 @@ const App: React.FC = () => {
                 const updated = {
                   ...updatedReq,
                   pncStatus: newStatus,
-                  timeline: [...updatedReq.timeline, {
-                    id: Date.now().toString(),
-                    timestamp: new Date().toISOString(),
-                    actor: currentUser.name,
-                    event: `Status changed to: ${newStatus}`,
-                    details: 'Manager Action'
-                  }]
+                  statusChangeReason: reason,
+                  timeline: newTimeline
                 };
 
                 setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
                 toast.success(`Request ${newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'}`);
+                
+                // Queue emails
+                await queueEmailsForTransition(updated, updatedReq.pncStatus, newStatus);
+                
                 if (pendingApprovals.length <= 1) handleTabChange('dashboard'); // Go back if no more
               } catch (e: any) {
                 toast.error("Failed to update: " + e.message);
@@ -3533,6 +3622,7 @@ const App: React.FC = () => {
             onUpdate={handleUpdateUser}
             isLock={true}
             onSkip={handleSkipVerification}
+            departments={departments}
           />
         </div>
       </div>
@@ -3556,6 +3646,7 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                 <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
+               <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                 {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
@@ -3596,6 +3687,16 @@ const App: React.FC = () => {
                 />
                 <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
+               <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
+                <SidebarLink 
+                  icon="fa-circle-exclamation" 
+                  label="Cancel Queue" 
+                  active={activeTab === 'cancellation-requests'} 
+                  onClick={() => handleTabChange('cancellation-requests')} 
+                  badge={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED).length || null}
+                  badgeColor="bg-rose-600 px-1.5 py-0.5"
+                />
                 {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
               </div>
@@ -3618,6 +3719,8 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
               </div>
 
             </>
@@ -3647,6 +3750,8 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
               </div>
 
             </>
@@ -3673,10 +3778,15 @@ const App: React.FC = () => {
           onClose={() => {
             setIsNewRequestModalOpen(false);
             setMeetupContext(null);
+            setEditingRequest(null);
           }}
           currentUser={currentUser!}
           policies={travelModePolicies}
           meetupContext={meetupContext}
+          departments={departments}
+          testingSettings={testingSettings}
+          isEditMode={!!editingRequest}
+          initialData={editingRequest}
           onSubmit={async (data: any) => {
             try {
               // Create temporary request object to check for violations
@@ -3693,90 +3803,193 @@ const App: React.FC = () => {
 
               const isViolated = checkPolicyViolation(tempRequest, travelModePolicies);
 
-              const newRequest = {
-                requester_id: currentUser!.id,
-                requester_name: data.requesterName || currentUser!.name,
-                requester_email: currentUser!.email,
-                requester_phone: data.requesterPhone,
-                requester_department: data.requesterDepartment || currentUser!.department,
-                requester_campus: data.requesterCampus || currentUser!.campus,
-                purpose: data.purpose,
-                approving_manager_name: data.approvingManagerName,
-                approving_manager_email: data.approvingManagerEmail,
-                trip_type: data.tripType,
-                travel_mode: data.mode,
-                from_location: data.from,
-                to_location: data.to,
-                date_of_travel: data.dateOfTravel || null,
-                preferred_departure_window: data.preferredDepartureWindow,
-                return_date: data.returnDate || null,
-                return_preferred_departure_window: data.returnPreferredDepartureWindow,
-                number_of_travelers: data.numberOfTravelers,
-                traveller_names: data.travellerNames,
-                priority: data.priority || Priority.MEDIUM,
-                special_requirements: data.specialRequirements,
-                emergency_contact_name: data.emergencyContactName,
-                emergency_contact_phone: data.emergencyContactPhone,
-                emergency_contact_relation: data.emergencyContactRelation,
-                blood_group: data.bloodGroup,
-                medical_conditions: data.medicalConditions,
-                approval_status: ApprovalStatus.PENDING,
-                pnc_status: PNCStatus.NOT_STARTED,
-                timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }],
-                has_violation: isViolated,
-                violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
-                booked_by: 'PNC' // Standard requests are processed by PNC
-              };
+              if (editingRequest) {
+                // Edit & Resubmit Flow
+                const newResubmissionCount = (editingRequest.resubmissionCount || 0) + 1;
+                
+                const updatedPayload = {
+                  requester_name: data.requesterName || currentUser!.name,
+                  requester_phone: data.requesterPhone,
+                  requester_department: data.requesterDepartment || currentUser!.department,
+                  requester_campus: data.requesterCampus || currentUser!.campus,
+                  purpose: data.purpose,
+                  approving_manager_name: data.approvingManagerName,
+                  approving_manager_email: data.approvingManagerEmail,
+                  trip_type: data.tripType,
+                  travel_mode: data.mode,
+                  from_location: data.from,
+                  to_location: data.to,
+                  date_of_travel: data.dateOfTravel || null,
+                  preferred_departure_window: data.preferredDepartureWindow,
+                  return_date: data.returnDate || null,
+                  return_preferred_departure_window: data.returnPreferredDepartureWindow,
+                  number_of_travelers: data.numberOfTravelers,
+                  traveller_names: data.travellerNames,
+                  priority: data.priority || Priority.MEDIUM,
+                  special_requirements: data.specialRequirements,
+                  emergency_contact_name: data.emergencyContactName,
+                  emergency_contact_phone: data.emergencyContactPhone,
+                  emergency_contact_relation: data.emergencyContactRelation,
+                  blood_group: data.bloodGroup,
+                  medical_conditions: data.medicalConditions,
+                  
+                  // Resubmission resets state to NOT_STARTED per life-cycle flow
+                  pnc_status: PNCStatus.NOT_STARTED,
+                  resubmission_count: newResubmissionCount,
+                  status_change_reason: `Resubmission (Attempt ${newResubmissionCount})`,
+                  cancelled_reason: null,
+                  info_requested: null,
+                  employee_response: null,
+                  on_hold_since: null,
+                  has_violation: isViolated,
+                  violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                  timeline: [
+                    ...editingRequest.timeline,
+                    {
+                      id: Date.now().toString(),
+                      timestamp: new Date().toISOString(),
+                      actor: currentUser!.name,
+                      event: `Request Resubmitted`,
+                      details: `Resubmitted request (Attempt ${newResubmissionCount})`
+                    }
+                  ],
+                  updated_at: new Date().toISOString()
+                };
 
-              const { data: inserted, error } = await supabase
-                .from('travel_requests')
-                .insert(newRequest)
-                .select()
-                .single();
+                const { data: updatedRow, error: updateError } = await supabase
+                  .from('travel_requests')
+                  .update(updatedPayload)
+                  .eq('id', editingRequest.id)
+                  .select()
+                  .single();
 
-              if (error) throw error;
+                if (updateError) throw updateError;
 
-              // Re-fetch or add to state
-              setRequests(prev => [{
-                id: inserted.id,
-                submissionId: inserted.submission_id,
-                timestamp: inserted.created_at,
-                requesterId: inserted.requester_id,
-                requesterName: inserted.requester_name,
-                requesterEmail: inserted.requester_email,
-                requesterPhone: inserted.requester_phone,
-                requesterDepartment: inserted.requester_department,
-                requesterCampus: inserted.requester_campus,
-                purpose: inserted.purpose,
-                approvingManagerName: inserted.approving_manager_name,
-                approvingManagerEmail: inserted.approving_manager_email,
-                tripType: inserted.trip_type,
-                mode: inserted.travel_mode,
-                from: inserted.from_location,
-                to: inserted.to_location,
-                dateOfTravel: inserted.date_of_travel,
-                preferredDepartureWindow: inserted.preferred_departure_window,
-                returnDate: inserted.return_date,
-                returnPreferredDepartureWindow: inserted.return_preferred_departure_window,
-                numberOfTravelers: inserted.number_of_travelers,
-                travellerNames: inserted.traveller_names,
-                priority: inserted.priority,
-                specialRequirements: inserted.special_requirements,
-                approvalStatus: inserted.approval_status,
-                pncStatus: inserted.pnc_status,
-                timeline: inserted.timeline || [],
-                emergencyContactName: inserted.emergency_contact_name,
-                emergencyContactPhone: inserted.emergency_contact_phone,
-                emergencyContactRelation: inserted.emergency_contact_relation,
-                bloodGroup: inserted.blood_group,
-                medicalConditions: inserted.medical_conditions,
-                hasViolation: inserted.has_violation,
-                violationDetails: inserted.violation_reason,
-                bookedBy: inserted.booked_by,
-              }, ...prev]);
+                const mappedUpdated = mapDbRequest(updatedRow);
 
-              setIsNewRequestModalOpen(false);
-              toast.success("Travel request saved to Supabase");
+                // Auto-advance logic:
+                // From NOT_STARTED, if violation -> Approval Pending, else -> Processing
+                const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
+                const { data: autoAdvancedRow, error: autoAdvancedError } = await supabase
+                  .from('travel_requests')
+                  .update({
+                    pnc_status: nextStatus,
+                    status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                    updated_at: new Date().toISOString(),
+                    timeline: [
+                      ...mappedUpdated.timeline,
+                      {
+                        id: (Date.now() + 1).toString(),
+                        timestamp: new Date().toISOString(),
+                        actor: 'System',
+                        event: `Status changed to: ${nextStatus}`,
+                        details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                      }
+                    ]
+                  })
+                  .eq('id', editingRequest.id)
+                  .select()
+                  .single();
+
+                if (autoAdvancedError) throw autoAdvancedError;
+
+                const finalRequest = mapDbRequest(autoAdvancedRow);
+
+                setRequests(prev => prev.map(r => r.id === editingRequest.id ? finalRequest : r));
+                if (selectedRequest && selectedRequest.id === editingRequest.id) {
+                  setSelectedRequest(finalRequest);
+                }
+
+                setIsNewRequestModalOpen(false);
+                setEditingRequest(null);
+                toast.success("Request resubmitted successfully!");
+
+                // Queue emails
+                await queueEmailsForTransition(mappedUpdated, null, PNCStatus.NOT_STARTED);
+                await queueEmailsForTransition(finalRequest, PNCStatus.NOT_STARTED, nextStatus);
+
+              } else {
+                // Insert New Request Flow
+                const newRequest = {
+                  requester_id: currentUser!.id,
+                  requester_name: data.requesterName || currentUser!.name,
+                  requester_email: currentUser!.email,
+                  requester_phone: data.requesterPhone,
+                  requester_department: data.requesterDepartment || currentUser!.department,
+                  requester_campus: data.requesterCampus || currentUser!.campus,
+                  purpose: data.purpose,
+                  approving_manager_name: data.approvingManagerName,
+                  approving_manager_email: data.approvingManagerEmail,
+                  trip_type: data.tripType,
+                  travel_mode: data.mode,
+                  from_location: data.from,
+                  to_location: data.to,
+                  date_of_travel: data.dateOfTravel || null,
+                  preferred_departure_window: data.preferredDepartureWindow,
+                  return_date: data.returnDate || null,
+                  return_preferred_departure_window: data.returnPreferredDepartureWindow,
+                  number_of_travelers: data.numberOfTravelers,
+                  traveller_names: data.travellerNames,
+                  priority: data.priority || Priority.MEDIUM,
+                  special_requirements: data.specialRequirements,
+                  emergency_contact_name: data.emergencyContactName,
+                  emergency_contact_phone: data.emergencyContactPhone,
+                  emergency_contact_relation: data.emergencyContactRelation,
+                  blood_group: data.bloodGroup,
+                  medical_conditions: data.medicalConditions,
+                  approval_status: ApprovalStatus.PENDING,
+                  pnc_status: PNCStatus.NOT_STARTED,
+                  timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }],
+                  has_violation: isViolated,
+                  violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                  booked_by: 'PNC'
+                };
+
+                const { data: inserted, error } = await supabase
+                  .from('travel_requests')
+                  .insert(newRequest)
+                  .select()
+                  .single();
+
+                if (error) throw error;
+
+                const mappedInserted = mapDbRequest(inserted);
+
+                // Auto-advance logic:
+                const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
+                const { data: autoAdvancedRow, error: autoAdvancedError } = await supabase
+                  .from('travel_requests')
+                  .update({
+                    pnc_status: nextStatus,
+                    status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                    updated_at: new Date().toISOString(),
+                    timeline: [
+                      ...mappedInserted.timeline,
+                      {
+                        id: (Date.now() + 1).toString(),
+                        timestamp: new Date().toISOString(),
+                        actor: 'System',
+                        event: `Status changed to: ${nextStatus}`,
+                        details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                      }
+                    ]
+                  })
+                  .eq('id', inserted.id)
+                  .select()
+                  .single();
+
+                if (autoAdvancedError) throw autoAdvancedError;
+
+                const finalRequest = mapDbRequest(autoAdvancedRow);
+
+                setRequests(prev => [finalRequest, ...prev]);
+                setIsNewRequestModalOpen(false);
+                toast.success("Travel request saved and auto-advanced");
+
+                // Queue emails
+                await queueEmailsForTransition(mappedInserted, null, PNCStatus.NOT_STARTED);
+                await queueEmailsForTransition(finalRequest, PNCStatus.NOT_STARTED, nextStatus);
+              }
             } catch (err: any) {
               toast.error("Submission failed: " + err.message);
             }
@@ -3791,6 +4004,11 @@ const App: React.FC = () => {
             role={currentUser.role}
             policies={travelModePolicies}
             onClose={() => setSelectedRequest(null)}
+            onEdit={(req) => {
+              setSelectedRequest(null);
+              setEditingRequest(req);
+              setIsNewRequestModalOpen(true);
+            }}
             onUpdate={async (updated: any) => {
               try {
                 // Check if status actually changed
@@ -3817,20 +4035,35 @@ const App: React.FC = () => {
                     pnc_status: updated.pncStatus,
                     status_change_reason: updated.statusChangeReason || null,
                     ticket_cost: updated.ticketCost || null,
+                    split_tickets: updated.travelLegs || null,
                     vendor_name: updated.vendorName || null,
                     invoice_url: updated.invoiceUrl || null,
                     timeline: newTimeline,
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    info_requested: updated.infoRequested || null,
+                    employee_response: updated.employeeResponse || null,
+                    on_hold_since: updated.onHoldSince || null,
+                    resubmission_count: updated.resubmissionCount || 0,
+                    cancelled_reason: updated.cancelledReason || null,
+                    advance_id: updated.advanceId || null
                   })
                   .eq('id', updated.id);
 
                 if (error) throw error;
 
                 // Update local state
-                const finalUpdated = { ...updated, timeline: newTimeline };
+                const finalUpdated = mapDbRequest({
+                  ...updated,
+                  timeline: newTimeline
+                });
                 setRequests(prev => prev.map(r => r.id === updated.id ? finalUpdated : r));
                 setSelectedRequest(finalUpdated);
                 toast.success("Request updated successfully");
+
+                // Queue emails if status changed
+                if (statusChanged) {
+                  await queueEmailsForTransition(finalUpdated, selectedRequest.pncStatus, updated.pncStatus);
+                }
               } catch (error: any) {
                 console.error('Error updating request:', error);
                 toast.error("Failed to update request: " + error.message);
@@ -3846,6 +4079,8 @@ const App: React.FC = () => {
           currentUser={currentUser!}
           employees={users} // Pass all users for selection
           policies={travelModePolicies}
+          departments={departments}
+          testingSettings={testingSettings}
           onSubmit={async (data: any) => {
             try {
               let invoiceUrl = null;
@@ -3890,9 +4125,10 @@ const App: React.FC = () => {
 
                 approval_status: ApprovalStatus.APPROVED, // Auto-approved since PNC is booking
                 pnc_status: PNCStatus.CLOSED, // Closed immediately as details are entered
-
-                ticket_cost: parseFloat(data.ticketCost),
+                budget_code: data.budgetCode,
                 vendor_name: data.vendorName,
+                ticket_cost: parseFloat(data.ticketCost),
+                split_tickets: data.travelLegs || null,
                 invoice_url: invoiceUrl,
                 booked_by: 'SELF', // Booking handled by employee directly
 
@@ -3929,9 +4165,11 @@ const App: React.FC = () => {
                   from: newRequest.from_location,
                   to: newRequest.to_location,
                   dateOfTravel: newRequest.date_of_travel,
-                  pncStatus: PNCStatus.CLOSED,
-                  ticketCost: newRequest.ticket_cost,
+                  budgetCode: newRequest.budget_code,
                   vendorName: newRequest.vendor_name,
+                  ticketCost: newRequest.ticket_cost,
+                  travelLegs: newRequest.split_tickets || undefined,
+                  pncStatus: PNCStatus.CLOSED,
                   invoiceUrl: newRequest.invoice_url
                 } as any,
                 ...prev
@@ -3951,23 +4189,68 @@ const App: React.FC = () => {
 // --- Shared Display Sub-components ---
 
 const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, completeness, onViewProfile, user, meetupRequests = [], onNavigateToMeetup, isIgatpuriEnabled = false }: { requests: TravelRequest[], onNewRequest: (context?: any) => void, onView: (r: TravelRequest) => void, isWarningVisible: boolean, completeness: number, onViewProfile: () => void, user: User, meetupRequests: MeetupAvailabilityRequest[], onNavigateToMeetup: () => void, isIgatpuriEnabled?: boolean }) => {
+  const [cancellationOwed, setCancellationOwed] = useState(0);
+  useEffect(() => {
+    const fetchOwed = async () => {
+      const { data } = await supabase
+        .from('cancellation_records')
+        .select('employee_owed_amount')
+        .eq('status', 'Pending Refund');
+        
+      if (data) {
+        const total = data.reduce((sum, r) => sum + (Number(r.employee_owed_amount) || 0), 0);
+        setCancellationOwed(total);
+      }
+    };
+    fetchOwed();
+  }, []);
+
   const welcomeNote = useMemo(() => WELCOME_NOTES[Math.floor(Math.random() * WELCOME_NOTES.length)], []);
-  const activeRequests = requests.filter((r: TravelRequest) =>
-    r.pncStatus !== PNCStatus.BOOKED &&
-    r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
-    r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER &&
-    r.pncStatus !== PNCStatus.CANCELLED_BY_EMPLOYEE &&
-    r.pncStatus !== PNCStatus.CANCELLED_BY_PNC &&
-    r.pncStatus !== PNCStatus.CLOSED
-  );
-  const closedRequests = requests.filter((r: TravelRequest) =>
-    r.pncStatus === PNCStatus.BOOKED ||
-    r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
-    r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
-    r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
-    r.pncStatus === PNCStatus.CANCELLED_BY_PNC ||
-    r.pncStatus === PNCStatus.CLOSED
-  );
+  const isTravelDatePassed = (r: TravelRequest) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let travelDate = new Date(r.dateOfTravel);
+    if (r.tripType === TripType.ROUND_TRIP && r.returnDate) {
+      travelDate = new Date(r.returnDate);
+    }
+    
+    return travelDate < today;
+  };
+
+  const activeRequests = requests.filter((r: TravelRequest) => {
+    const isCancelledOrRejected = 
+      r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
+      r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_PNC;
+
+    if (isCancelledOrRejected) return false;
+    if (r.pncStatus === PNCStatus.CLOSED) return false;
+
+    if (r.pncStatus === PNCStatus.BOOKED) {
+      return !isTravelDatePassed(r);
+    }
+
+    return true;
+  });
+
+  const closedRequests = requests.filter((r: TravelRequest) => {
+    const isCancelledOrRejected = 
+      r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
+      r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
+      r.pncStatus === PNCStatus.CANCELLED_BY_PNC;
+
+    if (isCancelledOrRejected) return true;
+    if (r.pncStatus === PNCStatus.CLOSED) return true;
+
+    if (r.pncStatus === PNCStatus.BOOKED) {
+      return isTravelDatePassed(r);
+    }
+
+    return false;
+  });
 
   const [pastRequestsTab, setPastRequestsTab] = useState<string>('All');
 

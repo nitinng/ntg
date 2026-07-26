@@ -15,6 +15,7 @@ ALTER TABLE public.travel_requests ADD CONSTRAINT chk_pnc_status CHECK (
     'Booked',
     'Cancelled by Employee',
     'Cancelled by PNC',
+    'Cancellation Requested',
     'Closed'
   )
 );
@@ -41,13 +42,13 @@ CREATE TABLE IF NOT EXISTS public.ticket_status_history (
   CONSTRAINT chk_history_from_status CHECK (
     from_status IS NULL OR from_status IN (
       'Not Started', 'Approval Pending', 'Rejected by Manager', 'Approved', 'Processing',
-      'On Hold', 'Rejected by PNC', 'Booked', 'Cancelled by Employee', 'Cancelled by PNC', 'Closed'
+      'On Hold', 'Rejected by PNC', 'Booked', 'Cancelled by Employee', 'Cancelled by PNC', 'Cancellation Requested', 'Closed'
     )
   ),
   CONSTRAINT chk_history_to_status CHECK (
     to_status IN (
       'Not Started', 'Approval Pending', 'Rejected by Manager', 'Approved', 'Processing',
-      'On Hold', 'Rejected by PNC', 'Booked', 'Cancelled by Employee', 'Cancelled by PNC', 'Closed'
+      'On Hold', 'Rejected by PNC', 'Booked', 'Cancelled by Employee', 'Cancelled by PNC', 'Cancellation Requested', 'Closed'
     )
   )
 );

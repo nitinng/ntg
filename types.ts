@@ -1,4 +1,3 @@
-
 export enum UserRole {
   EMPLOYEE = 'Employee',
   PNC = 'PNC',
@@ -81,6 +80,7 @@ export enum PNCStatus {
   BOOKED = 'Booked',
   CANCELLED_BY_EMPLOYEE = 'Cancelled by Employee',
   CANCELLED_BY_PNC = 'Cancelled by PNC',
+  CANCELLATION_REQUESTED = 'Cancellation Requested',
   CLOSED = 'Closed'
 }
 
@@ -149,6 +149,11 @@ export interface TravelRequest {
   resubmissionCount?: number;
   onHoldSince?: string;
   cancelledReason?: string;
+  infoRequested?: string;
+  employeeResponse?: string;
+
+  // Added for linking to Advances
+  advanceId?: string;
 
   // Finance & PNC Tracker Data
   costCenter?: string;
@@ -156,16 +161,62 @@ export interface TravelRequest {
   vendorName?: string;
   ticketCost?: number;
   invoiceNumber?: string;
-  invoiceDate?: string;
   paymentStatus?: PaymentStatus;
 
   // System
   timeline: TimelineEvent[];
   pnr?: string;
-  vendorRef?: string;
-  ticketUrl?: string;
+  travelLegs?: TravelLeg[];
   invoiceUrl?: string;
   bookedBy?: string; // 'PNC' or 'SELF'
+  paymentSource?: 'Advance' | 'Direct' | 'Not Yet Entered';
+  bookingStatus?: 'Booked' | 'Cancelled' | 'Partially Cancelled' | 'Reconciled';
+}
+
+export interface TravelLeg {
+  id: string; // uuid
+  travelRequestId: string;
+  fromLocation: string;
+  toLocation: string;
+  travelMode: TravelMode;
+  vendorName: string;
+  ticketCost: number;
+  invoiceUrl?: string;
+  status: 'Active' | 'Cancelled';
+  cancelledBy?: 'Employee' | 'Org' | 'Vendor';
+  cancellationReason?: string;
+  advanceId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CancellationRecord {
+  id: string;
+  travelRequestId: string;
+  legId?: string; // optional for full booking cancellation
+  cancelledBy: 'Employee' | 'Org';
+  cancellationDate: string;
+  policyNavgurukulCoverPercent: number;
+  policyEmployeeCoverPercent: number;
+  originalFare: number;
+  netUnrecoveredAmount: number;
+  employeeOwedAmount: number;
+  orgAbsorbedAmount: number;
+  status: 'Pending Refund' | 'Partially Refunded' | 'Fully Refunded' | 'Written Off' | 'Reconciled' | 'Disputed';
+  advanceId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RefundEntry {
+  id: string;
+  cancellationRecordId: string;
+  amount: number;
+  dateReceived: string;
+  receiptUrl?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PolicyConfig {
@@ -182,6 +233,11 @@ export interface PolicyConfig {
   tatApprovalHours: number;
   tatProcessingHours: number;
   tatBookingHours: number;
+  // Cancellation Policy
+  cancellationPncNgCover: number;
+  cancellationPncEmpCover: number;
+  cancellationEmpNgCover: number;
+  cancellationEmpEmpCover: number;
 }
 
 export interface TravelModePolicy {
@@ -200,6 +256,7 @@ export interface MailTemplate {
   body: string; // HTML supported
   statusTrigger: string; // e.g., 'Approved', 'Rejected'
   isDraft: boolean;
+  audience: 'employee' | 'manager' | 'pnc';
   createdAt: string;
   updatedAt: string;
 }
@@ -264,4 +321,43 @@ export interface ChatThread {
   messages: ChatMessage[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdvanceChangelogEntry {
+  timestamp: string;
+  user: string; // The name or ID of the user making the change
+  action: 'Created' | 'Edited' | 'Ticket Purchased' | 'Refund Received';
+  details: string;
+  relatedTicketId?: string; // Storing the UUID
+  relatedTicketSubmissionId?: string; // Storing the readable TRV- ID
+}
+
+export interface Advance {
+  id: string;
+  advance_code?: string;
+  amount_received: number;
+  amount_left: number;
+  received_from: string;
+  received_by?: string; // UUID of PNC user
+  received_on: string;
+  is_settled: boolean;
+  receipt_id?: string;
+  comments?: string;
+  changelog: AdvanceChangelogEntry[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  hod_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TestingSettings {
+  admin: boolean;
+  pnc: boolean;
+  employee: boolean;
 }

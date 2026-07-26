@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy, Department, TestingSettings } from '../types';
 import Input from './Input';
 import Select from './Select';
+import { toast } from 'sonner';
 
 interface NewRequestModalProps {
     onClose: () => void;
@@ -12,9 +13,13 @@ interface NewRequestModalProps {
         startDate: string;
         endDate: string;
     } | null;
+    departments?: Department[];
+    testingSettings?: TestingSettings;
+    initialData?: any;
+    isEditMode?: boolean;
 }
 
-const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext }: NewRequestModalProps) => {
+const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext, departments = [], testingSettings, initialData, isEditMode = false }: NewRequestModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
@@ -33,34 +38,36 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
         'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'
     ].map(g => ({ label: g, value: g }));
 
+    const departmentOptions = (departments || []).map(d => ({ label: d.name, value: d.name }));
+
     const [data, setData] = useState({
-        requesterName: currentUser.name,
-        requesterEmail: currentUser.email,
-        requesterPhone: currentUser.phone || '',
-        requesterDepartment: currentUser.department || '',
-        requesterCampus: currentUser.campus || '',
-        purpose: meetupContext ? 'Igatpuri Meetup' : '',
-        approvingManagerName: currentUser.managerName || '',
-        approvingManagerEmail: currentUser.managerEmail || '',
-        tripType: TripType.ONE_WAY,
-        mode: TravelMode.FLIGHT,
-        from: meetupContext ? '' : '',
-        to: meetupContext ? 'Igatpuri' : '',
-        dateOfTravel: '',
-        preferredDepartureWindow: '',
-        returnDate: '',
-        returnFrom: meetupContext ? 'Igatpuri' : '',
-        returnTo: '',
-        returnPreferredDepartureWindow: '',
-        travellerNames: currentUser.name,
-        priority: Priority.MEDIUM,
-        specialRequirements: '',
-        emergencyContactName: currentUser.emergencyContactName || '',
-        emergencyContactPhone: currentUser.emergencyContactPhone || '',
-        emergencyContactRelation: currentUser.emergencyContactRelation || '',
-        bloodGroup: currentUser.bloodGroup || '',
-        medicalConditions: currentUser.medicalConditions || '',
-        violationReason: ''
+        requesterName: isEditMode && initialData ? (initialData.requesterName || '') : currentUser.name,
+        requesterEmail: isEditMode && initialData ? (initialData.requesterEmail || '') : currentUser.email,
+        requesterPhone: isEditMode && initialData ? (initialData.requesterPhone || '') : (currentUser.phone || ''),
+        requesterDepartment: isEditMode && initialData ? (initialData.requesterDepartment || '') : (currentUser.department || ''),
+        requesterCampus: isEditMode && initialData ? (initialData.requesterCampus || '') : (currentUser.campus || ''),
+        purpose: isEditMode && initialData ? (initialData.purpose || '') : (meetupContext ? 'Igatpuri Meetup' : ''),
+        approvingManagerName: isEditMode && initialData ? (initialData.approvingManagerName || '') : (currentUser.managerName || ''),
+        approvingManagerEmail: isEditMode && initialData ? (initialData.approvingManagerEmail || '') : (currentUser.managerEmail || ''),
+        tripType: isEditMode && initialData ? (initialData.tripType || TripType.ONE_WAY) : TripType.ONE_WAY,
+        mode: isEditMode && initialData ? (initialData.mode || TravelMode.FLIGHT) : TravelMode.FLIGHT,
+        from: isEditMode && initialData ? (initialData.from || '') : '',
+        to: isEditMode && initialData ? (initialData.to || '') : (meetupContext ? 'Igatpuri' : ''),
+        dateOfTravel: isEditMode && initialData ? (initialData.dateOfTravel ? initialData.dateOfTravel.substring(0, 10) : '') : '',
+        preferredDepartureWindow: isEditMode && initialData ? (initialData.preferredDepartureWindow || '') : '',
+        returnDate: isEditMode && initialData ? (initialData.returnDate ? initialData.returnDate.substring(0, 10) : '') : '',
+        returnFrom: isEditMode && initialData ? (initialData.returnFrom || initialData.to || '') : (meetupContext ? 'Igatpuri' : ''),
+        returnTo: isEditMode && initialData ? (initialData.returnTo || initialData.from || '') : '',
+        returnPreferredDepartureWindow: isEditMode && initialData ? (initialData.returnPreferredDepartureWindow || '') : '',
+        travellerNames: isEditMode && initialData ? (initialData.travellerNames || '') : currentUser.name,
+        priority: isEditMode && initialData ? (initialData.priority || Priority.MEDIUM) : Priority.MEDIUM,
+        specialRequirements: isEditMode && initialData ? (initialData.specialRequirements || '') : '',
+        emergencyContactName: isEditMode && initialData ? (initialData.emergencyContactName || '') : (currentUser.emergencyContactName || ''),
+        emergencyContactPhone: isEditMode && initialData ? (initialData.emergencyContactPhone || '') : (currentUser.emergencyContactPhone || ''),
+        emergencyContactRelation: isEditMode && initialData ? (initialData.emergencyContactRelation || '') : (currentUser.emergencyContactRelation || ''),
+        bloodGroup: isEditMode && initialData ? (initialData.bloodGroup || '') : (currentUser.bloodGroup || ''),
+        medicalConditions: isEditMode && initialData ? (initialData.medicalConditions || '') : (currentUser.medicalConditions || ''),
+        violationReason: isEditMode && initialData ? (initialData.violationDetails || '') : ''
     });
 
     // Meetup specific date logic
@@ -95,6 +102,119 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
 
     const nextStep = () => setStep(s => Math.min(s + 1, totalSteps));
     const prevStep = () => setStep(s => Math.max(s - 1, 1));
+
+    const validationActive = (() => {
+        if (!testingSettings) return true;
+        if (currentUser.role === 'Admin') return testingSettings.admin;
+        if (currentUser.role === 'PNC') return testingSettings.pnc;
+        return testingSettings.employee;
+    })();
+
+    const validateStep = (currentStep: number): boolean => {
+        if (!validationActive) return true;
+
+        if (currentStep === 1) {
+            if (!data.requesterName.trim()) {
+                toast.error("Full Name is required");
+                return false;
+            }
+            if (!data.requesterPhone.trim()) {
+                toast.error("Phone Number is required");
+                return false;
+            }
+            if (data.requesterPhone.replace(/\D/g, '').length !== 10) {
+                toast.error("Phone Number must be exactly 10 digits");
+                return false;
+            }
+            if (!data.purpose.trim()) {
+                toast.error("Purpose of Travel is required");
+                return false;
+            }
+            if (!data.approvingManagerName.trim()) {
+                toast.error("Approving Manager Name is required");
+                return false;
+            }
+            if (!data.approvingManagerEmail.trim()) {
+                toast.error("Approving Manager Email is required");
+                return false;
+            }
+        } else if (currentStep === 2) {
+            if (!data.from.trim()) {
+                toast.error("Departure From location is required");
+                return false;
+            }
+            if (!data.to.trim()) {
+                toast.error("Departure To location is required");
+                return false;
+            }
+            if (!data.dateOfTravel) {
+                toast.error("Departure Date is required");
+                return false;
+            }
+            if (!data.preferredDepartureWindow) {
+                toast.error("Preferred Time Window is required");
+                return false;
+            }
+            if (data.tripType === TripType.ROUND_TRIP) {
+                const retFrom = data.returnFrom || data.to;
+                const retTo = data.returnTo || data.from;
+                if (!retFrom.trim()) {
+                    toast.error("Return From location is required");
+                    return false;
+                }
+                if (!retTo.trim()) {
+                    toast.error("Return To location is required");
+                    return false;
+                }
+                if (!data.returnDate) {
+                    toast.error("Return Date is required");
+                    return false;
+                }
+                if (!data.returnPreferredDepartureWindow) {
+                    toast.error("Return Preferred Time Window is required");
+                    return false;
+                }
+            }
+        } else if (currentStep === 3) {
+            if (!data.emergencyContactName.trim()) {
+                toast.error("Emergency Contact Name is required");
+                return false;
+            }
+            if (!data.emergencyContactRelation.trim()) {
+                toast.error("Emergency Contact Relation is required");
+                return false;
+            }
+            if (!data.emergencyContactPhone.trim()) {
+                toast.error("Emergency Contact Phone is required");
+                return false;
+            }
+            if (data.emergencyContactPhone.replace(/\D/g, '').length !== 10) {
+                toast.error("Emergency Contact Phone must be exactly 10 digits");
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const handleNextStep = () => {
+        if (validateStep(step)) {
+            nextStep();
+        }
+    };
+
+    const handleSubmit = () => {
+        if (validateStep(3)) {
+            // Provide database insert fallbacks for optional validations
+            const finalData = {
+                ...data,
+                purpose: data.purpose.trim() || 'Testing Booking',
+                from: data.from.trim() || '—',
+                to: data.to.trim() || '—',
+                dateOfTravel: data.dateOfTravel || new Date().toISOString().split('T')[0]
+            };
+            onSubmit(finalData);
+        }
+    };
 
     const progress = (step / totalSteps) * 100;
 
@@ -183,9 +303,11 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
                                         value={data.requesterPhone}
                                         onChange={(e: any) => handleInputChange('requesterPhone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                                     />
-                                    <Input
+                                    <Select
                                         label="Department"
                                         value={data.requesterDepartment}
+                                        options={departmentOptions}
+                                        placeholder="Select department..."
                                         onChange={(e: any) => handleInputChange('requesterDepartment', e.target.value)}
                                     />
                                 </div>
@@ -467,7 +589,7 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
 
                     {step < totalSteps ? (
                         <button
-                            onClick={nextStep}
+                            onClick={handleNextStep}
                             disabled={step === 2 && isViolated && !data.violationReason.trim()}
                             className={`px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-lg shadow-indigo-600/25 hover:shadow-xl hover:shadow-indigo-600/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
@@ -476,7 +598,7 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
                         </button>
                     ) : (
                         <button
-                            onClick={() => onSubmit(data)}
+                            onClick={handleSubmit}
                             className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-md shadow-lg shadow-emerald-600/25 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.98] transition-all"
                         >
                             <i className="fa-solid fa-check mr-2"></i>

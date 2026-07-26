@@ -81,6 +81,7 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
                 body: t.body,
                 statusTrigger: t.status_trigger,
                 isDraft: t.is_draft ?? false,
+                audience: t.audience || 'employee',
                 createdAt: t.created_at,
                 updatedAt: t.updated_at,
             }));
@@ -128,7 +129,7 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
     };
 
     const resetForm = () => setCurrentTemplate({
-        name: '', subject: '', body: '', statusTrigger: PNCStatus.NOT_STARTED, isDraft: false,
+        name: '', subject: '', body: '', statusTrigger: PNCStatus.NOT_STARTED, isDraft: false, audience: 'employee',
     });
 
     const clearLocalDraft = () => localStorage.removeItem(DRAFT_KEY);
@@ -149,6 +150,7 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
                 body: currentTemplate.body || '',
                 status_trigger: currentTemplate.statusTrigger || null,
                 is_draft: saveAsDraft,
+                audience: currentTemplate.audience || 'employee',
                 updated_at: new Date().toISOString(),
             };
 
@@ -235,6 +237,9 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
                         {template.statusTrigger || 'No trigger'}
+                    </span>
+                    <span className="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                        {template.audience || 'employee'}
                     </span>
                     {template.isDraft && (
                         <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 rounded-full text-xs font-bold">
@@ -402,6 +407,17 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
                                 value={currentTemplate.statusTrigger || ''}
                                 options={Object.values(PNCStatus).map(s => ({ label: s, value: s }))}
                                 onChange={(e) => setCurrentTemplate({ ...currentTemplate, statusTrigger: e.target.value })}
+                            />
+
+                            <Select
+                                label="Audience"
+                                value={currentTemplate.audience || 'employee'}
+                                options={[
+                                    { label: 'Employee', value: 'employee' },
+                                    { label: 'Manager', value: 'manager' },
+                                    { label: 'PNC Team', value: 'pnc' }
+                                ]}
+                                onChange={(e) => setCurrentTemplate({ ...currentTemplate, audience: e.target.value as any })}
                             />
 
                             <Input

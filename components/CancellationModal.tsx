@@ -3,6 +3,7 @@ import { TravelRequest, TravelLeg, UserRole, PNCStatus } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { calculateCancellationSplit } from '../utils/cancellation';
+import { queueEmailsForTransition } from '../utils/emailQueueUtils';
 
 interface CancellationModalProps {
   request: TravelRequest;
@@ -139,6 +140,16 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
           updated_at: new Date().toISOString()
         }).eq('id', request.id);
 
+        // Queue emails
+        const updatedRequest = {
+          ...request,
+          pncStatus: newPncStatus,
+          cancelledReason: reason,
+          statusChangeReason: reason,
+          timeline: newTimeline
+        };
+        await queueEmailsForTransition(updatedRequest, request.pncStatus, newPncStatus);
+
         toast.success('Cancellation processed successfully');
         onSuccess();
       } catch (error: any) {
@@ -248,6 +259,17 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
       }).eq('id', request.id);
 
       if (updateError) throw updateError;
+
+      // Queue emails
+      const updatedRequest = {
+        ...request,
+        pncStatus: newPncStatus,
+        cancelledReason: reason,
+        statusChangeReason: reason,
+        travelLegs: updatedLegs as TravelLeg[],
+        timeline: updatedTimeline
+      };
+      await queueEmailsForTransition(updatedRequest, request.pncStatus, newPncStatus);
 
       toast.success(`${selectedLegs.length} leg${selectedLegs.length > 1 ? 's' : ''} cancelled successfully`);
       onSuccess();

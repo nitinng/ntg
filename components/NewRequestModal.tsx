@@ -15,9 +15,11 @@ interface NewRequestModalProps {
     } | null;
     departments?: Department[];
     testingSettings?: TestingSettings;
+    initialData?: any;
+    isEditMode?: boolean;
 }
 
-const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext, departments = [], testingSettings }: NewRequestModalProps) => {
+const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext, departments = [], testingSettings, initialData, isEditMode = false }: NewRequestModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
@@ -39,33 +41,33 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
     const departmentOptions = (departments || []).map(d => ({ label: d.name, value: d.name }));
 
     const [data, setData] = useState({
-        requesterName: currentUser.name,
-        requesterEmail: currentUser.email,
-        requesterPhone: currentUser.phone || '',
-        requesterDepartment: currentUser.department || '',
-        requesterCampus: currentUser.campus || '',
-        purpose: meetupContext ? 'Igatpuri Meetup' : '',
-        approvingManagerName: currentUser.managerName || '',
-        approvingManagerEmail: currentUser.managerEmail || '',
-        tripType: TripType.ONE_WAY,
-        mode: TravelMode.FLIGHT,
-        from: meetupContext ? '' : '',
-        to: meetupContext ? 'Igatpuri' : '',
-        dateOfTravel: '',
-        preferredDepartureWindow: '',
-        returnDate: '',
-        returnFrom: meetupContext ? 'Igatpuri' : '',
-        returnTo: '',
-        returnPreferredDepartureWindow: '',
-        travellerNames: currentUser.name,
-        priority: Priority.MEDIUM,
-        specialRequirements: '',
-        emergencyContactName: currentUser.emergencyContactName || '',
-        emergencyContactPhone: currentUser.emergencyContactPhone || '',
-        emergencyContactRelation: currentUser.emergencyContactRelation || '',
-        bloodGroup: currentUser.bloodGroup || '',
-        medicalConditions: currentUser.medicalConditions || '',
-        violationReason: ''
+        requesterName: isEditMode && initialData ? (initialData.requesterName || '') : currentUser.name,
+        requesterEmail: isEditMode && initialData ? (initialData.requesterEmail || '') : currentUser.email,
+        requesterPhone: isEditMode && initialData ? (initialData.requesterPhone || '') : (currentUser.phone || ''),
+        requesterDepartment: isEditMode && initialData ? (initialData.requesterDepartment || '') : (currentUser.department || ''),
+        requesterCampus: isEditMode && initialData ? (initialData.requesterCampus || '') : (currentUser.campus || ''),
+        purpose: isEditMode && initialData ? (initialData.purpose || '') : (meetupContext ? 'Igatpuri Meetup' : ''),
+        approvingManagerName: isEditMode && initialData ? (initialData.approvingManagerName || '') : (currentUser.managerName || ''),
+        approvingManagerEmail: isEditMode && initialData ? (initialData.approvingManagerEmail || '') : (currentUser.managerEmail || ''),
+        tripType: isEditMode && initialData ? (initialData.tripType || TripType.ONE_WAY) : TripType.ONE_WAY,
+        mode: isEditMode && initialData ? (initialData.mode || TravelMode.FLIGHT) : TravelMode.FLIGHT,
+        from: isEditMode && initialData ? (initialData.from || '') : '',
+        to: isEditMode && initialData ? (initialData.to || '') : (meetupContext ? 'Igatpuri' : ''),
+        dateOfTravel: isEditMode && initialData ? (initialData.dateOfTravel ? initialData.dateOfTravel.substring(0, 10) : '') : '',
+        preferredDepartureWindow: isEditMode && initialData ? (initialData.preferredDepartureWindow || '') : '',
+        returnDate: isEditMode && initialData ? (initialData.returnDate ? initialData.returnDate.substring(0, 10) : '') : '',
+        returnFrom: isEditMode && initialData ? (initialData.returnFrom || initialData.to || '') : (meetupContext ? 'Igatpuri' : ''),
+        returnTo: isEditMode && initialData ? (initialData.returnTo || initialData.from || '') : '',
+        returnPreferredDepartureWindow: isEditMode && initialData ? (initialData.returnPreferredDepartureWindow || '') : '',
+        travellerNames: isEditMode && initialData ? (initialData.travellerNames || '') : currentUser.name,
+        priority: isEditMode && initialData ? (initialData.priority || Priority.MEDIUM) : Priority.MEDIUM,
+        specialRequirements: isEditMode && initialData ? (initialData.specialRequirements || '') : '',
+        emergencyContactName: isEditMode && initialData ? (initialData.emergencyContactName || '') : (currentUser.emergencyContactName || ''),
+        emergencyContactPhone: isEditMode && initialData ? (initialData.emergencyContactPhone || '') : (currentUser.emergencyContactPhone || ''),
+        emergencyContactRelation: isEditMode && initialData ? (initialData.emergencyContactRelation || '') : (currentUser.emergencyContactRelation || ''),
+        bloodGroup: isEditMode && initialData ? (initialData.bloodGroup || '') : (currentUser.bloodGroup || ''),
+        medicalConditions: isEditMode && initialData ? (initialData.medicalConditions || '') : (currentUser.medicalConditions || ''),
+        violationReason: isEditMode && initialData ? (initialData.violationDetails || '') : ''
     });
 
     // Meetup specific date logic

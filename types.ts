@@ -149,6 +149,8 @@ export interface TravelRequest {
   resubmissionCount?: number;
   onHoldSince?: string;
   cancelledReason?: string;
+  infoRequested?: string;
+  employeeResponse?: string;
 
   // Added for linking to Advances
   advanceId?: string;
@@ -254,6 +256,7 @@ export interface MailTemplate {
   body: string; // HTML supported
   statusTrigger: string; // e.g., 'Approved', 'Rejected'
   isDraft: boolean;
+  audience: 'employee' | 'manager' | 'pnc';
   createdAt: string;
   updatedAt: string;
 }

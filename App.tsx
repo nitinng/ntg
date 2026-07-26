@@ -17,6 +17,7 @@ import PNCBookingModal from './components/PNCBookingModal';
 const ChatView = React.lazy(() => import('./components/ChatView'));
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
+import { queueEmailsForTransition } from './utils/emailQueueUtils';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -2632,6 +2633,57 @@ const checkPolicyViolation = (request: TravelRequest, policies: TravelModePolicy
   return daysDifference < policy.minAdvanceDays;
 };
 
+const mapDbRequest = (r: any): TravelRequest => ({
+  id: r.id,
+  submissionId: r.submission_id || r.submissionId || '',
+  timestamp: r.created_at || r.timestamp || '',
+  requesterId: r.requester_id || r.requesterId || '',
+  requesterName: r.requester_name || r.requesterName || '',
+  requesterEmail: r.requester_email || r.requesterEmail || '',
+  requesterPhone: r.requester_phone || r.requesterPhone || '',
+  requesterDepartment: r.requester_department || r.requesterDepartment || '',
+  requesterCampus: r.requester_campus || r.requesterCampus || '',
+  purpose: r.purpose || '',
+  approvingManagerName: r.approving_manager_name || r.approvingManagerName || '',
+  approvingManagerEmail: r.approving_manager_email || r.approvingManagerEmail || '',
+  tripType: r.trip_type || r.tripType || TripType.ONE_WAY,
+  mode: r.travel_mode || r.mode || TravelMode.FLIGHT,
+  from: r.from_location || r.from || '',
+  to: r.to_location || r.to || '',
+  dateOfTravel: r.date_of_travel || r.dateOfTravel || '',
+  preferredDepartureWindow: r.preferred_departure_window || r.preferredDepartureWindow || '',
+  returnDate: r.return_date || r.returnDate || '',
+  returnPreferredDepartureWindow: r.return_preferred_departure_window || r.returnPreferredDepartureWindow || '',
+  numberOfTravelers: r.number_of_travelers || r.numberOfTravelers || 1,
+  travellerNames: r.traveller_names || r.travellerNames || '',
+  priority: r.priority || Priority.MEDIUM,
+  specialRequirements: r.special_requirements || r.specialRequirements || '',
+  approvalStatus: r.approval_status || r.approvalStatus || ApprovalStatus.PENDING,
+  pncStatus: r.pnc_status || r.pncStatus || PNCStatus.NOT_STARTED,
+  costCenter: r.cost_center || r.costCenter || '',
+  budgetCode: r.budget_code || r.budgetCode || '',
+  vendorName: r.vendor_name || r.vendorName || '',
+  ticketCost: r.ticket_cost || r.ticketCost || 0,
+  travelLegs: r.split_tickets || r.travelLegs || undefined,
+  invoiceUrl: r.invoice_url || r.invoiceUrl || '',
+  timeline: r.timeline || [],
+  emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
+  emergencyContactPhone: r.emergency_contact_phone || r.emergencyContactPhone || '',
+  emergencyContactRelation: r.emergency_contact_relation || r.emergencyContactRelation || '',
+  bloodGroup: r.blood_group || r.bloodGroup || '',
+  medicalConditions: r.medical_conditions || r.medicalConditions || '',
+  hasViolation: r.has_violation || r.hasViolation || false,
+  violationDetails: r.violation_reason || r.violationDetails || '',
+  bookedBy: r.booked_by || r.bookedBy || '',
+  resubmissionCount: r.resubmission_count || r.resubmissionCount || 0,
+  onHoldSince: r.on_hold_since || r.onHoldSince,
+  cancelledReason: r.cancelled_reason || r.cancelledReason,
+  statusChangeReason: r.status_change_reason || r.statusChangeReason,
+  infoRequested: r.info_requested || r.infoRequested,
+  employeeResponse: r.employee_response || r.employeeResponse,
+  advanceId: r.advance_id || r.advanceId,
+});
+
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -2647,6 +2699,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<TravelRequest | null>(null);
   const [isPNCBookingModalOpen, setIsPNCBookingModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [baseRole, setBaseRole] = useState<UserRole | null>(null);
@@ -2869,49 +2922,7 @@ const App: React.FC = () => {
           }
           const { data: reqs, error: reqsError } = await query.order('created_at', { ascending: false });
           if (reqsError) throw reqsError;
-          const mappedReqs = reqs.map((r: any) => ({
-            id: r.id,
-            submissionId: r.submission_id,
-            timestamp: r.created_at,
-            requesterId: r.requester_id,
-            requesterName: r.requester_name,
-            requesterEmail: r.requester_email,
-            requesterPhone: r.requester_phone,
-            requesterDepartment: r.requester_department,
-            requesterCampus: r.requester_campus,
-            purpose: r.purpose,
-            approvingManagerName: r.approving_manager_name,
-            approvingManagerEmail: r.approving_manager_email,
-            tripType: r.trip_type,
-            mode: r.travel_mode,
-            from: r.from_location,
-            to: r.to_location,
-            dateOfTravel: r.date_of_travel,
-            preferredDepartureWindow: r.preferred_departure_window,
-            returnDate: r.return_date,
-            returnPreferredDepartureWindow: r.return_preferred_departure_window,
-            numberOfTravelers: r.number_of_travelers,
-            travellerNames: r.traveller_names,
-            priority: r.priority,
-            specialRequirements: r.special_requirements,
-            approvalStatus: r.approval_status,
-            pncStatus: r.pnc_status,
-            costCenter: r.cost_center,
-            budgetCode: r.budget_code,
-            vendorName: r.vendor_name,
-            ticketCost: r.ticket_cost,
-            travelLegs: r.split_tickets || undefined,
-            invoiceUrl: r.invoice_url,
-            timeline: r.timeline || [],
-            emergencyContactName: r.emergency_contact_name,
-            emergencyContactPhone: r.emergency_contact_phone,
-            emergencyContactRelation: r.emergency_contact_relation,
-            bloodGroup: r.blood_group,
-            medicalConditions: r.medical_conditions,
-            hasViolation: r.has_violation,
-            violationDetails: r.violation_reason,
-            bookedBy: r.booked_by,
-          }));
+          const mappedReqs = reqs.map((r: any) => mapDbRequest(r));
           setRequests(mappedReqs);
         };
 
@@ -3469,19 +3480,26 @@ const App: React.FC = () => {
           return <ManagerApprovalsView
             requests={pendingApprovals}
             currentUser={currentUser}
-            onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus) => {
+            onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus, rejectReason?: string) => {
               try {
+                const reason = rejectReason || 'Manager Action';
+                const newTimeline = [
+                  ...updatedReq.timeline,
+                  {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    actor: currentUser.name,
+                    event: `Status changed to: ${newStatus}`,
+                    details: reason
+                  }
+                ];
+
                 const { error } = await supabase
                   .from('travel_requests')
                   .update({
                     pnc_status: newStatus,
-                    timeline: [...updatedReq.timeline, {
-                      id: Date.now().toString(),
-                      timestamp: new Date().toISOString(),
-                      actor: currentUser.name,
-                      event: `Status changed to: ${newStatus}`,
-                      details: 'Manager Action'
-                    }]
+                    status_change_reason: reason,
+                    timeline: newTimeline
                   })
                   .eq('id', updatedReq.id);
 
@@ -3490,17 +3508,16 @@ const App: React.FC = () => {
                 const updated = {
                   ...updatedReq,
                   pncStatus: newStatus,
-                  timeline: [...updatedReq.timeline, {
-                    id: Date.now().toString(),
-                    timestamp: new Date().toISOString(),
-                    actor: currentUser.name,
-                    event: `Status changed to: ${newStatus}`,
-                    details: 'Manager Action'
-                  }]
+                  statusChangeReason: reason,
+                  timeline: newTimeline
                 };
 
                 setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
                 toast.success(`Request ${newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'}`);
+                
+                // Queue emails
+                await queueEmailsForTransition(updated, updatedReq.pncStatus, newStatus);
+                
                 if (pendingApprovals.length <= 1) handleTabChange('dashboard'); // Go back if no more
               } catch (e: any) {
                 toast.error("Failed to update: " + e.message);
@@ -3761,12 +3778,15 @@ const App: React.FC = () => {
           onClose={() => {
             setIsNewRequestModalOpen(false);
             setMeetupContext(null);
+            setEditingRequest(null);
           }}
           currentUser={currentUser!}
           policies={travelModePolicies}
           meetupContext={meetupContext}
           departments={departments}
           testingSettings={testingSettings}
+          isEditMode={!!editingRequest}
+          initialData={editingRequest}
           onSubmit={async (data: any) => {
             try {
               // Create temporary request object to check for violations
@@ -3783,90 +3803,193 @@ const App: React.FC = () => {
 
               const isViolated = checkPolicyViolation(tempRequest, travelModePolicies);
 
-              const newRequest = {
-                requester_id: currentUser!.id,
-                requester_name: data.requesterName || currentUser!.name,
-                requester_email: currentUser!.email,
-                requester_phone: data.requesterPhone,
-                requester_department: data.requesterDepartment || currentUser!.department,
-                requester_campus: data.requesterCampus || currentUser!.campus,
-                purpose: data.purpose,
-                approving_manager_name: data.approvingManagerName,
-                approving_manager_email: data.approvingManagerEmail,
-                trip_type: data.tripType,
-                travel_mode: data.mode,
-                from_location: data.from,
-                to_location: data.to,
-                date_of_travel: data.dateOfTravel || null,
-                preferred_departure_window: data.preferredDepartureWindow,
-                return_date: data.returnDate || null,
-                return_preferred_departure_window: data.returnPreferredDepartureWindow,
-                number_of_travelers: data.numberOfTravelers,
-                traveller_names: data.travellerNames,
-                priority: data.priority || Priority.MEDIUM,
-                special_requirements: data.specialRequirements,
-                emergency_contact_name: data.emergencyContactName,
-                emergency_contact_phone: data.emergencyContactPhone,
-                emergency_contact_relation: data.emergencyContactRelation,
-                blood_group: data.bloodGroup,
-                medical_conditions: data.medicalConditions,
-                approval_status: ApprovalStatus.PENDING,
-                pnc_status: PNCStatus.NOT_STARTED,
-                timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }],
-                has_violation: isViolated,
-                violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
-                booked_by: 'PNC' // Standard requests are processed by PNC
-              };
+              if (editingRequest) {
+                // Edit & Resubmit Flow
+                const newResubmissionCount = (editingRequest.resubmissionCount || 0) + 1;
+                
+                const updatedPayload = {
+                  requester_name: data.requesterName || currentUser!.name,
+                  requester_phone: data.requesterPhone,
+                  requester_department: data.requesterDepartment || currentUser!.department,
+                  requester_campus: data.requesterCampus || currentUser!.campus,
+                  purpose: data.purpose,
+                  approving_manager_name: data.approvingManagerName,
+                  approving_manager_email: data.approvingManagerEmail,
+                  trip_type: data.tripType,
+                  travel_mode: data.mode,
+                  from_location: data.from,
+                  to_location: data.to,
+                  date_of_travel: data.dateOfTravel || null,
+                  preferred_departure_window: data.preferredDepartureWindow,
+                  return_date: data.returnDate || null,
+                  return_preferred_departure_window: data.returnPreferredDepartureWindow,
+                  number_of_travelers: data.numberOfTravelers,
+                  traveller_names: data.travellerNames,
+                  priority: data.priority || Priority.MEDIUM,
+                  special_requirements: data.specialRequirements,
+                  emergency_contact_name: data.emergencyContactName,
+                  emergency_contact_phone: data.emergencyContactPhone,
+                  emergency_contact_relation: data.emergencyContactRelation,
+                  blood_group: data.bloodGroup,
+                  medical_conditions: data.medicalConditions,
+                  
+                  // Resubmission resets state to NOT_STARTED per life-cycle flow
+                  pnc_status: PNCStatus.NOT_STARTED,
+                  resubmission_count: newResubmissionCount,
+                  status_change_reason: `Resubmission (Attempt ${newResubmissionCount})`,
+                  cancelled_reason: null,
+                  info_requested: null,
+                  employee_response: null,
+                  on_hold_since: null,
+                  has_violation: isViolated,
+                  violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                  timeline: [
+                    ...editingRequest.timeline,
+                    {
+                      id: Date.now().toString(),
+                      timestamp: new Date().toISOString(),
+                      actor: currentUser!.name,
+                      event: `Request Resubmitted`,
+                      details: `Resubmitted request (Attempt ${newResubmissionCount})`
+                    }
+                  ],
+                  updated_at: new Date().toISOString()
+                };
 
-              const { data: inserted, error } = await supabase
-                .from('travel_requests')
-                .insert(newRequest)
-                .select()
-                .single();
+                const { data: updatedRow, error: updateError } = await supabase
+                  .from('travel_requests')
+                  .update(updatedPayload)
+                  .eq('id', editingRequest.id)
+                  .select()
+                  .single();
 
-              if (error) throw error;
+                if (updateError) throw updateError;
 
-              // Re-fetch or add to state
-              setRequests(prev => [{
-                id: inserted.id,
-                submissionId: inserted.submission_id,
-                timestamp: inserted.created_at,
-                requesterId: inserted.requester_id,
-                requesterName: inserted.requester_name,
-                requesterEmail: inserted.requester_email,
-                requesterPhone: inserted.requester_phone,
-                requesterDepartment: inserted.requester_department,
-                requesterCampus: inserted.requester_campus,
-                purpose: inserted.purpose,
-                approvingManagerName: inserted.approving_manager_name,
-                approvingManagerEmail: inserted.approving_manager_email,
-                tripType: inserted.trip_type,
-                mode: inserted.travel_mode,
-                from: inserted.from_location,
-                to: inserted.to_location,
-                dateOfTravel: inserted.date_of_travel,
-                preferredDepartureWindow: inserted.preferred_departure_window,
-                returnDate: inserted.return_date,
-                returnPreferredDepartureWindow: inserted.return_preferred_departure_window,
-                numberOfTravelers: inserted.number_of_travelers,
-                travellerNames: inserted.traveller_names,
-                priority: inserted.priority,
-                specialRequirements: inserted.special_requirements,
-                approvalStatus: inserted.approval_status,
-                pncStatus: inserted.pnc_status,
-                timeline: inserted.timeline || [],
-                emergencyContactName: inserted.emergency_contact_name,
-                emergencyContactPhone: inserted.emergency_contact_phone,
-                emergencyContactRelation: inserted.emergency_contact_relation,
-                bloodGroup: inserted.blood_group,
-                medicalConditions: inserted.medical_conditions,
-                hasViolation: inserted.has_violation,
-                violationDetails: inserted.violation_reason,
-                bookedBy: inserted.booked_by,
-              }, ...prev]);
+                const mappedUpdated = mapDbRequest(updatedRow);
 
-              setIsNewRequestModalOpen(false);
-              toast.success("Travel request saved to Supabase");
+                // Auto-advance logic:
+                // From NOT_STARTED, if violation -> Approval Pending, else -> Processing
+                const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
+                const { data: autoAdvancedRow, error: autoAdvancedError } = await supabase
+                  .from('travel_requests')
+                  .update({
+                    pnc_status: nextStatus,
+                    status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                    updated_at: new Date().toISOString(),
+                    timeline: [
+                      ...mappedUpdated.timeline,
+                      {
+                        id: (Date.now() + 1).toString(),
+                        timestamp: new Date().toISOString(),
+                        actor: 'System',
+                        event: `Status changed to: ${nextStatus}`,
+                        details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                      }
+                    ]
+                  })
+                  .eq('id', editingRequest.id)
+                  .select()
+                  .single();
+
+                if (autoAdvancedError) throw autoAdvancedError;
+
+                const finalRequest = mapDbRequest(autoAdvancedRow);
+
+                setRequests(prev => prev.map(r => r.id === editingRequest.id ? finalRequest : r));
+                if (selectedRequest && selectedRequest.id === editingRequest.id) {
+                  setSelectedRequest(finalRequest);
+                }
+
+                setIsNewRequestModalOpen(false);
+                setEditingRequest(null);
+                toast.success("Request resubmitted successfully!");
+
+                // Queue emails
+                await queueEmailsForTransition(mappedUpdated, null, PNCStatus.NOT_STARTED);
+                await queueEmailsForTransition(finalRequest, PNCStatus.NOT_STARTED, nextStatus);
+
+              } else {
+                // Insert New Request Flow
+                const newRequest = {
+                  requester_id: currentUser!.id,
+                  requester_name: data.requesterName || currentUser!.name,
+                  requester_email: currentUser!.email,
+                  requester_phone: data.requesterPhone,
+                  requester_department: data.requesterDepartment || currentUser!.department,
+                  requester_campus: data.requesterCampus || currentUser!.campus,
+                  purpose: data.purpose,
+                  approving_manager_name: data.approvingManagerName,
+                  approving_manager_email: data.approvingManagerEmail,
+                  trip_type: data.tripType,
+                  travel_mode: data.mode,
+                  from_location: data.from,
+                  to_location: data.to,
+                  date_of_travel: data.dateOfTravel || null,
+                  preferred_departure_window: data.preferredDepartureWindow,
+                  return_date: data.returnDate || null,
+                  return_preferred_departure_window: data.returnPreferredDepartureWindow,
+                  number_of_travelers: data.numberOfTravelers,
+                  traveller_names: data.travellerNames,
+                  priority: data.priority || Priority.MEDIUM,
+                  special_requirements: data.specialRequirements,
+                  emergency_contact_name: data.emergencyContactName,
+                  emergency_contact_phone: data.emergencyContactPhone,
+                  emergency_contact_relation: data.emergencyContactRelation,
+                  blood_group: data.bloodGroup,
+                  medical_conditions: data.medicalConditions,
+                  approval_status: ApprovalStatus.PENDING,
+                  pnc_status: PNCStatus.NOT_STARTED,
+                  timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }],
+                  has_violation: isViolated,
+                  violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                  booked_by: 'PNC'
+                };
+
+                const { data: inserted, error } = await supabase
+                  .from('travel_requests')
+                  .insert(newRequest)
+                  .select()
+                  .single();
+
+                if (error) throw error;
+
+                const mappedInserted = mapDbRequest(inserted);
+
+                // Auto-advance logic:
+                const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
+                const { data: autoAdvancedRow, error: autoAdvancedError } = await supabase
+                  .from('travel_requests')
+                  .update({
+                    pnc_status: nextStatus,
+                    status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                    updated_at: new Date().toISOString(),
+                    timeline: [
+                      ...mappedInserted.timeline,
+                      {
+                        id: (Date.now() + 1).toString(),
+                        timestamp: new Date().toISOString(),
+                        actor: 'System',
+                        event: `Status changed to: ${nextStatus}`,
+                        details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                      }
+                    ]
+                  })
+                  .eq('id', inserted.id)
+                  .select()
+                  .single();
+
+                if (autoAdvancedError) throw autoAdvancedError;
+
+                const finalRequest = mapDbRequest(autoAdvancedRow);
+
+                setRequests(prev => [finalRequest, ...prev]);
+                setIsNewRequestModalOpen(false);
+                toast.success("Travel request saved and auto-advanced");
+
+                // Queue emails
+                await queueEmailsForTransition(mappedInserted, null, PNCStatus.NOT_STARTED);
+                await queueEmailsForTransition(finalRequest, PNCStatus.NOT_STARTED, nextStatus);
+              }
             } catch (err: any) {
               toast.error("Submission failed: " + err.message);
             }
@@ -3881,6 +4004,11 @@ const App: React.FC = () => {
             role={currentUser.role}
             policies={travelModePolicies}
             onClose={() => setSelectedRequest(null)}
+            onEdit={(req) => {
+              setSelectedRequest(null);
+              setEditingRequest(req);
+              setIsNewRequestModalOpen(true);
+            }}
             onUpdate={async (updated: any) => {
               try {
                 // Check if status actually changed
@@ -3911,17 +4039,31 @@ const App: React.FC = () => {
                     vendor_name: updated.vendorName || null,
                     invoice_url: updated.invoiceUrl || null,
                     timeline: newTimeline,
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    info_requested: updated.infoRequested || null,
+                    employee_response: updated.employeeResponse || null,
+                    on_hold_since: updated.onHoldSince || null,
+                    resubmission_count: updated.resubmissionCount || 0,
+                    cancelled_reason: updated.cancelledReason || null,
+                    advance_id: updated.advanceId || null
                   })
                   .eq('id', updated.id);
 
                 if (error) throw error;
 
                 // Update local state
-                const finalUpdated = { ...updated, timeline: newTimeline };
+                const finalUpdated = mapDbRequest({
+                  ...updated,
+                  timeline: newTimeline
+                });
                 setRequests(prev => prev.map(r => r.id === updated.id ? finalUpdated : r));
                 setSelectedRequest(finalUpdated);
                 toast.success("Request updated successfully");
+
+                // Queue emails if status changed
+                if (statusChanged) {
+                  await queueEmailsForTransition(finalUpdated, selectedRequest.pncStatus, updated.pncStatus);
+                }
               } catch (error: any) {
                 console.error('Error updating request:', error);
                 toast.error("Failed to update request: " + error.message);

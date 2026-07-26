@@ -12,6 +12,7 @@ interface RequestDetailOverlayProps {
   onClose: () => void;
   onUpdate: (updatedRequest: TravelRequest) => Promise<void>;
   policies?: any[];
+  onEdit?: (request: TravelRequest) => void;
 }
 
 export const RequestDetailOverlay = ({
@@ -19,7 +20,8 @@ export const RequestDetailOverlay = ({
   role,
   onClose,
   onUpdate,
-  policies = []
+  policies = [],
+  onEdit
 }: RequestDetailOverlayProps) => {
   const isPolicyViolated = request.hasViolation || (policies.length > 0 ? checkPolicyViolation(request, policies) : false);
   const [status, setStatus] = useState(request.pncStatus);
@@ -27,6 +29,8 @@ export const RequestDetailOverlay = ({
   const [showNotes, setShowNotes] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [showCancellationForm, setShowCancellationForm] = useState(false);
+  const [infoRequestedInput, setInfoRequestedInput] = useState(request.infoRequested || '');
+  const [employeeResponseInput, setEmployeeResponseInput] = useState('');
 
   const handleEmployeeRequestCancel = async () => {
     setIsUploading(true);
@@ -63,6 +67,47 @@ export const RequestDetailOverlay = ({
     } catch (error: any) {
       console.error(error);
       toast.error('Failed to submit cancellation request: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleEmployeeSubmitResponse = async () => {
+    if (!employeeResponseInput.trim()) {
+      toast.error("Please provide a response before submitting.");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userName = user?.user_metadata?.full_name || user?.email || 'Employee';
+
+      const newTimeline = [
+        ...(request.timeline || []),
+        {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          actor: userName,
+          event: `Info Provided`,
+          details: `Employee responded: ${employeeResponseInput}`
+        }
+      ];
+
+      await onUpdate({
+        ...request,
+        pncStatus: PNCStatus.PROCESSING,
+        statusChangeReason: `Info provided: ${employeeResponseInput}`,
+        employeeResponse: employeeResponseInput,
+        onHoldSince: undefined, // Clears the hold timestamp
+        timeline: newTimeline
+      });
+
+      toast.success('Response submitted and request set to Processing.');
+      setEmployeeResponseInput('');
+      onClose();
+    } catch (error: any) {
+      console.error(error);
+      toast.error('Failed to submit response: ' + error.message);
     } finally {
       setIsUploading(false);
     }
@@ -117,12 +162,20 @@ export const RequestDetailOverlay = ({
         status === PNCStatus.REJECTED_BY_PNC ||
         status === PNCStatus.CANCELLED_BY_PNC ||
         status === PNCStatus.CANCELLED_BY_EMPLOYEE ||
-        status === PNCStatus.REJECTED_BY_MANAGER;
+        status === PNCStatus.REJECTED_BY_MANAGER ||
+        status === PNCStatus.ON_HOLD;
 
-      if (requiresReason && !statusChangeReason.trim()) {
-        toast.error(`Please provide a reason for the ${status} action.`);
-        setShowNotes(true);
-        return;
+      if (requiresReason) {
+        const reasonText = status === PNCStatus.ON_HOLD ? infoRequestedInput : statusChangeReason;
+        if (!reasonText.trim()) {
+          toast.error(status === PNCStatus.ON_HOLD 
+            ? "Please specify what information is requested before putting the request on hold." 
+            : `Please provide a reason for the ${status} action.`);
+          if (status !== PNCStatus.ON_HOLD) {
+            setShowNotes(true);
+          }
+          return;
+        }
       }
       
       let finalTicketCost = ticketCost;
@@ -235,10 +288,21 @@ export const RequestDetailOverlay = ({
         }
       }
 
+      let finalOnHoldSince = request.onHoldSince;
+      if (finalStatus === PNCStatus.ON_HOLD) {
+        if (!request.onHoldSince) {
+          finalOnHoldSince = new Date().toISOString();
+        }
+      } else {
+        finalOnHoldSince = undefined;
+      }
+
       await onUpdate({
         ...request,
         pncStatus: finalStatus,
-        statusChangeReason: statusChangeReason,
+        statusChangeReason: finalStatus === PNCStatus.ON_HOLD ? infoRequestedInput : statusChangeReason,
+        infoRequested: finalStatus === PNCStatus.ON_HOLD ? infoRequestedInput : request.infoRequested,
+        onHoldSince: finalOnHoldSince,
         cancelledReason: (finalStatus === PNCStatus.CANCELLED_BY_EMPLOYEE || finalStatus === PNCStatus.CANCELLED_BY_PNC) ? statusChangeReason : request.cancelledReason,
         ticketCost: isBookingStatus ? parseFloat(finalTicketCost.toString()) : request.ticketCost,
         vendorName: isBookingStatus ? finalVendorName : request.vendorName,
@@ -360,6 +424,30 @@ export const RequestDetailOverlay = ({
                     {isPolicyViolated ? (request.violationDetails || 'Advance booking policy violation') : 'No Violation'}
                   </p>
                 </div>
+
+                {(request.infoRequested || request.employeeResponse) && (
+                  <>
+                    <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
+                    <div className="col-span-2 space-y-3 bg-amber-500/5 border border-amber-250 dark:border-amber-900/20 p-4 rounded-xl">
+                      <p className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                        <i className="fa-solid fa-clipboard-question"></i>
+                        Clarification History
+                      </p>
+                      {request.infoRequested && (
+                        <div>
+                          <p className="text-2xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-widest">Requested by PNC</p>
+                          <p className="text-sm font-bold text-slate-755 dark:text-slate-300 mt-0.5">{request.infoRequested}</p>
+                        </div>
+                      )}
+                      {request.employeeResponse && (
+                        <div className="pt-2 border-t border-dashed border-amber-200/35 dark:border-amber-900/20">
+                          <p className="text-2xs font-black text-emerald-700 dark:text-emerald-500 uppercase tracking-widest">Employee Response</p>
+                          <p className="text-sm font-bold text-slate-755 dark:text-slate-300 mt-0.5">{request.employeeResponse}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -683,24 +771,41 @@ export const RequestDetailOverlay = ({
                 </div>
               )}
 
-              <button
-                onClick={() => setShowNotes(!showNotes)}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
-              >
-                <i className={`fa-solid fa-chevron-${showNotes ? 'up' : 'down'} text-xs`}></i>
-                {showNotes ? 'Hide' : 'Add'} Notes / Reason (Optional)
-              </button>
-
-              {showNotes && (
-                <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+              {status === PNCStatus.ON_HOLD ? (
+                <div className="space-y-2 pt-2 animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-xs font-black text-rose-500 uppercase tracking-widest block ml-1">
+                    Information Needed from Employee <span className="text-red-500">*</span>
+                  </label>
                   <textarea
                     className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
                     rows={3}
-                    placeholder="Add context for this status change (e.g., reason for rejection, booking details, etc.)"
-                    value={statusChangeReason}
-                    onChange={e => setStatusChangeReason(e.target.value)}
+                    placeholder="Specify exactly what information or documents are needed from the employee..."
+                    value={infoRequestedInput}
+                    onChange={e => setInfoRequestedInput(e.target.value)}
                   />
                 </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowNotes(!showNotes)}
+                    className="w-full text-left px-4 py-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
+                  >
+                    <i className={`fa-solid fa-chevron-${showNotes ? 'up' : 'down'} text-xs`}></i>
+                    {showNotes ? 'Hide' : 'Add'} Notes / Reason (Optional)
+                  </button>
+
+                  {showNotes && (
+                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                      <textarea
+                        className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
+                        rows={3}
+                        placeholder="Add context for this status change (e.g., reason for rejection, booking details, etc.)"
+                        value={statusChangeReason}
+                        onChange={e => setStatusChangeReason(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               <button
@@ -753,13 +858,77 @@ export const RequestDetailOverlay = ({
             request.pncStatus !== PNCStatus.CANCELLATION_REQUESTED &&
             request.pncStatus !== PNCStatus.CLOSED ? (
             <div className="space-y-4 w-full">
+              {request.pncStatus === PNCStatus.ON_HOLD && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-5 rounded-xl space-y-4 animate-in fade-in duration-300 mb-2">
+                  <div>
+                    <h4 className="text-sm font-black text-amber-800 dark:text-amber-400 flex items-center gap-2">
+                      <i className="fa-solid fa-circle-exclamation text-lg"></i>
+                      Information Requested by PNC Desk
+                    </h4>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-2 bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-amber-100 dark:border-amber-900/10">
+                      {request.infoRequested || "Clarification needed."}
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">
+                      Your Response <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all shadow-sm resize-none"
+                      rows={3}
+                      placeholder="Enter the requested information or clarification here..."
+                      value={employeeResponseInput}
+                      onChange={e => setEmployeeResponseInput(e.target.value)}
+                    />
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={handleEmployeeSubmitResponse}
+                    disabled={isUploading || !employeeResponseInput.trim()}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-10 rounded-lg font-black uppercase tracking-wider text-xs shadow-md shadow-emerald-600/10 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isUploading ? (
+                      <>
+                        <i className="fa-solid fa-circle-notch fa-spin"></i> Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-paper-plane"></i> Submit Response & Resume Processing
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {!showCancellationForm ? (
-                <button
-                  onClick={() => setShowCancellationForm(true)}
-                  className="w-full bg-rose-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-95 transition-all"
-                >
-                  <i className="fa-solid fa-circle-xmark mr-2"></i> Cancel Request
-                </button>
+                <div className="flex gap-3">
+                  {(request.pncStatus === PNCStatus.REJECTED_BY_MANAGER || request.pncStatus === PNCStatus.REJECTED_BY_PNC) && (
+                    <div className="flex-1">
+                      {request.resubmissionCount && request.resubmissionCount >= 3 ? (
+                        <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 p-3 rounded-lg text-center text-2xs font-semibold text-rose-600 dark:text-rose-400">
+                          Resubmission cap reached. Please contact PNC or your manager directly.
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onEdit && onEdit(request)}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                          Edit & Resubmit
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setShowCancellationForm(true)}
+                    className="flex-1 bg-rose-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-95 transition-all"
+                  >
+                    <i className="fa-solid fa-circle-xmark mr-2"></i> Cancel Request
+                  </button>
+                </div>
               ) : (
                 <div className="p-4 bg-rose-50 dark:bg-rose-955/20 border border-rose-250 dark:border-rose-900/30 rounded-xl space-y-4">
                   <p className="text-sm font-bold text-rose-800 dark:text-rose-400">

@@ -3,7 +3,7 @@ import { TravelRequest, PNCStatus } from '../types';
 
 interface ManagerApprovalsViewProps {
   requests: TravelRequest[];
-  onUpdate: (request: TravelRequest, newStatus: PNCStatus) => void;
+  onUpdate: (request: TravelRequest, newStatus: PNCStatus, reason?: string) => void;
   currentUser: any;
 }
 
@@ -227,7 +227,16 @@ export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsVie
           request={selectedRequest}
           onClose={() => setSelectedRequest(null)}
           onApprove={() => { onUpdate(selectedRequest, PNCStatus.APPROVED); setSelectedRequest(null); }}
-          onReject={() => { onUpdate(selectedRequest, PNCStatus.REJECTED_BY_MANAGER); setSelectedRequest(null); }}
+          onReject={() => {
+            const reason = window.prompt("Please specify a reason for rejection:");
+            if (reason === null) return; // user clicked Cancel on prompt
+            if (!reason.trim()) {
+              alert("Rejection reason is required.");
+              return;
+            }
+            onUpdate(selectedRequest, PNCStatus.REJECTED_BY_MANAGER, reason); 
+            setSelectedRequest(null); 
+          }}
         />
       )}
     </div>

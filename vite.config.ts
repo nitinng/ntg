@@ -31,6 +31,14 @@ export default defineConfig(({ mode }) => {
           // @ts-ignore - lookup is supported by node-http-proxy
           lookup: reliableSupabaseLookup,
           rewrite: (path) => path.replace(/^\/supabase-api/, ''),
+          configure: (proxy, _options) => {
+            proxy.on('proxyReq', (proxyReq, _req, _res) => {
+              proxyReq.removeHeader('cookie');
+            });
+            proxy.on('proxyReqWs', (proxyReq, _req, _socket, _options, _head) => {
+              proxyReq.removeHeader('cookie');
+            });
+          }
         },
       },
       hmr: {

@@ -209,32 +209,19 @@ ALTER TABLE public.advances ADD COLUMN IF NOT EXISTS is_settled BOOLEAN DEFAULT 
 ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS payment_source TEXT CHECK (payment_source IN ('Advance', 'Direct', 'Not Yet Entered')) DEFAULT 'Not Yet Entered';
 ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS booking_status TEXT CHECK (booking_status IN ('Booked', 'Cancelled', 'Partially Cancelled', 'Reconciled'));
 
-CREATE TABLE IF NOT EXISTS public.travel_legs (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  travel_request_id UUID REFERENCES public.travel_requests(id) ON DELETE CASCADE,
-  from_location TEXT NOT NULL,
-  to_location TEXT NOT NULL,
-  travel_mode TEXT,
-  vendor_name TEXT,
-  ticket_cost NUMERIC,
-  invoice_url TEXT,
-  status TEXT DEFAULT 'Active' CHECK (status IN ('Active', 'Cancelled')),
-  cancelled_by TEXT CHECK (cancelled_by IN ('Employee', 'Org', 'Vendor')),
-  cancellation_reason TEXT,
-  advance_id UUID REFERENCES public.advances(id),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.travel_legs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admins manage travel legs" ON public.travel_legs FOR ALL USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
-CREATE POLICY "Employees view own travel legs" ON public.travel_legs FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.travel_requests WHERE id = travel_request_id AND requester_id = auth.uid())
-);
+-- 7. Ticket Cancellation & Reconciliation Tables
+
+ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS payment_source TEXT CHECK (payment_source IN ('Advance', 'Direct', 'Not Yet Entered')) DEFAULT 'Not Yet Entered';
+ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS booking_status TEXT CHECK (booking_status IN ('Booked', 'Cancelled', 'Partially Cancelled', 'Reconciled'));
+ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS split_tickets JSONB DEFAULT '[]'::jsonb;
+
+-- Drop travel_legs table if it exists (we are using split_tickets JSONB on travel_requests)
+DROP TABLE IF EXISTS public.travel_legs CASCADE;
 
 CREATE TABLE IF NOT EXISTS public.cancellation_records (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   travel_request_id UUID REFERENCES public.travel_requests(id) ON DELETE CASCADE,
-  leg_id UUID REFERENCES public.travel_legs(id) ON DELETE CASCADE,
+  leg_id TEXT, -- References client-side generated leg ID string in split_tickets JSONB
   cancelled_by TEXT CHECK (cancelled_by IN ('Employee', 'Org')),
   cancellation_date TIMESTAMPTZ DEFAULT NOW(),
   policy_navgurukul_cover_percent NUMERIC NOT NULL,
@@ -244,30 +231,29 @@ CREATE TABLE IF NOT EXISTS public.cancellation_records (
   employee_owed_amount NUMERIC DEFAULT 0,
   org_absorbed_amount NUMERIC DEFAULT 0,
   status TEXT DEFAULT 'Pending Refund' CHECK (status IN ('Pending Refund', 'Partially Refunded', 'Fully Refunded', 'Written Off', 'Reconciled', 'Disputed')),
+  advance_id UUID REFERENCES public.advances(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.cancellation_records ENABLE ROW LEVEL SECURITY;
 
 -- Policies for cancellation_records
--- Admins, PNC, Finance can view all cancellations
+DROP POLICY IF EXISTS "Admins view all cancellations" ON public.cancellation_records;
 CREATE POLICY "Admins view all cancellations" ON public.cancellation_records FOR SELECT USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
 
--- Employees can view their own cancellations (linked travel request)
-CREATE POLICY "Employees view own cancellations" ON public.cancellation_records FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.travel_requests tr WHERE tr.id = public.cancellation_records.travel_request_id AND tr.requester_id = auth.uid())
-);
-
--- Admins, PNC, Finance can insert cancellation records
-CREATE POLICY "Admins insert cancellations" ON public.cancellation_records FOR INSERT WITH CHECK (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
-
--- Admins, PNC, Finance can update cancellation status
-CREATE POLICY "Admins update cancellations" ON public.cancellation_records FOR UPDATE USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
-
-CREATE POLICY "Admins manage cancellations" ON public.cancellation_records FOR ALL USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
+DROP POLICY IF EXISTS "Employees view own cancellations" ON public.cancellation_records;
 CREATE POLICY "Employees view own cancellations" ON public.cancellation_records FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.travel_requests WHERE id = travel_request_id AND requester_id = auth.uid())
 );
+
+DROP POLICY IF EXISTS "Admins insert cancellations" ON public.cancellation_records;
+CREATE POLICY "Admins insert cancellations" ON public.cancellation_records FOR INSERT WITH CHECK (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
+
+DROP POLICY IF EXISTS "Admins update cancellations" ON public.cancellation_records;
+CREATE POLICY "Admins update cancellations" ON public.cancellation_records FOR UPDATE USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
+
+DROP POLICY IF EXISTS "Admins manage cancellations" ON public.cancellation_records;
+CREATE POLICY "Admins manage cancellations" ON public.cancellation_records FOR ALL USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
 
 CREATE TABLE IF NOT EXISTS public.refund_entries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -280,7 +266,11 @@ CREATE TABLE IF NOT EXISTS public.refund_entries (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.refund_entries ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins manage refunds" ON public.refund_entries;
 CREATE POLICY "Admins manage refunds" ON public.refund_entries FOR ALL USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
+
+DROP POLICY IF EXISTS "Employees view own refunds" ON public.refund_entries;
 CREATE POLICY "Employees view own refunds" ON public.refund_entries FOR SELECT USING (
   EXISTS (
     SELECT 1 FROM public.cancellation_records cr 
@@ -288,3 +278,37 @@ CREATE POLICY "Employees view own refunds" ON public.refund_entries FOR SELECT U
     WHERE cr.id = cancellation_record_id AND tr.requester_id = auth.uid()
   )
 );
+
+-- Atomic advance balance update function
+CREATE OR REPLACE FUNCTION public.update_advance_balance(
+  p_advance_id UUID,
+  p_amount_delta NUMERIC,
+  p_changelog_entry JSONB
+) RETURNS NUMERIC AS $$
+DECLARE
+  v_new_amount NUMERIC;
+  v_updated_entry JSONB;
+BEGIN
+  -- 1. Perform atomic update
+  UPDATE public.advances
+  SET 
+    amount_left = amount_left + p_amount_delta,
+    updated_at = NOW()
+  WHERE id = p_advance_id
+  RETURNING amount_left INTO v_new_amount;
+
+  -- 2. Modify the changelog entry to append the new active balance
+  v_updated_entry := p_changelog_entry || jsonb_build_object(
+    'details', 
+    (p_changelog_entry->>'details') || ' Active balance: ₹' || v_new_amount || '.'
+  );
+
+  -- 3. Update the changelog array
+  UPDATE public.advances
+  SET changelog = COALESCE(changelog, '[]'::jsonb) || jsonb_build_array(v_updated_entry)
+  WHERE id = p_advance_id;
+
+  RETURN v_new_amount;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+

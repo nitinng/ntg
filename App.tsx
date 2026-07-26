@@ -43,6 +43,7 @@ const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 const PNCDashboard = React.lazy(() => import('./components/PNCDashboard'));
 const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagement'));
 const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
+const CancellationRequestsQueue = React.lazy(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
 const FinanceDashboard = React.lazy(() => import('./components/FinanceDashboard'));
 const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprovalsView'));
 const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
@@ -3382,6 +3383,14 @@ const App: React.FC = () => {
         return renderDashboard();
       case 'cancellations':
         return <CancellationsDashboard currentUser={currentUser} />;
+      case 'cancellation-requests':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return (
+          <CancellationRequestsQueue
+            requests={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED)}
+            onView={setSelectedRequest}
+          />
+        );
       case 'verification':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VerificationQueue users={users} onUpdateUser={handleUpdateUser} />;
@@ -3620,6 +3629,14 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
                 <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
                <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
+                <SidebarLink 
+                  icon="fa-circle-exclamation" 
+                  label="Cancel Queue" 
+                  active={activeTab === 'cancellation-requests'} 
+                  onClick={() => handleTabChange('cancellation-requests')} 
+                  badge={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED).length || null}
+                  badgeColor="bg-rose-600 px-1.5 py-0.5"
+                />
                 {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
               </div>

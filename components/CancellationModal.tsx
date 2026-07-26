@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { TravelRequest, TravelLeg, UserRole, PNCStatus } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { calculateCancellationSplit } from '../utils/cancellation';
 
 interface CancellationModalProps {
   request: TravelRequest;
@@ -105,6 +106,13 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
           }
         ];
 
+        const split = calculateCancellationSplit(
+          originalFare,
+          [],
+          ngCoverPercent,
+          empCoverPercent
+        );
+
         const { error: cancelError } = await supabase.from('cancellation_records').insert({
           travel_request_id: request.id,
           leg_id: null,
@@ -113,10 +121,11 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
           policy_navgurukul_cover_percent: ngCoverPercent,
           policy_employee_cover_percent: empCoverPercent,
           original_fare: originalFare,
-          net_unrecovered_amount: originalFare,
-          employee_owed_amount: (originalFare * empCoverPercent) / 100,
-          org_absorbed_amount: (originalFare * ngCoverPercent) / 100,
-          status: 'Pending Refund'
+          net_unrecovered_amount: split.netUnrecoveredAmount,
+          employee_owed_amount: split.employeeOwedAmount,
+          org_absorbed_amount: split.orgAbsorbedAmount,
+          status: 'Pending Refund',
+          advance_id: request.advanceId || null
         });
         if (cancelError) throw cancelError;
 
@@ -165,42 +174,37 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
         : (policyData?.cancellationPncEmpCover !== undefined ? Number(policyData.cancellationPncEmpCover) : 0);
 
       // Create one cancellation record per selected leg
-      const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       const selectedLegs = activeLegs.filter(l => selectedLegIds.has(l.id));
       const records = selectedLegs.map(leg => {
         const legRefund = refundData[leg.id];
         const refundAmt = (legRefund?.received && legRefund?.amount) ? parseFloat(legRefund.amount) || 0 : 0;
-        const netUnrecovered = Math.max(0, leg.ticketCost - refundAmt);
-        const hasFullRefund = refundAmt >= leg.ticketCost;
+        const refundEntries = refundAmt > 0 ? [{ amount: refundAmt } as any] : [];
+
+        const split = calculateCancellationSplit(
+          leg.ticketCost,
+          refundEntries,
+          ngCoverPercent,
+          empCoverPercent
+        );
 
         return {
           travel_request_id: request.id,
-          leg_id: isValidUUID(leg.id) ? leg.id : null,
+          leg_id: leg.id,
           cancelled_by: cancelledBy,
           cancellation_date: new Date().toISOString(),
           policy_navgurukul_cover_percent: ngCoverPercent,
           policy_employee_cover_percent: empCoverPercent,
           original_fare: leg.ticketCost,
-          net_unrecovered_amount: netUnrecovered,
-          employee_owed_amount: (netUnrecovered * empCoverPercent) / 100,
-          org_absorbed_amount: (netUnrecovered * ngCoverPercent) / 100,
-          status: hasFullRefund ? 'Fully Refunded' : refundAmt > 0 ? 'Partially Refunded' : 'Pending Refund'
+          net_unrecovered_amount: split.netUnrecoveredAmount,
+          employee_owed_amount: split.employeeOwedAmount,
+          org_absorbed_amount: split.orgAbsorbedAmount,
+          status: split.netUnrecoveredAmount === 0 ? 'Fully Refunded' : refundAmt > 0 ? 'Partially Refunded' : 'Pending Refund',
+          advance_id: leg.advanceId || request.advanceId || null
         };
       });
 
       const { error: cancelError } = await supabase.from('cancellation_records').insert(records);
       if (cancelError) throw cancelError;
-
-      // Update each leg's status (only for real travel_legs rows with valid UUIDs)
-      for (const leg of selectedLegs) {
-        if (isValidUUID(leg.id)) {
-          await supabase.from('travel_legs').update({
-            status: 'Cancelled',
-            cancelled_by: cancelledBy,
-            cancellation_reason: reason
-          }).eq('id', leg.id);
-        }
-      }
 
       // Update split_tickets JSONB array in travel_requests table
       const updatedLegs = legs.map(leg => {
@@ -219,7 +223,7 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
       const allLegsCancelled = updatedLegs.every(l => l.status === 'Cancelled');
       const newPncStatus = allLegsCancelled
         ? (cancelledBy === 'Employee' ? PNCStatus.CANCELLED_BY_EMPLOYEE : PNCStatus.CANCELLED_BY_PNC)
-        : request.pncStatus;
+        : PNCStatus.BOOKED;
       const newBookingStatus = allLegsCancelled ? 'Cancelled' : 'Partially Cancelled';
 
       const updatedTimeline = [
@@ -233,7 +237,7 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
         }
       ];
 
-      await supabase.from('travel_requests').update({
+      const { error: updateError } = await supabase.from('travel_requests').update({
         pnc_status: newPncStatus,
         booking_status: newBookingStatus,
         cancelled_reason: reason,
@@ -242,6 +246,8 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
         timeline: updatedTimeline,
         updated_at: new Date().toISOString()
       }).eq('id', request.id);
+
+      if (updateError) throw updateError;
 
       toast.success(`${selectedLegs.length} leg${selectedLegs.length > 1 ? 's' : ''} cancelled successfully`);
       onSuccess();

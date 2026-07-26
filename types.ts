@@ -1,4 +1,3 @@
-
 export enum UserRole {
   EMPLOYEE = 'Employee',
   PNC = 'PNC',
@@ -81,6 +80,7 @@ export enum PNCStatus {
   BOOKED = 'Booked',
   CANCELLED_BY_EMPLOYEE = 'Cancelled by Employee',
   CANCELLED_BY_PNC = 'Cancelled by PNC',
+  CANCELLATION_REQUESTED = 'Cancellation Requested',
   CLOSED = 'Closed'
 }
 
@@ -201,6 +201,7 @@ export interface CancellationRecord {
   employeeOwedAmount: number;
   orgAbsorbedAmount: number;
   status: 'Pending Refund' | 'Partially Refunded' | 'Fully Refunded' | 'Written Off' | 'Reconciled' | 'Disputed';
+  advanceId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -322,7 +323,7 @@ export interface ChatThread {
 export interface AdvanceChangelogEntry {
   timestamp: string;
   user: string; // The name or ID of the user making the change
-  action: 'Created' | 'Edited' | 'Ticket Purchased';
+  action: 'Created' | 'Edited' | 'Ticket Purchased' | 'Refund Received';
   details: string;
   relatedTicketId?: string; // Storing the UUID
   relatedTicketSubmissionId?: string; // Storing the readable TRV- ID

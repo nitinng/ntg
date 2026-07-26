@@ -227,20 +227,21 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
         status
       ];
 
-      // Extract ticket purchase expenses
-      const expenses = adv.changelog?.filter(entry => entry.action === 'Ticket Purchased') || [];
+      // Extract ticket purchase expenses and refunds
+      const expenses = adv.changelog?.filter(entry => entry.action === 'Ticket Purchased' || entry.action === 'Refund Received') || [];
 
       if (expenses.length === 0) {
         // Just advance details, no expenses
         rows.push([...baseRow, '', '', '', '']);
       } else {
-        // One row per expense
+        // One row per expense/refund
         expenses.forEach(exp => {
-          // Attempt to extract amount from details e.g. "purchased for Rs500" or similar
-          // Alternatively, we calculate it if we stored it, but we can just put it in details,
-          // wait, we have `cost` in the changelog details string: "purchased for ₹1000"
-          const match = exp.details.match(/for ₹([0-9.]+)/);
-          const amount = match ? match[1] : '';
+          const match = exp.details.match(/₹([0-9.]+)/);
+          let amount = match ? match[1] : '';
+          
+          if (exp.action === 'Refund Received' && amount) {
+            amount = `-${amount}`;
+          }
           
           rows.push([
             ...baseRow,
@@ -555,8 +556,16 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
                   {selectedAdvance.changelog.map((entry, idx) => (
                     <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
                       {/* Timeline Dot */}
-                      <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white dark:border-slate-900 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${entry.action === 'Created' ? 'bg-emerald-500' : entry.action === 'Ticket Purchased' ? 'bg-rose-500' : 'bg-indigo-500'}`}>
-                        <i className={`fa-solid ${entry.action === 'Created' ? 'fa-plus' : entry.action === 'Ticket Purchased' ? 'fa-ticket' : 'fa-pen'} text-white text-xs`}></i>
+                      <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white dark:border-slate-900 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${
+                        entry.action === 'Created' ? 'bg-emerald-500' : 
+                        entry.action === 'Ticket Purchased' ? 'bg-rose-500' : 
+                        entry.action === 'Refund Received' ? 'bg-teal-500' : 'bg-indigo-500'
+                      }`}>
+                        <i className={`fa-solid ${
+                          entry.action === 'Created' ? 'fa-plus' : 
+                          entry.action === 'Ticket Purchased' ? 'fa-ticket' : 
+                          entry.action === 'Refund Received' ? 'fa-arrow-rotate-left' : 'fa-pen'
+                        } text-white text-xs`}></i>
                       </div>
                       
                       {/* Content Card */}

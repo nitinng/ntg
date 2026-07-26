@@ -28,6 +28,46 @@ export const RequestDetailOverlay = ({
   const [cancellationReason, setCancellationReason] = useState('');
   const [showCancellationForm, setShowCancellationForm] = useState(false);
 
+  const handleEmployeeRequestCancel = async () => {
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userName = user?.user_metadata?.full_name || user?.email || 'Employee';
+
+      const newTimeline = [
+        ...(request.timeline || []),
+        {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          actor: userName,
+          event: `Cancellation Requested`,
+          details: `Employee requested cancellation of this ticket.`
+        }
+      ];
+
+      const { error } = await supabase
+        .from('travel_requests')
+        .update({
+          pnc_status: PNCStatus.CANCELLATION_REQUESTED,
+          timeline: newTimeline,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', request.id);
+
+      if (error) throw error;
+
+      toast.success('Cancellation request submitted successfully');
+      setShowCancellationForm(false);
+      onClose();
+      window.location.reload();
+    } catch (error: any) {
+      console.error(error);
+      toast.error('Failed to submit cancellation request: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Booking Details State
   const [ticketCost, setTicketCost] = useState<string | number>(request.ticketCost || '');
   const [vendorName, setVendorName] = useState(request.vendorName || '');
@@ -116,28 +156,31 @@ export const RequestDetailOverlay = ({
               const selectedAdv = activeAdvances.find(a => a.id === ticket.advanceId);
               if (selectedAdv) {
                 const cost = Number(ticket.ticketCost);
-                const newAmountLeft = selectedAdv.amount_left - cost;
                 
                 const newChangelogEntry: AdvanceChangelogEntry = {
                   timestamp: new Date().toISOString(),
                   user: userEmail,
                   action: 'Ticket Purchased',
-                  details: `Leg (${ticket.fromLocation} to ${ticket.toLocation}) for Ticket ${request.submissionId || request.id} purchased for ₹${cost}. Active balance: ₹${newAmountLeft}.`,
+                  details: `Leg (${ticket.fromLocation} to ${ticket.toLocation}) for Ticket ${request.submissionId || request.id} purchased for ₹${cost}.`,
                   relatedTicketId: request.id,
                   relatedTicketSubmissionId: request.submissionId
                 };
 
-                const { error: advError } = await supabase.from('advances').update({
-                  amount_left: newAmountLeft,
-                  changelog: [...(selectedAdv.changelog || []), newChangelogEntry]
-                }).eq('id', ticket.advanceId);
+                const { data: updatedBalance, error: advError } = await supabase.rpc('update_advance_balance', {
+                  p_advance_id: ticket.advanceId,
+                  p_amount_delta: -cost,
+                  p_changelog_entry: newChangelogEntry
+                });
                 
                 if (advError) {
                   console.error("Failed to deduct from advance:", advError);
                   toast.error(`Failed to deduct from advance for leg ${ticket.fromLocation}-${ticket.toLocation}`);
                 } else {
-                  selectedAdv.amount_left = newAmountLeft;
-                  selectedAdv.changelog = [...(selectedAdv.changelog || []), newChangelogEntry];
+                  selectedAdv.amount_left = Number(updatedBalance);
+                  selectedAdv.changelog = [...(selectedAdv.changelog || []), {
+                    ...newChangelogEntry,
+                    details: newChangelogEntry.details + ` Active balance: ₹${updatedBalance}.`
+                  }];
                   ticket.processed_advance = true; // prevent double deduction if re-saved
                 }
               }
@@ -158,7 +201,6 @@ export const RequestDetailOverlay = ({
             const selectedAdv = activeAdvances.find(a => a.id === selectedAdvanceId);
             if (selectedAdv) {
               const cost = parseFloat(ticketCost.toString());
-              const newAmountLeft = selectedAdv.amount_left - cost;
               
               const { data: { user } } = await supabase.auth.getUser();
               const userEmail = user?.email || 'Unknown User';
@@ -167,19 +209,26 @@ export const RequestDetailOverlay = ({
                 timestamp: new Date().toISOString(),
                 user: userEmail,
                 action: 'Ticket Purchased',
-                details: `Ticket ${request.submissionId || request.id} purchased for ₹${cost}. Active balance: ₹${newAmountLeft}. Ticket booked on ${new Date().toLocaleDateString()}.`,
+                details: `Ticket ${request.submissionId || request.id} purchased for ₹${cost}. Ticket booked on ${new Date().toLocaleDateString()}.`,
                 relatedTicketId: request.id,
                 relatedTicketSubmissionId: request.submissionId
               };
 
-              const { error: advError } = await supabase.from('advances').update({
-                amount_left: newAmountLeft,
-                changelog: [...(selectedAdv.changelog || []), newChangelogEntry]
-              }).eq('id', selectedAdvanceId);
+              const { data: updatedBalance, error: advError } = await supabase.rpc('update_advance_balance', {
+                p_advance_id: selectedAdvanceId,
+                p_amount_delta: -cost,
+                p_changelog_entry: newChangelogEntry
+              });
 
               if (advError) {
                 console.error("Failed to deduct from advance:", advError);
                 toast.error("Failed to deduct from advance.");
+              } else {
+                selectedAdv.amount_left = Number(updatedBalance);
+                selectedAdv.changelog = [...(selectedAdv.changelog || []), {
+                  ...newChangelogEntry,
+                  details: newChangelogEntry.details + ` Active balance: ₹${updatedBalance}.`
+                }];
               }
             }
           }
@@ -421,7 +470,7 @@ export const RequestDetailOverlay = ({
 
         {/* Actions Area */}
         <div className="mt-8 pt-8 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800">
-            {role === UserRole.PNC ? (
+            {role === UserRole.PNC || role === UserRole.ADMIN ? (
             <div className="space-y-3">
               <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
 
@@ -669,10 +718,39 @@ export const RequestDetailOverlay = ({
                   </>
                 )}
               </button>
+
+              {(request.pncStatus === PNCStatus.CANCELLATION_REQUESTED || 
+                request.pncStatus === PNCStatus.BOOKED || 
+                request.pncStatus === PNCStatus.CLOSED) && (
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                  {!showCancellationForm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCancellationForm(true)}
+                      className="w-full bg-rose-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-95 transition-all"
+                    >
+                      <i className="fa-solid fa-ban mr-2"></i> Process Cancellation
+                    </button>
+                  ) : (
+                    <CancellationModal
+                      request={request}
+                      legs={request.travelLegs || []}
+                      role={role}
+                      onClose={() => setShowCancellationForm(false)}
+                      onSuccess={() => {
+                        setShowCancellationForm(false);
+                        onClose();
+                        window.location.reload();
+                      }}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           ) : role === UserRole.EMPLOYEE &&
             request.pncStatus !== PNCStatus.CANCELLED_BY_EMPLOYEE &&
             request.pncStatus !== PNCStatus.CANCELLED_BY_PNC &&
+            request.pncStatus !== PNCStatus.CANCELLATION_REQUESTED &&
             request.pncStatus !== PNCStatus.CLOSED ? (
             <div className="space-y-4 w-full">
               {!showCancellationForm ? (
@@ -683,18 +761,28 @@ export const RequestDetailOverlay = ({
                   <i className="fa-solid fa-circle-xmark mr-2"></i> Cancel Request
                 </button>
               ) : (
-                <CancellationModal 
-                  request={request}
-                  legs={request.travelLegs || []}
-                  role={role}
-                  onClose={() => setShowCancellationForm(false)}
-                  onSuccess={() => {
-                     setShowCancellationForm(false);
-                     onClose();
-                     // trigger a refresh ideally
-                     window.location.reload(); 
-                  }}
-                />
+                <div className="p-4 bg-rose-50 dark:bg-rose-955/20 border border-rose-250 dark:border-rose-900/30 rounded-xl space-y-4">
+                  <p className="text-sm font-bold text-rose-800 dark:text-rose-400">
+                    Are you sure you want to cancel this ticket?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCancellationForm(false)}
+                      className="flex-1 h-9 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all"
+                    >
+                      No, Keep It
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEmployeeRequestCancel}
+                      disabled={isUploading}
+                      className="flex-1 h-9 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-200 dark:shadow-none transition-all disabled:opacity-50"
+                    >
+                      {isUploading ? 'Submitting...' : 'Yes, Cancel Request'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           ) : (

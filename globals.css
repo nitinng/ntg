@@ -47,6 +47,16 @@
     font-family: var(--font-primary);
 }
 
+/* Synchronized dark/light mode transition — all color-related properties
+   animate together at the same speed so nothing switches at a different time. */
+*,
+*::before,
+*::after {
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, box-shadow;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+}
+
 /* Allow FontAwesome to keep its own font-family */
 .fa,
 .fa-solid,
@@ -410,7 +420,7 @@ small,
         position: fixed !important;
         top: 0 !important;
         width: 100% !important;
-        z-index: 50 !important;
+        z-index: 40 !important;
         flex-wrap: nowrap !important;
     }
 

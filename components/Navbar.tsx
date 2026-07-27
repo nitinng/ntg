@@ -47,7 +47,7 @@ export const Navbar = ({
   const visibleRoles = getVisibleRoles();
 
   return (
-    <nav className="h-16 app-navbar bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-300">
+    <nav className="h-16 app-navbar bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-200">
       <div className="flex items-center gap-2 md:gap-4">
         {onToggleSidebar && (
           <button onClick={onToggleSidebar} className="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-colors flex-shrink-0">
@@ -55,16 +55,16 @@ export const Navbar = ({
           </button>
         )}
         <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-600/20 flex-shrink-0">N</div>
-        <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 hidden md:block tracking-tight whitespace-nowrap">Navgurukul Travel Desk</h1>
+        <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 hidden md:block tracking-tight whitespace-nowrap">NG Travel Desk</h1>
         {visibleRoles.length > 0 && (
           <>
             {/* Desktop standard role tabs */}
-            <div className="ml-4 hidden md:flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors duration-300">
+            <div className="ml-4 hidden md:flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors duration-200">
               {visibleRoles.map(role => (
                 <button
-                  key={role}
-                  onClick={() => onToggleRole(role)}
-                  className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-300 ${currentUser.role === role ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                   key={role}
+                   onClick={() => onToggleRole(role)}
+                   className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${currentUser.role === role ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   {role}
                 </button>
@@ -75,7 +75,7 @@ export const Navbar = ({
             <div className="ml-2 md:hidden relative role-dropdown-container">
               <button
                 onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                className="flex items-center justify-between min-w-[100px] bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-xs sm:text-xs font-black uppercase tracking-widest py-1.5 pl-3.5 pr-2.5 rounded-full outline-none shadow-sm shadow-indigo-500/5 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-300"
+                className="flex items-center justify-between min-w-[100px] bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-xs sm:text-xs font-black uppercase tracking-widest py-1.5 pl-3.5 pr-2.5 rounded-full outline-none shadow-sm shadow-indigo-500/5 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200"
               >
                 <span>{currentUser.role}</span>
                 <div className="w-4 h-4 ml-2 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center transition-colors">
@@ -115,13 +115,13 @@ export const Navbar = ({
       <div className="flex items-center gap-4">
         <button
           onClick={onToggleTheme}
-          className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-transparent hover:border-indigo-500/20 transition-all duration-300 shadow-sm"
+          className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-transparent hover:border-indigo-500/20 transition-all duration-200 shadow-sm"
           aria-label="Toggle Dark Mode"
         >
           <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} text-lg`}></i>
         </button>
 
-        <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800 transition-colors duration-300">
+        <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800 transition-colors duration-200">
           <div className="text-right hidden sm:block">
             <p className="text-base font-bold text-slate-800 dark:text-white leading-none">{currentUser.name}</p>
             <p className="text-xs text-slate-500 mt-1 uppercase tracking-tighter font-medium">{currentUser.role} View</p>

@@ -52,6 +52,7 @@ const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprov
 const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
 const LocationCalendar = React.lazy(() => import('./components/LocationCalendar'));
 const RequestDetailOverlay = React.lazy(() => import('./components/RequestDetailOverlay'));
+const EmployeeGuideView = React.lazy(() => import('./components/EmployeeGuideView'));
 
 const IgathpuriMeetupView = ({
   onNewRequest,
@@ -3418,7 +3419,7 @@ const App: React.FC = () => {
       case 'all-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} />;
-            case 'advances':
+      case 'advances':
         if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN) {
           return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
             const req = requests.find((r: TravelRequest) => r.id === id);
@@ -3474,6 +3475,8 @@ const App: React.FC = () => {
         );
       case 'settings':
         return <SettingsView isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />;
+      case 'guide':
+        return <EmployeeGuideView onTabChange={handleTabChange} policies={travelModePolicies} />;
       case 'approvals':
         if (currentUser.role === UserRole.EMPLOYEE) {
           const pendingApprovals = requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING);
@@ -3514,10 +3517,10 @@ const App: React.FC = () => {
 
                 setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
                 toast.success(`Request ${newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'}`);
-                
+
                 // Queue emails
                 await queueEmailsForTransition(updated, updatedReq.pncStatus, newStatus);
-                
+
                 if (pendingApprovals.length <= 1) handleTabChange('dashboard'); // Go back if no more
               } catch (e: any) {
                 toast.error("Failed to update: " + e.message);
@@ -3597,7 +3600,7 @@ const App: React.FC = () => {
         <nav className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-8 flex items-center justify-between transition-colors duration-300">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-600/20">N</div>
-            <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">Navgurukul Travel Desk</h1>
+            <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">NG Travel Desk</h1>
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -3639,14 +3642,14 @@ const App: React.FC = () => {
         handleTabChange('dashboard');
       }} onOpenProfile={() => handleTabChange('profile')} />
 
-      <div className="flex-1 flex flex-col md:flex-row transition-colors duration-300 relative">
+      <div className="flex-1 flex flex-col md:flex-row transition-colors duration-300">
         <aside className={`app-sidebar ${isSidebarOpen ? 'sidebar-open' : ''} w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 p-6 flex flex-col space-y-6 transition-colors duration-300 md:sticky md:top-16 md:h-[calc(100vh-4rem)] overflow-y-auto custom-scrollbar`}>
           {currentUser.role === UserRole.EMPLOYEE && (
             <>
               <div className="space-y-1">
                 <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                 <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
-               <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
+                <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                 {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                 {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
                 {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
@@ -3667,6 +3670,7 @@ const App: React.FC = () => {
                     badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
                   />
                 )}
+                <SidebarLink icon="fa-book" label="Employee Guide" active={activeTab === 'guide'} onClick={() => handleTabChange('guide')} />
               </div>
 
             </>
@@ -3688,12 +3692,12 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
                 <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
-               <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
-                <SidebarLink 
-                  icon="fa-circle-exclamation" 
-                  label="Cancel Queue" 
-                  active={activeTab === 'cancellation-requests'} 
-                  onClick={() => handleTabChange('cancellation-requests')} 
+                <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
+                <SidebarLink
+                  icon="fa-circle-exclamation"
+                  label="Cancel Queue"
+                  active={activeTab === 'cancellation-requests'}
+                  onClick={() => handleTabChange('cancellation-requests')}
                   badge={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED).length || null}
                   badgeColor="bg-rose-600 px-1.5 py-0.5"
                 />
@@ -3806,7 +3810,7 @@ const App: React.FC = () => {
               if (editingRequest) {
                 // Edit & Resubmit Flow
                 const newResubmissionCount = (editingRequest.resubmissionCount || 0) + 1;
-                
+
                 const updatedPayload = {
                   requester_name: data.requesterName || currentUser!.name,
                   requester_phone: data.requesterPhone,
@@ -3832,7 +3836,7 @@ const App: React.FC = () => {
                   emergency_contact_relation: data.emergencyContactRelation,
                   blood_group: data.bloodGroup,
                   medical_conditions: data.medicalConditions,
-                  
+
                   // Resubmission resets state to NOT_STARTED per life-cycle flow
                   pnc_status: PNCStatus.NOT_STARTED,
                   resubmission_count: newResubmissionCount,
@@ -4196,7 +4200,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
         .from('cancellation_records')
         .select('employee_owed_amount')
         .eq('status', 'Pending Refund');
-        
+
       if (data) {
         const total = data.reduce((sum, r) => sum + (Number(r.employee_owed_amount) || 0), 0);
         setCancellationOwed(total);
@@ -4209,17 +4213,17 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
   const isTravelDatePassed = (r: TravelRequest) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     let travelDate = new Date(r.dateOfTravel);
     if (r.tripType === TripType.ROUND_TRIP && r.returnDate) {
       travelDate = new Date(r.returnDate);
     }
-    
+
     return travelDate < today;
   };
 
   const activeRequests = requests.filter((r: TravelRequest) => {
-    const isCancelledOrRejected = 
+    const isCancelledOrRejected =
       r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
       r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
       r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
@@ -4236,7 +4240,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
   });
 
   const closedRequests = requests.filter((r: TravelRequest) => {
-    const isCancelledOrRejected = 
+    const isCancelledOrRejected =
       r.pncStatus === PNCStatus.REJECTED_BY_PNC ||
       r.pncStatus === PNCStatus.REJECTED_BY_MANAGER ||
       r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE ||
@@ -4562,11 +4566,10 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
           <div className="flex flex-wrap gap-2 bg-slate-150/40 dark:bg-slate-800/40 p-1.5 rounded-lg max-w-fit border border-slate-200/50 dark:border-slate-800/50">
             <button
               onClick={() => setPastRequestsTab('All')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                pastRequestsTab === 'All'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-              }`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${pastRequestsTab === 'All'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+                }`}
             >
               All ({closedRequests.length})
             </button>
@@ -4576,11 +4579,10 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                 <button
                   key={status}
                   onClick={() => setPastRequestsTab(status)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                    pastRequestsTab === status
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${pastRequestsTab === status
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+                    }`}
                 >
                   {status} ({count})
                 </button>
@@ -4929,13 +4931,13 @@ const LoadingView = () => {
             }`}></div>
 
           {/* Icon Slider Window */}
-          <div className="w-16 h-16 rounded-lg overflow-hidden shadow-2xl shadow-indigo-600/30 relative z-10 bg-white dark:bg-slate-900">
+          <div className="w-12 h-12 rounded-lg overflow-hidden shadow-2xl shadow-indigo-600/30 relative z-10 bg-white dark:bg-slate-900">
             {renderContent()}
           </div>
         </div>
 
         <div className="text-center space-y-2">
-          <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Navgurukul Travel Desk</h3>
+          <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">NG Travel Desk</h3>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading...</p>
         </div>
       </div>

@@ -55,7 +55,7 @@ export const Navbar = ({
           </button>
         )}
         <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-600/20 flex-shrink-0">N</div>
-        <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 hidden md:block tracking-tight whitespace-nowrap">Navgurukul Travel Desk</h1>
+        <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 hidden md:block tracking-tight whitespace-nowrap">NG Travel Desk</h1>
         {visibleRoles.length > 0 && (
           <>
             {/* Desktop standard role tabs */}

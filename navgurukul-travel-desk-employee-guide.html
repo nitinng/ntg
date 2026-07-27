@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Guide — Navgurukul Travel Desk</title>
+<meta name="description" content="The complete employee guide to the Navgurukul Travel Desk: profile verification, submitting requests, the ticket lifecycle, approvals, cancellations and support.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+/* ============================================================
+   Design tokens — lifted from ntg/tailwind.config.js + globals.css
+   ============================================================ */
+:root{
+  --font-primary:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+  --font-mono:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --text-2xs:.6875rem; --text-xs:.75rem;  --text-sm:.8125rem; --text-base:.9375rem;
+  --text-lg:1.0625rem; --text-xl:1.125rem; --text-2xl:1.375rem; --text-3xl:1.6875rem;
+  --text-4xl:2rem;     --text-5xl:2.625rem;
+
+  --indigo-50:#f5f7ff;  --indigo-100:#ebf0fe; --indigo-200:#ced9fd; --indigo-300:#a1b6fb;
+  --indigo-400:#6d8bf7; --indigo-500:#4361ee; --indigo-600:#3a4fd4; --indigo-700:#2f3faf;
+  --indigo-800:#26328c; --indigo-900:#202971; --indigo-950:#131843;
+
+  --bg:#f8fafc; --surface:#ffffff; --surface-2:#f8fafc;
+  --border:#e2e8f0; --border-soft:#f1f5f9;
+  --ink:#0f172a; --ink-2:#475569; --ink-3:#64748b; --ink-4:#94a3b8;
+  --shadow-sm:0 1px 2px 0 rgba(15,23,42,.05);
+  --shadow-md:0 4px 12px -2px rgba(15,23,42,.08);
+  --shadow-accent:0 10px 24px -8px rgba(67,97,238,.35);
+  --radius:.5rem;
+}
+html[data-theme="dark"]{
+  --bg:#020617; --surface:#0f172a; --surface-2:#0b1220;
+  --border:#1e293b; --border-soft:#172033;
+  --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8; --ink-4:#64748b;
+  --shadow-sm:0 1px 2px 0 rgba(0,0,0,.4);
+  --shadow-md:0 4px 14px -2px rgba(0,0,0,.55);
+  --shadow-accent:0 10px 24px -8px rgba(67,97,238,.55);
+}
+
+*{box-sizing:border-box;font-family:var(--font-primary)}
+.fa,.fa-solid,.fa-regular,.fa-brands{font-family:"Font Awesome 6 Free"!important}
+html{scroll-behavior:smooth;scroll-padding-top:1.5rem}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-size:var(--text-base);line-height:1.5;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  transition:background-color .3s,color .3s;
+}
+a{color:var(--indigo-500);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--indigo-500);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation:none!important;transition:none!important}
+}
+
+/* ---------- shell ---------- */
+.shell{display:flex;align-items:flex-start;gap:2.5rem;max-width:1320px;margin:0 auto;padding:1.5rem}
+.main{flex:1;min-width:0;max-width:900px;padding-bottom:5rem}
+
+/* ---------- sidebar (mirrors SidebarLink.tsx) ---------- */
+.sidebar{
+  width:264px;flex:0 0 264px;position:sticky;top:1.5rem;
+  max-height:calc(100vh - 3rem);overflow-y:auto;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:1rem;
+}
+.sidebar::-webkit-scrollbar{width:8px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(148,163,184,.3);border-radius:4px}
+.brand{display:flex;align-items:center;gap:.7rem;padding:.35rem .35rem 1rem}
+.brand-mark{
+  width:38px;height:38px;flex:0 0 38px;border-radius:10px;display:grid;place-items:center;
+  background:var(--indigo-500);color:#fff;font-size:1rem;box-shadow:var(--shadow-accent);
+}
+.brand-name{font-size:var(--text-sm);font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.brand-sub{font-size:var(--text-2xs);color:var(--ink-4);text-transform:uppercase;letter-spacing:.09em;font-weight:700}
+.nav-eyebrow{
+  font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.1em;font-weight:700;
+  color:var(--ink-4);padding:.9rem .75rem .4rem;
+}
+.navlink{
+  display:flex;align-items:center;gap:.75rem;width:100%;
+  padding:.6rem .75rem;border-radius:var(--radius);
+  font-size:var(--text-sm);font-weight:500;color:var(--ink-3);
+  transition:all .25s;border:0;background:none;cursor:pointer;text-align:left;
+}
+.navlink:hover{background:var(--surface-2);color:var(--ink);text-decoration:none}
+html[data-theme="dark"] .navlink:hover{background:rgba(30,41,59,.5)}
+.navlink i{width:18px;text-align:center;color:var(--ink-4);font-size:.85rem;transition:color .25s}
+.navlink:hover i{color:var(--indigo-500)}
+.navlink.active{background:var(--indigo-500);color:#fff;box-shadow:var(--shadow-accent)}
+.navlink.active i{color:#fff}
+.navstep{
+  font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;
+  color:var(--ink-4);min-width:1.3rem;
+}
+.navlink.active .navstep{color:rgba(255,255,255,.75)}
+.theme-row{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)}
+
+/* ---------- boarding pass hero (signature element) ---------- */
+.pass{
+  position:relative;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-md);overflow:hidden;margin-bottom:2rem;
+}
+.pass-top{
+  background:linear-gradient(115deg,var(--indigo-700) 0%,var(--indigo-500) 55%,var(--indigo-400) 100%);
+  color:#fff;padding:1.6rem 1.75rem 1.5rem;position:relative;overflow:hidden;
+}
+.pass-top::after{
+  content:"\f072";font-family:"Font Awesome 6 Free";font-weight:900;
+  position:absolute;right:-.5rem;top:-.9rem;font-size:8rem;opacity:.1;transform:rotate(-18deg);
+}
+.pass-eyebrow{
+  font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.16em;font-weight:700;
+  opacity:.82;margin:0 0 .5rem;
+}
+.pass h1{font-size:var(--text-4xl);line-height:1.15;font-weight:700;margin:0 0 .5rem;letter-spacing:-.02em}
+.pass-lede{font-size:var(--text-base);max-width:56ch;margin:0;opacity:.92;font-weight:300}
+.perf{
+  position:relative;height:0;border-top:2px dashed var(--border);
+}
+.perf::before,.perf::after{
+  content:"";position:absolute;top:-13px;width:24px;height:24px;border-radius:50%;
+  background:var(--bg);border:1px solid var(--border);
+}
+.perf::before{left:-13px}
+.perf::after{right:-13px}
+.pass-bottom{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:1px;background:var(--border);
+}
+.pass-cell{background:var(--surface);padding:1rem 1.1rem}
+.pass-cell dt{
+  font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.1em;
+  font-weight:700;color:var(--ink-4);margin:0 0 .3rem;
+}
+.pass-cell dd{margin:0;font-size:var(--text-sm);font-weight:500;color:var(--ink)}
+.pass-cell dd .big{font-family:var(--font-mono);font-size:var(--text-xl);font-weight:700;letter-spacing:-.02em}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:1.5rem;margin-bottom:3rem}
+.sec-head{display:flex;align-items:baseline;gap:.85rem;margin-bottom:.4rem}
+.sec-num{
+  font-family:var(--font-mono);font-size:var(--text-sm);font-weight:700;
+  color:var(--indigo-500);letter-spacing:-.02em;
+}
+h2{font-size:var(--text-2xl);font-weight:700;line-height:1.2;margin:0;letter-spacing:-.015em}
+h3{font-size:var(--text-xl);font-weight:600;line-height:1.3;margin:1.75rem 0 .6rem}
+h4{font-size:var(--text-base);font-weight:700;margin:1.25rem 0 .4rem}
+.sec-sub{color:var(--ink-3);font-size:var(--text-sm);margin:0 0 1.25rem;max-width:70ch}
+p{margin:0 0 .9rem;color:var(--ink-2)}
+strong{color:var(--ink);font-weight:700}
+ul,ol{margin:0 0 1rem;padding-left:1.25rem;color:var(--ink-2)}
+li{margin-bottom:.4rem}
+li::marker{color:var(--ink-4)}
+code{
+  font-family:var(--font-mono);font-size:.85em;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:4px;padding:.08em .38em;color:var(--ink);
+}
+hr.rule{border:0;border-top:1px solid var(--border);margin:2.5rem 0}
+
+/* ---------- card (Card.tsx) ---------- */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);overflow:hidden;transition:all .3s;margin-bottom:1.25rem;
+}
+.card-pad{padding:1.25rem 1.4rem}
+.card-head{
+  padding:.85rem 1.4rem;border-bottom:1px solid var(--border);background:var(--surface-2);
+  font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--ink-3);
+  display:flex;align-items:center;gap:.55rem;
+}
+.card-head i{color:var(--indigo-500)}
+
+/* ---------- stat cards (StatCard.tsx) ---------- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.25rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:1.25rem}
+.stat-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem}
+.stat-title{font-size:var(--text-sm);font-weight:500;color:var(--ink-3);margin:0}
+.stat-row i{color:var(--indigo-500);opacity:.6;font-size:var(--text-lg)}
+.stat-val{font-size:var(--text-2xl);font-weight:700;letter-spacing:-.02em;margin:0;color:var(--ink)}
+.stat-desc{font-size:var(--text-xs);color:var(--ink-4);margin:.3rem 0 0}
+
+/* ---------- badges (StatusBadge.tsx) ---------- */
+.badge{
+  display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .45rem;border-radius:6px;
+  font-size:var(--text-2xs);text-transform:uppercase;font-weight:700;border:1px solid;
+  white-space:nowrap;line-height:1.5;
+}
+.b-slate{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+.b-amber{background:#fef3c7;color:#b45309;border-color:#fde68a}
+.b-rose {background:#ffe4e6;color:#be123c;border-color:#fecdd3}
+.b-emerald{background:#d1fae5;color:#047857;border-color:#a7f3d0}
+.b-indigo{background:#ebf0fe;color:#2f3faf;border-color:#ced9fd}
+.b-blue {background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe}
+.b-red  {background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+.b-orange{background:#ffedd5;color:#c2410c;border-color:#fed7aa}
+.b-closed{background:#64748b;color:#fff;border-color:#475569}
+html[data-theme="dark"] .b-slate{background:#1e293b;color:#94a3b8;border-color:#334155}
+html[data-theme="dark"] .b-amber{background:rgba(120,53,15,.3);color:#fbbf24;border-color:rgba(146,64,14,.5)}
+html[data-theme="dark"] .b-rose{background:rgba(136,19,55,.3);color:#fb7185;border-color:rgba(159,18,57,.5)}
+html[data-theme="dark"] .b-emerald{background:rgba(6,78,59,.3);color:#34d399;border-color:rgba(6,95,70,.5)}
+html[data-theme="dark"] .b-indigo{background:rgba(38,50,140,.35);color:#a1b6fb;border-color:rgba(47,63,175,.5)}
+html[data-theme="dark"] .b-blue{background:rgba(30,58,138,.3);color:#60a5fa;border-color:rgba(30,64,175,.5)}
+html[data-theme="dark"] .b-red{background:rgba(127,29,29,.3);color:#f87171;border-color:rgba(153,27,27,.5)}
+html[data-theme="dark"] .b-orange{background:rgba(124,45,18,.3);color:#fb923c;border-color:rgba(154,52,18,.5)}
+html[data-theme="dark"] .b-closed{background:#334155;color:#e2e8f0;border-color:#475569}
+.badge.pulse{animation:pulse 2.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow-sm);margin-bottom:1.25rem}
+table{width:100%;border-collapse:collapse;font-size:var(--text-sm);min-width:520px}
+thead th{
+  text-align:left;padding:.65rem .9rem;background:var(--surface-2);
+  font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.09em;
+  font-weight:700;color:var(--ink-3);border-bottom:1px solid var(--border);white-space:nowrap;
+}
+tbody td{padding:.7rem .9rem;border-bottom:1px solid var(--border-soft);color:var(--ink-2);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-2)}
+td strong{color:var(--ink)}
+.req-yes{color:#047857;font-weight:700;font-size:var(--text-xs)}
+.req-no{color:var(--ink-4);font-weight:500;font-size:var(--text-xs)}
+html[data-theme="dark"] .req-yes{color:#34d399}
+
+/* ---------- callouts ---------- */
+.callout{
+  display:flex;gap:.85rem;padding:.95rem 1.1rem;border-radius:var(--radius);
+  border:1px solid;border-left-width:3px;margin:0 0 1.25rem;font-size:var(--text-sm);
+}
+.callout i{font-size:.95rem;margin-top:.12rem;flex:0 0 auto}
+.callout p{margin:0 0 .5rem;color:inherit}
+.callout p:last-child{margin-bottom:0}
+.callout .co-title{
+  display:block;font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.1em;
+  font-weight:700;margin-bottom:.3rem;
+}
+.co-tip{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
+.co-warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.co-danger{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
+.co-info{background:var(--indigo-50);border-color:var(--indigo-200);color:var(--indigo-800)}
+html[data-theme="dark"] .co-tip{background:rgba(6,78,59,.18);border-color:rgba(6,95,70,.5);color:#6ee7b7}
+html[data-theme="dark"] .co-warn{background:rgba(120,53,15,.18);border-color:rgba(146,64,14,.5);color:#fcd34d}
+html[data-theme="dark"] .co-danger{background:rgba(136,19,55,.18);border-color:rgba(159,18,57,.5);color:#fda4af}
+html[data-theme="dark"] .co-info{background:rgba(38,50,140,.22);border-color:rgba(47,63,175,.5);color:#a1b6fb}
+
+/* ---------- step wizard ---------- */
+.wizard-bar{display:flex;gap:.4rem;margin-bottom:1.25rem}
+.wizard-bar span{flex:1;height:5px;border-radius:99px;background:var(--indigo-500)}
+.wizard-bar span:nth-child(2){opacity:.55}
+.wizard-bar span:nth-child(3){opacity:.28}
+.step-tag{
+  display:inline-flex;align-items:center;gap:.45rem;font-family:var(--font-mono);
+  font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--indigo-500);background:var(--indigo-50);border:1px solid var(--indigo-200);
+  padding:.2rem .55rem;border-radius:99px;margin-bottom:.5rem;
+}
+html[data-theme="dark"] .step-tag{background:rgba(38,50,140,.25);border-color:rgba(47,63,175,.5);color:#a1b6fb}
+
+/* ---------- lifecycle flow ---------- */
+.flow{display:flex;flex-direction:column;gap:0;margin-bottom:1.25rem}
+.flow-row{display:flex;align-items:stretch;gap:.75rem;flex-wrap:wrap}
+.flow-node{
+  flex:1;min-width:170px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:.7rem .85rem;box-shadow:var(--shadow-sm);
+}
+.flow-node .fn-label{font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:var(--ink-4);margin:0 0 .3rem}
+.flow-node .fn-body{font-size:var(--text-xs);color:var(--ink-3);margin:.35rem 0 0}
+.flow-arrow{
+  display:flex;align-items:center;gap:.55rem;padding:.5rem 0 .5rem .3rem;
+  font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:var(--ink-4);
+}
+.flow-arrow i{color:var(--indigo-400)}
+
+/* ---------- timeline (process log) ---------- */
+.timeline{list-style:none;margin:0 0 1.25rem;padding:0 0 0 1.35rem;border-left:2px solid var(--border)}
+.timeline li{position:relative;padding:0 0 1.1rem .35rem;margin:0;color:var(--ink-2);font-size:var(--text-sm)}
+.timeline li::before{
+  content:"";position:absolute;left:-1.79rem;top:.42rem;width:9px;height:9px;border-radius:50%;
+  background:var(--indigo-500);border:2px solid var(--surface);box-shadow:0 0 0 2px var(--indigo-200);
+}
+html[data-theme="dark"] .timeline li::before{box-shadow:0 0 0 2px rgba(47,63,175,.6)}
+.timeline .t-title{display:block;font-weight:700;color:var(--ink);font-size:var(--text-sm);margin-bottom:.15rem}
+
+/* ---------- FAQ accordion ---------- */
+details.faq{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);margin-bottom:.6rem;overflow:hidden;
+}
+details.faq summary{
+  cursor:pointer;list-style:none;padding:.9rem 1.1rem;font-weight:500;font-size:var(--text-base);
+  display:flex;align-items:center;gap:.75rem;color:var(--ink);transition:background .2s;
+}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary:hover{background:var(--surface-2)}
+details.faq summary::after{
+  content:"\f078";font-family:"Font Awesome 6 Free";font-weight:900;font-size:.7rem;
+  margin-left:auto;color:var(--ink-4);transition:transform .25s;
+}
+details.faq[open] summary::after{transform:rotate(180deg)}
+details.faq summary i.q{color:var(--indigo-500);font-size:.8rem}
+details.faq .faq-body{padding:0 1.1rem 1.1rem 2.85rem;font-size:var(--text-sm);color:var(--ink-2)}
+details.faq .faq-body p:last-child{margin-bottom:0}
+
+/* ---------- quick reference ---------- */
+.qr{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.75rem}
+.qr-item{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:.85rem 1rem;box-shadow:var(--shadow-sm);display:flex;gap:.8rem;align-items:flex-start;
+}
+.qr-item i{color:var(--indigo-500);width:18px;text-align:center;margin-top:.15rem}
+.qr-want{font-size:var(--text-sm);color:var(--ink-2);margin:0}
+.qr-go{display:block;font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:var(--ink-4);margin-top:.2rem}
+.qr-go b{color:var(--indigo-500)}
+
+/* ---------- misc ---------- */
+.btn-ghost{
+  display:inline-flex;align-items:center;gap:.5rem;padding:.45rem .8rem;border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--surface);color:var(--ink-2);
+  font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  cursor:pointer;transition:all .2s;width:100%;justify-content:center;
+}
+.btn-ghost:hover{color:var(--indigo-500);border-color:var(--indigo-200);background:var(--indigo-50)}
+html[data-theme="dark"] .btn-ghost:hover{background:rgba(38,50,140,.25);border-color:rgba(47,63,175,.5)}
+.chip{
+  display:inline-block;font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;
+  padding:.12rem .4rem;border-radius:4px;background:var(--surface-2);border:1px solid var(--border);color:var(--ink-3);
+}
+footer.page-foot{
+  border-top:1px solid var(--border);padding-top:1.25rem;margin-top:1rem;
+  font-size:var(--text-xs);color:var(--ink-4);
+}
+
+/* ---------- responsive ---------- */
+@media (max-width:960px){
+  .shell{flex-direction:column;gap:1.25rem;padding:1rem}
+  .sidebar{
+    position:static;width:100%;flex:none;max-height:none;
+    display:flex;gap:.4rem;overflow-x:auto;padding:.6rem;align-items:center;
+  }
+  .brand{padding:0 .6rem 0 .25rem;border-right:1px solid var(--border);margin-right:.4rem;flex:0 0 auto}
+  .brand-sub{display:none}
+  .nav-eyebrow{display:none}
+  .navlink{width:auto;flex:0 0 auto;white-space:nowrap;padding:.45rem .7rem}
+  .navlink .navstep{display:none}
+  .theme-row{margin:0;padding:0;border:0;flex:0 0 auto;margin-left:auto}
+  .btn-ghost{width:auto;padding:.45rem .6rem}
+  .main{max-width:100%}
+  .pass h1{font-size:var(--text-3xl)}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+<!-- ============ SIDEBAR ============ -->
+<aside class="sidebar" aria-label="Guide navigation">
+  <div class="brand">
+    <div class="brand-mark"><i class="fa-solid fa-plane-departure"></i></div>
+    <div>
+      <div class="brand-name">Travel Desk</div>
+      <div class="brand-sub">Employee Guide</div>
+    </div>
+  </div>
+
+  <div class="nav-eyebrow">Contents</div>
+  <a class="navlink" href="#start"><span class="navstep">01</span><i class="fa-solid fa-right-to-bracket"></i>Getting started</a>
+  <a class="navlink" href="#profile"><span class="navstep">02</span><i class="fa-solid fa-id-card"></i>Profile &amp; verification</a>
+  <a class="navlink" href="#dashboard"><span class="navstep">03</span><i class="fa-solid fa-gauge-high"></i>Your dashboard</a>
+  <a class="navlink" href="#submit"><span class="navstep">04</span><i class="fa-solid fa-ticket"></i>Submit a request</a>
+  <a class="navlink" href="#lifecycle"><span class="navstep">05</span><i class="fa-solid fa-diagram-project"></i>Request lifecycle</a>
+  <a class="navlink" href="#detail"><span class="navstep">06</span><i class="fa-solid fa-layer-group"></i>Request detail view</a>
+  <a class="navlink" href="#onhold"><span class="navstep">07</span><i class="fa-solid fa-circle-question"></i>On Hold responses</a>
+  <a class="navlink" href="#rejections"><span class="navstep">08</span><i class="fa-solid fa-pen-to-square"></i>Edit &amp; resubmit</a>
+  <a class="navlink" href="#cancel"><span class="navstep">09</span><i class="fa-solid fa-circle-xmark"></i>Cancellations</a>
+  <a class="navlink" href="#approvals"><span class="navstep">10</span><i class="fa-solid fa-user-check"></i>Approving as manager</a>
+  <a class="navlink" href="#meetup"><span class="navstep">11</span><i class="fa-solid fa-person-shelter"></i>Igatpuri meetup</a>
+  <a class="navlink" href="#chat"><span class="navstep">12</span><i class="fa-solid fa-comments"></i>PNC support chat</a>
+  <a class="navlink" href="#gaps"><span class="navstep">13</span><i class="fa-solid fa-triangle-exclamation"></i>Known gaps</a>
+  <a class="navlink" href="#faq"><span class="navstep">14</span><i class="fa-solid fa-circle-info"></i>FAQ</a>
+  <a class="navlink" href="#quickref"><span class="navstep">15</span><i class="fa-solid fa-bolt"></i>Quick reference</a>
+
+  <div class="theme-row">
+    <button class="btn-ghost" id="themeToggle" type="button" aria-label="Switch colour theme">
+      <i class="fa-solid fa-moon" id="themeIcon"></i><span id="themeLabel">Dark</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main class="main">
+
+  <!-- HERO: boarding pass -->
+  <div class="pass">
+    <div class="pass-top">
+      <p class="pass-eyebrow">Navgurukul Travel Desk · Employee handbook</p>
+      <h1>Everything you need to book, track and close a trip.</h1>
+      <p class="pass-lede">From your first document upload to the moment a request goes <strong style="color:#fff">Closed</strong> — every screen, field, status and edge case, in the order you'll meet them.</p>
+    </div>
+    <div class="perf"></div>
+    <dl class="pass-bottom">
+      <div class="pass-cell"><dt>Wizard steps</dt><dd><span class="big">3</span></dd></div>
+      <div class="pass-cell"><dt>Profile fields</dt><dd><span class="big">11</span></dd></div>
+      <div class="pass-cell"><dt>Lifecycle states</dt><dd><span class="big">12</span></dd></div>
+      <div class="pass-cell"><dt>Resubmission cap</dt><dd><span class="big">3</span></dd></div>
+      <div class="pass-cell"><dt>Grace period</dt><dd><span class="big">7</span> days default</dd></div>
+    </dl>
+  </div>
+
+  <p class="sec-sub" style="margin-bottom:2.5rem">
+    This guide merges the two employee handbooks into one source of truth. Where they disagreed, the behaviour in the shipped application wins — those points are flagged with a <span class="chip">verified</span> note so you know which version is current.
+  </p>
+
+  <!-- 01 GETTING STARTED -->
+  <section id="start">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Getting started</h2></div>
+    <p class="sec-sub">Signing in, and what to do if you can't.</p>
+
+    <p>The sign-in screen offers up to two routes, depending on how your organisation is configured:</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Option</th><th>When you'll see it</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Continue with Google</strong></td><td>Always — this is the primary path</td><td>Signs you in via Google OAuth using your organisation email.</td></tr>
+          <tr><td><strong>Login with Email</strong></td><td>Only if email/password login is enabled for your org</td><td>Standard email and password entry.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Forgotten password</h3>
+    <p>Only relevant if you use email login:</p>
+    <ol>
+      <li>Click <strong>Forgot Password?</strong> on the sign-in screen.</li>
+      <li>Enter your email and click <strong>Send Reset Link</strong>.</li>
+      <li>Follow the link in the email to the <strong>Update Password</strong> screen and set a new one.</li>
+      <li><strong>Back to Login</strong> returns you to the sign-in screen from any point in this flow.</li>
+    </ol>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 02 PROFILE -->
+  <section id="profile">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Profile &amp; verification</h2></div>
+    <p class="sec-sub">Your profile gates your ability to book. Complete it first — everything downstream is faster for it.</p>
+
+    <p>Open <strong>Profile</strong> in the sidebar. Your completeness score is built from <strong>11 fields</strong>, each worth roughly 9% (100 ÷ 11). Your email address is deliberately excluded, since it's fixed to your account.</p>
+
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-list-check"></i>The 11 fields</div>
+      <div class="card-pad">
+        <div class="tw" style="margin:0;border:0;box-shadow:none">
+          <table style="min-width:0">
+            <thead><tr><th style="width:2.5rem">#</th><th>Field</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><span class="chip">01</span></td><td><strong>Full name</strong></td><td>—</td></tr>
+              <tr><td><span class="chip">02</span></td><td><strong>Department</strong></td><td>Select from your organisation's list.</td></tr>
+              <tr><td><span class="chip">03</span></td><td><strong>Campus</strong></td><td>Your base location.</td></tr>
+              <tr><td><span class="chip">04</span></td><td><strong>Manager name</strong></td><td>Pre-fills onto every request you submit.</td></tr>
+              <tr><td><span class="chip">05</span></td><td><strong>Manager email</strong></td><td>This is who receives policy-violation approvals. Get it right.</td></tr>
+              <tr><td><span class="chip">06</span></td><td><strong>Phone number</strong></td><td>Valid 10-digit mobile number.</td></tr>
+              <tr><td><span class="chip">07</span></td><td><strong>Emergency contact name</strong></td><td>—</td></tr>
+              <tr><td><span class="chip">08</span></td><td><strong>Emergency contact phone</strong></td><td>Valid 10-digit number.</td></tr>
+              <tr><td><span class="chip">09</span></td><td><strong>Blood group</strong></td><td>A+, A−, B+, B−, AB+, AB−, O+, O−.</td></tr>
+              <tr><td><span class="chip">10</span></td><td><strong>Passport-size photo</strong></td><td>Clear passport-style photo. <strong>Max 5 MB.</strong></td></tr>
+              <tr><td><span class="chip">11</span></td><td><strong>Government ID proof</strong></td><td>Aadhaar, Passport, PAN, Voter ID or Driving Licence. <strong>Max 5 MB.</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout co-info">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>
+        <span class="co-title">Source note</span>
+        <p>The two source guides counted these fields slightly differently — one treated the two document uploads as separate items, the other bundled them and counted <strong>emergency contact relation</strong> instead. Emergency contact relation <em>is</em> collected, but on the travel request form (Step 3), not as part of the 11-field profile score.</p>
+      </div>
+    </div>
+
+    <h3>Document verification lifecycle</h3>
+    <p>Both uploads move through the same four states:</p>
+    <p style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+      <span class="badge b-slate">Incomplete</span>
+      <i class="fa-solid fa-arrow-right" style="color:var(--ink-4);font-size:.7rem"></i>
+      <span class="badge b-amber"><i class="fa-solid fa-clock"></i>Pending Verification</span>
+      <i class="fa-solid fa-arrow-right" style="color:var(--ink-4);font-size:.7rem"></i>
+      <span class="badge b-emerald"><i class="fa-solid fa-circle-check"></i>Approved</span>
+      <span style="color:var(--ink-4);font-size:var(--text-xs)">or</span>
+      <span class="badge b-rose"><i class="fa-solid fa-circle-xmark"></i>Rejected</span>
+    </p>
+    <p>A rejected document must be re-uploaded, which puts it back into the Pending Verification queue.</p>
+
+    <h3>The temporary unlock window</h3>
+    <p>If your organisation enforces verification before booking, you aren't left waiting on the PNC review queue. Uploading your documents — or clicking <strong>Skip for Now</strong> on the dashboard prompt — grants a time-boxed grace period.</p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-row"><p class="stat-title">Default window</p><i class="fa-solid fa-hourglass-half"></i></div>
+        <p class="stat-val">7 days</p>
+        <p class="stat-desc">Admin-configurable, 1–30 days</p>
+      </div>
+      <div class="stat">
+        <div class="stat-row"><p class="stat-title">Urgent warning at</p><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <p class="stat-val">≤ 2 days</p>
+        <p class="stat-desc">Countdown turns amber</p>
+      </div>
+      <div class="stat">
+        <div class="stat-row"><p class="stat-title">If rejected</p><i class="fa-solid fa-lock"></i></div>
+        <p class="stat-val">No grace</p>
+        <p class="stat-desc">Locked out immediately</p>
+      </div>
+    </div>
+
+    <ul>
+      <li>While the window is active you'll see a countdown: <em>"You have X days remaining to use the travel desk while your documents are reviewed."</em></li>
+      <li>At <strong>2 days or fewer</strong>, that message escalates to an amber warning.</li>
+      <li>If the window <strong>expires before approval</strong>, you're locked out of submitting new requests until an Admin or PNC user approves your documents.</li>
+      <li>If a document is <strong>rejected</strong>, there's no grace period at all — you're locked immediately and must re-upload.</li>
+      <li>Once <strong>approved</strong>, the countdown disappears permanently.</li>
+    </ul>
+
+    <div class="callout co-tip">
+      <i class="fa-solid fa-lightbulb"></i>
+      <div>
+        <span class="co-title">Bottom line</span>
+        <p>Upload documents on day one, not the day you need to fly. If your window is running down, chase PNC directly rather than waiting.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 03 DASHBOARD -->
+  <section id="dashboard">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Your dashboard</h2></div>
+    <p class="sec-sub">The home screen after login: a greeting banner, three stat cards, and your requests as boarding-pass cards.</p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-row"><p class="stat-title">Active Requests</p><i class="fa-solid fa-plane-up"></i></div>
+        <p class="stat-val">In flight</p>
+        <p class="stat-desc">Anything not yet in a final state</p>
+      </div>
+      <div class="stat">
+        <div class="stat-row"><p class="stat-title">Past Trips</p><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <p class="stat-val">Archived</p>
+        <p class="stat-desc">Booked, rejected, cancelled or closed</p>
+      </div>
+      <div class="stat">
+        <div class="stat-row"><p class="stat-title">Profile Status</p><i class="fa-solid fa-circle-user"></i></div>
+        <p class="stat-val">0–100%</p>
+        <p class="stat-desc">Your completeness score</p>
+      </div>
+    </div>
+
+    <p><strong>Active</strong> counts everything except Booked, Rejected by Manager, Rejected by PNC, Cancelled by Employee, Cancelled by PNC and Closed. <strong>Past Trips</strong> counts exactly those.</p>
+    <p>If your profile is under 100%, an <strong>Action Required</strong> banner appears below the stats with a <strong>Complete Profile</strong> button.</p>
+
+    <h3>Sidebar navigation</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Link</th><th>Always visible?</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong><i class="fa-solid fa-gauge-high" style="color:var(--indigo-500);margin-right:.4rem"></i>Dashboard</strong></td><td><span class="req-yes">Yes</span></td><td>This home screen.</td></tr>
+          <tr><td><strong><i class="fa-solid fa-id-card" style="color:var(--indigo-500);margin-right:.4rem"></i>Profile</strong></td><td><span class="req-yes">Yes</span></td><td>Personal info and document uploads.</td></tr>
+          <tr><td><strong><i class="fa-solid fa-money-bill-transfer" style="color:var(--indigo-500);margin-right:.4rem"></i>Cancellations</strong></td><td><span class="req-yes">Yes</span></td><td>Refunds, org-absorbed costs, and anything you owe.</td></tr>
+          <tr><td><strong><i class="fa-solid fa-comments" style="color:var(--indigo-500);margin-right:.4rem"></i>Chat Support</strong></td><td><span class="req-no">Conditional</span></td><td>Only if enabled by your org. Shows an unread dot for new messages.</td></tr>
+          <tr><td><strong><i class="fa-solid fa-person-shelter" style="color:var(--indigo-500);margin-right:.4rem"></i>Igatpuri Meetup</strong></td><td><span class="req-no">Conditional</span></td><td>Only if the meetup module is switched on.</td></tr>
+          <tr><td><strong><i class="fa-solid fa-user-check" style="color:var(--indigo-500);margin-right:.4rem"></i>Approvals</strong></td><td><span class="req-no">Conditional</span></td><td>Appears only when at least one request names you as Approving Manager <em>and</em> sits in Approval Pending. Carries a count badge.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A <strong>Chat Feature is in Beta</strong> banner also sits in the sidebar as a standing reminder.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 04 SUBMIT -->
+  <section id="submit">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Submit a travel request</h2></div>
+    <p class="sec-sub">Click <strong>New Booking</strong> on your dashboard to open a three-step wizard. You can go <strong>Back</strong> at any point; the progress bar tracks where you are.</p>
+
+    <div class="wizard-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+
+    <!-- STEP 1 -->
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-1"></i>Step 1 of 3 — Basic information</div>
+      <div class="card-pad" style="padding:0">
+        <div class="tw" style="margin:0;border:0;box-shadow:none;border-radius:0">
+          <table>
+            <thead><tr><th>Field</th><th style="width:5.5rem">Required</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Full name</strong></td><td><span class="req-yes">Required</span></td><td>Pre-filled from your profile, editable.</td></tr>
+              <tr><td><strong>Email address</strong></td><td><span class="req-yes">Required</span></td><td>Pre-filled and <strong>locked</strong> — cannot be changed here.</td></tr>
+              <tr><td><strong>Phone number</strong></td><td><span class="req-yes">Required</span></td><td>Digits only, capped at 10 as you type.</td></tr>
+              <tr><td><strong>Department</strong></td><td><span class="req-no">Optional</span></td><td>Pre-filled from your profile if set.</td></tr>
+              <tr><td><strong>Purpose of travel</strong></td><td><span class="req-yes">Required</span></td><td>Free text. Be specific: <em>"Site visit to Pune"</em>, <em>"Partner meeting"</em>, <em>"Conference attendance"</em>.</td></tr>
+              <tr><td><strong>Approving manager name</strong></td><td><span class="req-yes">Required</span></td><td>Pre-filled from your profile if set.</td></tr>
+              <tr><td><strong>Approving manager email</strong></td><td><span class="req-yes">Required</span></td><td>This is who reviews the request if a policy violation is flagged.</td></tr>
+              <tr><td><strong>Mode of travel</strong></td><td><span class="req-yes">Required</span></td><td>Flight, Train or Bus — button selector.</td></tr>
+              <tr><td><strong>Trip type</strong></td><td><span class="req-yes">Required</span></td><td>One-way or Round-trip — button selector.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-2"></i>Step 2 of 3 — Travel logistics</div>
+      <div class="card-pad">
+        <h4 style="margin-top:0"><i class="fa-solid fa-arrow-right-long" style="color:var(--indigo-500);margin-right:.4rem"></i>Outbound journey</h4>
+        <ul>
+          <li><strong>From / To</strong> — free text: city, airport or station name.</li>
+          <li><strong>Departure date</strong> — date picker; the earliest selectable date is always at least tomorrow.</li>
+          <li><strong>Preferred time</strong> — Morning (6AM–12PM), Afternoon (12PM–6PM), Evening (6PM–12AM), or Anytime.</li>
+        </ul>
+
+        <h4><i class="fa-solid fa-arrow-left-long" style="color:var(--indigo-500);margin-right:.4rem"></i>Return journey <span class="chip" style="text-transform:none">round-trip only</span></h4>
+        <ul>
+          <li><strong>Return From / Return To</strong> — pre-filled by swapping your outbound legs, editable.</li>
+          <li><strong>Return date</strong> — must be on or after your departure date.</li>
+          <li><strong>Preferred time</strong> — same four options.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout co-warn">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <div>
+        <span class="co-title">Policy violation check</span>
+        <p>Each travel mode carries a minimum advance-notice period set by PNC/Admin under <strong>Policies</strong> (flights, for example, are typically 14 days). The check runs the moment you've picked a mode and a departure date.</p>
+        <p>If you're inside that window, a <strong>"Policy Violation Detected"</strong> card appears and you <strong>must</strong> type a justification — e.g. <em>"Client scheduled urgent meeting"</em> — before you can continue to Step 3. Your reason is shown verbatim to your manager, who must then explicitly approve before PNC can book.</p>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-3"></i>Step 3 of 3 — Personal &amp; emergency details</div>
+      <div class="card-pad" style="padding:0">
+        <div class="tw" style="margin:0;border:0;box-shadow:none;border-radius:0">
+          <table>
+            <thead><tr><th>Field</th><th style="width:5.5rem">Required</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Blood group</strong></td><td><span class="req-no">Optional</span></td><td>Dropdown: A+, A−, B+, B−, AB+, AB−, O+, O−.</td></tr>
+              <tr><td><strong>Emergency contact name</strong></td><td><span class="req-yes">Required</span></td><td>—</td></tr>
+              <tr><td><strong>Relationship</strong></td><td><span class="req-yes">Required</span></td><td>How this person is related to you.</td></tr>
+              <tr><td><strong>Emergency contact phone</strong></td><td><span class="req-yes">Required</span></td><td>Digits only, capped at 10.</td></tr>
+              <tr><td><strong>Medical conditions / special requirements</strong></td><td><span class="req-no">Optional</span></td><td>Free text. Flag serious conditions, allergies, dietary needs, or assistance such as wheelchair access.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <p>Click <strong>Submit Request</strong> to finish.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 05 LIFECYCLE -->
+  <section id="lifecycle">
+    <div class="sec-head"><span class="sec-num">05</span><h2>The request lifecycle</h2></div>
+    <p class="sec-sub">Twelve possible states. Track them live from your dashboard, where each request renders as a boarding-pass card with a colour-coded status badge.</p>
+
+    <h3>The happy path</h3>
+    <div class="flow">
+      <div class="flow-row">
+        <div class="flow-node"><p class="fn-label">Entry</p><span class="badge b-slate">Not Started</span><p class="fn-body">Violation check runs automatically.</p></div>
+      </div>
+      <div class="flow-arrow"><i class="fa-solid fa-arrow-down-long"></i>System splits on the result</div>
+      <div class="flow-row">
+        <div class="flow-node"><p class="fn-label">If violation found</p><span class="badge b-amber">Approval Pending</span><p class="fn-body">Manager reviews → <span class="badge b-emerald" style="vertical-align:baseline">Approved</span> (auto pass-through) or <span class="badge b-rose" style="vertical-align:baseline">Rejected by Manager</span>.</p></div>
+        <div class="flow-node"><p class="fn-label">If clean</p><span class="badge b-indigo">Processing</span><p class="fn-body">Straight into PNC's queue.</p></div>
+      </div>
+      <div class="flow-arrow"><i class="fa-solid fa-arrow-down-long"></i>PNC works the request</div>
+      <div class="flow-row">
+        <div class="flow-node"><p class="fn-label">Ticket issued</p><span class="badge b-blue">Booked</span><p class="fn-body">Cost, vendor and ticket link become visible to you.</p></div>
+      </div>
+      <div class="flow-arrow"><i class="fa-solid fa-arrow-down-long"></i>Reconciliation complete</div>
+      <div class="flow-row">
+        <div class="flow-node"><p class="fn-label">Terminal</p><span class="badge b-closed">Closed</span><p class="fn-body">Trip complete and archived.</p></div>
+      </div>
+    </div>
+
+    <h3>Every state, in full</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Status</th><th>What it means</th><th>What you do</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-slate">Not Started</span></td><td>Just submitted; being checked against policy.</td><td>Nothing. Auto-advances.</td></tr>
+          <tr><td><span class="badge b-amber">Approval Pending</span></td><td>A policy violation was detected — waiting on your manager.</td><td>Wait. Chase them if it stalls.</td></tr>
+          <tr><td><span class="badge b-rose">Rejected by Manager</span></td><td>Your manager declined, with a stated reason.</td><td><a href="#rejections">Edit &amp; resubmit</a>, or cancel.</td></tr>
+          <tr><td><span class="badge b-emerald">Approved</span></td><td>Manager approved — an automatic pass-through state.</td><td>Nothing. Moves to Processing immediately.</td></tr>
+          <tr><td><span class="badge b-indigo">Processing</span></td><td>PNC is actively searching fares or contacting vendors.</td><td>Nothing.</td></tr>
+          <tr><td><span class="badge b-slate">On Hold</span></td><td>PNC needs more information before they can proceed.</td><td><a href="#onhold">Reply in the request detail view</a>, promptly.</td></tr>
+          <tr><td><span class="badge b-red">Rejected by PNC</span></td><td>PNC couldn't fulfil the request — budget limits, no availability, wrong mode. A reason is shown.</td><td><a href="#rejections">Edit &amp; resubmit</a> based on the feedback.</td></tr>
+          <tr><td><span class="badge b-blue">Booked</span></td><td>Ticket confirmed. Cost, vendor and ticket/invoice link are visible.</td><td>Download your itinerary from the card.</td></tr>
+          <tr><td><span class="badge b-slate">Cancellation Requested</span></td><td>You asked to cancel a <em>booked</em> ticket; it's in PNC's queue.</td><td>Wait for PNC to process the refund.</td></tr>
+          <tr><td><span class="badge b-slate">Cancelled by Employee</span></td><td>You cancelled it.</td><td>Reconcile any employee-owned cost.</td></tr>
+          <tr><td><span class="badge b-slate">Cancelled by PNC</span></td><td>PNC or ops cancelled a booked ticket — airline change, price error, ops decision.</td><td>Nothing owed. Rebook if you still need to travel.</td></tr>
+          <tr><td><span class="badge b-closed">Closed</span></td><td>Trip complete and financially reconciled.</td><td>Done.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Separately, a <span class="badge b-rose pulse">Policy Violation</span> badge appears on any request that was flagged for short notice, regardless of its current status.</p>
+
+    <div class="callout co-info">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>
+        <span class="co-title">Booked → Closed is automatic</span>
+        <p>A Booked request flips to Closed the moment PNC has entered <strong>ticket cost</strong>, <strong>vendor name</strong>, <em>and</em> uploaded a <strong>ticket or invoice</strong>. You don't need to do anything. If it's sat on Booked for a while, one of those three — usually the file upload — is still outstanding on PNC's side.</p>
+      </div>
+    </div>
+
+    <div class="callout co-warn">
+      <i class="fa-solid fa-code-branch"></i>
+      <div>
+        <span class="co-title">Reconciled — status list</span>
+        <p>One source guide omitted <strong>Approved</strong> and <strong>Cancelled by PNC</strong>; the other omitted <strong>Cancellation Requested</strong>. All twelve above exist in the application's state machine.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 06 DETAIL VIEW -->
+  <section id="detail">
+    <div class="sec-head"><span class="sec-num">06</span><h2>The request detail view</h2></div>
+    <p class="sec-sub">Click any request card to slide the detail overlay in from the right. It's your single source of truth for one trip.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Section</th><th>What's in it</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Header</strong></td><td>Submission ID, current status badge, priority badge, and a Policy Violation flag if applicable.</td></tr>
+          <tr><td><strong>Traveler details</strong></td><td>Name, email, phone, department and campus.</td></tr>
+          <tr><td><strong>Logistics &amp; preferences</strong></td><td>Trip type, mode, preferred time window, travelling staff, return legs, purpose, special requirements, plus a Policy Compliance line — green "No Violation" or red with the reason.</td></tr>
+          <tr><td><strong>Booking confirmation</strong></td><td>Only once Booked or Closed: ticket cost, vendor name, and a <strong>View Ticket</strong> link if an invoice was uploaded.</td></tr>
+          <tr><td><strong>Professional oversight</strong></td><td>Your approving manager's name and email.</td></tr>
+          <tr><td><strong>Emergency &amp; health</strong></td><td>Emergency contact, phone, blood group, medical conditions.</td></tr>
+          <tr><td><strong>Process timeline</strong></td><td>Every status change: who made it, when, and any attached note.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>What the timeline looks like</h4>
+    <ul class="timeline">
+      <li><span class="t-title">Request submitted</span>You · violation check queued</li>
+      <li><span class="t-title">Policy violation detected — routed for approval</span>System · flight booked 4 days out, policy requires 14</li>
+      <li><span class="t-title">Approved by manager</span>Manager · <em>"Client meeting is fixed, approved."</em></li>
+      <li><span class="t-title">Picked up by PNC</span>PNC · searching fares</li>
+      <li><span class="t-title">Ticket booked</span>PNC · vendor and cost recorded</li>
+    </ul>
+    <p>When something's unclear about your request, read the timeline before asking — it usually already answers the question.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 07 ON HOLD -->
+  <section id="onhold">
+    <div class="sec-head"><span class="sec-num">07</span><h2>Responding to an On Hold request</h2></div>
+    <p class="sec-sub">PNC puts a request <span class="badge b-slate">On Hold</span> when they need something from you — <em>"The morning flight is sold out, is afternoon acceptable?"</em> or <em>"Share your middle name exactly as on your Aadhaar."</em></p>
+
+    <ol>
+      <li>Your ticket card shows a warning strip: <strong>Action Required: Information Requested</strong>.</li>
+      <li>Click the card to open the <strong>Request Details</strong> overlay.</li>
+      <li>Read PNC's query under the <strong>PNC Clarification Needed</strong> block.</li>
+      <li>Type your answer in the <strong>Your Response</strong> box.</li>
+      <li>Click <strong>Submit Response &amp; Resume Processing</strong>.</li>
+    </ol>
+
+    <p>That single click clears the hold and returns the request to <span class="badge b-indigo">Processing</span>, so PNC can carry on booking without another round trip.</p>
+
+    <div class="callout co-danger">
+      <i class="fa-solid fa-clock"></i>
+      <div>
+        <span class="co-title">Respond quickly</span>
+        <p>A held request isn't being worked on. Fares move, and seats you were quoted may be gone by the time you reply. Treat an On Hold notice as same-day.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 08 REJECTIONS -->
+  <section id="rejections">
+    <div class="sec-head"><span class="sec-num">08</span><h2>Edit &amp; resubmit after a rejection</h2></div>
+    <p class="sec-sub">Rejections aren't dead ends. Whether it came from your manager or PNC, you can correct and send it back through.</p>
+
+    <ol>
+      <li>Open the request. The rejection reason is stated in the detail view — e.g. <em>"Wrong travel dates"</em> or <em>"Please select Train instead of Flight."</em></li>
+      <li>Click <strong>Edit &amp; Resubmit</strong>. The wizard reopens pre-filled with everything you entered before.</li>
+      <li>Fix the flagged details and submit.</li>
+    </ol>
+
+    <div class="callout co-danger">
+      <i class="fa-solid fa-lock"></i>
+      <div>
+        <span class="co-title">Three attempts, then it locks</span>
+        <p>You can resubmit a request a maximum of <strong>3 times</strong>. On the fourth rejection the button is replaced with: <em>"Resubmission cap reached. Please contact PNC or your manager directly."</em> Resolve it manually from there.</p>
+      </div>
+    </div>
+
+    <div class="callout co-info">
+      <i class="fa-solid fa-rotate"></i>
+      <div>
+        <span class="co-title">Resubmission re-runs the check</span>
+        <p>A resubmitted request always returns to <span class="badge b-slate">Not Started</span> and the violation check runs again from scratch. This is deliberate: if your edit fixed the dates, it skips manager approval entirely; if it still violates policy, it correctly routes for approval again.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 09 CANCELLATIONS -->
+  <section id="cancel">
+    <div class="sec-head"><span class="sec-num">09</span><h2>Cancellations &amp; reconciliation</h2></div>
+    <p class="sec-sub">What happens when you cancel depends entirely on whether a ticket has already been bought.</p>
+
+    <h3>Before booking</h3>
+    <p>From Not Started, Approval Pending, Processing or On Hold, open the request and click <strong>Cancel Request</strong>. Type a reason — it's mandatory, you can't confirm without one — then click <strong>Confirm Cancellation</strong>.</p>
+    <p>The request moves straight to <span class="badge b-slate">Cancelled by Employee</span> with <strong>no penalty and no financial impact</strong>. Your reason is stored and shown back to you in the detail panel.</p>
+
+    <h3>After booking</h3>
+    <ol>
+      <li>Open the request and click <strong>Cancel Request</strong>.</li>
+      <li>Confirm. Status becomes <span class="badge b-slate">Cancellation Requested</span> and it enters PNC's queue.</li>
+      <li>PNC processes the cancellation with the vendor and records the refund percentage.</li>
+    </ol>
+
+    <h3>Who bears the cost?</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Cause</th><th>Resolved as</th><th>Who pays</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Airline cancelled, ops change, price error</strong></td>
+            <td><span class="badge b-slate">Cancelled by PNC</span></td>
+            <td>The organisation covers <strong>100%</strong> of the loss. Nothing owed by you.</td>
+          </tr>
+          <tr>
+            <td><strong>Your plans changed</strong></td>
+            <td><span class="badge b-slate">Cancelled by Employee</span></td>
+            <td>You may owe a share of the non-refundable fare or penalty, split per the system cancellation policy.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout co-info">
+      <i class="fa-solid fa-money-bill-transfer"></i>
+      <div>
+        <span class="co-title">Cancellations dashboard</span>
+        <p>Track refunds, org-absorbed costs and any balance you owe under <strong>Cancellations</strong> in the sidebar. A personal-reason balance stays open as <code>Pending Refund</code> until it's settled, typically via a salary adjustment.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 10 APPROVALS -->
+  <section id="approvals">
+    <div class="sec-head"><span class="sec-num">10</span><h2>Approving requests as a manager</h2></div>
+    <p class="sec-sub">If a colleague names you as their Approving Manager and their request trips a policy violation, it lands in your inbox.</p>
+
+    <p>The <strong>Approvals</strong> link appears in your sidebar with a count badge. Open it to see a card grid of pending requests; click a card to open the review modal, which shows:</p>
+    <ul>
+      <li>The traveller's name, department, campus and email</li>
+      <li>Route, date, mode and trip type</li>
+      <li>Their stated purpose of travel</li>
+      <li>The specific policy violation and the justification they wrote</li>
+    </ul>
+
+    <p>You then choose <strong>Reject</strong> or <strong>Approve Request</strong>.</p>
+
+    <div class="callout co-warn">
+      <i class="fa-solid fa-comment-dots"></i>
+      <div>
+        <span class="co-title">Rejections need a reason</span>
+        <p>If you reject, you'll be prompted for a reason. It's stored and shown to the employee in their view of the request, so write something they can act on — <em>"Take the train, it's a 6-hour route"</em> beats <em>"Not approved."</em></p>
+      </div>
+    </div>
+
+    <p>Once you action a request, if it was your last pending approval you're returned to your dashboard automatically.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 11 MEETUP -->
+  <section id="meetup">
+    <div class="sec-head"><span class="sec-num">11</span><h2>Igatpuri meetup travel</h2></div>
+    <p class="sec-sub">The Igatpuri campus is the central hub for team meetups, workshops and offsites — travel to it has a shortcut.</p>
+
+    <p>If your department head or coordinator adds you to a <strong>finalised</strong> Igatpuri meetup list, a green notification banner appears on your dashboard. Click <strong>Book Travel</strong> on that banner and the wizard opens with your <strong>dates and purpose already filled in</strong> — you only need to supply your route and confirm your details.</p>
+
+    <div class="callout co-tip">
+      <i class="fa-solid fa-person-shelter"></i>
+      <div>
+        <span class="co-title">Availability requests</span>
+        <p>Where the module is enabled, you may first submit your availability, which goes to the meetup approvers. Once approved, you can proceed with the travel booking. For questions about meetup logistics or coordination, reach the PNC team on Slack rather than through the travel desk.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 12 CHAT -->
+  <section id="chat">
+    <div class="sec-head"><span class="sec-num">12</span><h2>PNC support chat <span class="badge b-orange" style="vertical-align:middle;margin-left:.3rem">Beta</span></h2></div>
+    <p class="sec-sub">Message the PNC team directly from inside the app, if your organisation has it enabled.</p>
+
+    <ol>
+      <li>Go to <strong>Chat Support</strong> in the sidebar.</li>
+      <li>Click <strong>Start New Chat</strong>.</li>
+      <li>Choose a thread type:
+        <ul style="margin-top:.4rem">
+          <li><strong>Existing Request</strong> — pick a submitted request from the dropdown; the conversation is linked to that ticket so PNC has full context.</li>
+          <li><strong>Future Request</strong> — a trip you haven't submitted yet.</li>
+          <li><strong>Others</strong> — general travel desk queries, reimbursement policy, feedback.</li>
+        </ul>
+      </li>
+      <li>Send your message. PNC admins see it in their support dashboard and reply.</li>
+    </ol>
+
+    <p>Messages exchange in real time, and you can attach images or documents — visa copies, permission letters — directly in the chat window.</p>
+
+    <div class="callout co-warn">
+      <i class="fa-solid fa-flask"></i>
+      <div>
+        <span class="co-title">It's beta, so treat it as beta</span>
+        <p>Expect occasional bugs and delays. Don't rely on chat for anything urgent or time-sensitive — for those, contact PNC directly.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 13 GAPS -->
+  <section id="gaps">
+    <div class="sec-head"><span class="sec-num">13</span><h2>Known gaps &amp; workarounds</h2></div>
+    <p class="sec-sub">Honest limitations, so nothing catches you out.</p>
+
+    <div class="callout co-danger">
+      <i class="fa-solid fa-envelope-circle-check"></i>
+      <div>
+        <span class="co-title">Automated emails aren't fully wired up — check the dashboard</span>
+        <p>Mail templates can be authored and published by admins, but automated dispatch on status change is still being built. <strong>Don't assume you'll get an email for every status change.</strong></p>
+        <p>The two source guides disagreed on this: one promised an email on rejection, the other said notifications aren't live. The application's own roadmap confirms dispatch isn't wired up yet — so the dashboard is the reliable place to check status.</p>
+      </div>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Gap</th><th>Status</th><th>Workaround</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Editing an in-progress request</strong></td><td>Not available unless rejected</td><td>Cancel and resubmit a corrected request, or use chat for a small clarification.</td></tr>
+          <tr><td><strong>Stalled approvals</strong></td><td>No automatic reminder or escalation</td><td>Follow up with your manager directly.</td></tr>
+          <tr><td><strong>On Hold with no reply</strong></td><td>No auto-reminder yet</td><td>Check your dashboard for the Action Required strip.</td></tr>
+          <tr><td><strong>Status history audit trail</strong></td><td>Tracked informally on the request timeline</td><td>The Process Timeline in the detail view is complete for your purposes.</td></tr>
+          <tr><td><strong>On Hold visibility &amp; replies</strong></td><td><span class="badge b-emerald">Now available</span></td><td>Superseded — PNC's note and your reply box are both in the detail view.</td></tr>
+          <tr><td><strong>Edit &amp; resubmit after rejection</strong></td><td><span class="badge b-emerald">Now available</span></td><td>Superseded — capped at 3 attempts.</td></tr>
+          <tr><td><strong>Manager rejection reasons</strong></td><td><span class="badge b-emerald">Now available</span></td><td>Superseded — shown to you in the detail view.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 14 FAQ -->
+  <section id="faq">
+    <div class="sec-head"><span class="sec-num">14</span><h2>FAQ</h2></div>
+    <p class="sec-sub">The questions PNC gets most often.</p>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>My request still says "Not Started" — is something broken?</summary>
+      <div class="faq-body"><p>No. That's the initial state while the system runs the policy check. It should move quickly to either Approval Pending (violation found) or Processing (clean).</p></div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>It's been in Approval Pending for days. What now?</summary>
+      <div class="faq-body"><p>There's no automatic reminder or escalation for manager approvals yet. Follow up with your manager directly. If they're unavailable, contact PNC — they can advise on a fallback approver.</p></div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>It's Booked but hasn't turned Closed. Do I need to do something?</summary>
+      <div class="faq-body"><p>No. It auto-closes once PNC has entered ticket cost, vendor name, and uploaded the ticket file. If it's lingering, one of those three is still missing on PNC's side — usually the file.</p></div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>Can I edit a request after submitting?</summary>
+      <div class="faq-body">
+        <p>If it's been Rejected by Manager or Rejected by PNC, yes — use <strong>Edit &amp; Resubmit</strong>, up to 3 times.</p>
+        <p>For a request still in progress there's no live-edit option. Cancel it and submit a corrected one, or use chat for a minor clarification.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>I don't know my exact departure time yet.</summary>
+      <div class="faq-body"><p>Choose <strong>Anytime</strong> in the Preferred Time dropdown. It exists for precisely this case and gives PNC the widest search.</p></div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>My temporary unlock window is about to expire.</summary>
+      <div class="faq-body"><p>Contact PNC or an Admin and ask them to review your documents. Once the window lapses you can't submit new requests, though existing ones continue to be processed normally.</p></div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>My document was rejected. Do I get a grace period?</summary>
+      <div class="faq-body"><p>No. Rejection locks booking immediately, with no temporary unlock. Re-upload the document and it re-enters the Pending Verification queue.</p></div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>Will I owe money if I cancel?</summary>
+      <div class="faq-body">
+        <p>Not if you cancel before the ticket is booked — that's clean, with no penalty.</p>
+        <p>After booking, it depends on cause. Airline or ops-driven cancellations are absorbed entirely by the organisation. Personal changes of plan may leave you liable for a share of the non-refundable fare, shown in the Cancellations dashboard as <code>Pending Refund</code> until settled.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary><i class="fa-solid fa-circle-question q"></i>I've hit the resubmission cap. What now?</summary>
+      <div class="faq-body"><p>The Edit &amp; Resubmit button locks after 3 attempts. Contact PNC or your manager directly to resolve the underlying issue, then submit a fresh request.</p></div>
+    </details>
+  </section>
+
+  <hr class="rule">
+
+  <!-- 15 QUICK REF -->
+  <section id="quickref">
+    <div class="sec-head"><span class="sec-num">15</span><h2>Quick reference</h2></div>
+    <p class="sec-sub">Everything, one line each.</p>
+
+    <div class="qr">
+      <div class="qr-item"><i class="fa-solid fa-ticket"></i><div><p class="qr-want">Submit a new travel request</p><span class="qr-go">Dashboard → <b>New Booking</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-magnifying-glass"></i><div><p class="qr-want">Check the status of a request</p><span class="qr-go">Dashboard → <b>click the request card</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-comment-dots"></i><div><p class="qr-want">Reply to an On Hold query</p><span class="qr-go">Open request → <b>Submit Response &amp; Resume</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-pen-to-square"></i><div><p class="qr-want">Fix and resend a rejected request</p><span class="qr-go">Open request → <b>Edit &amp; Resubmit</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-circle-xmark"></i><div><p class="qr-want">Cancel a request or ticket</p><span class="qr-go">Open request → <b>Cancel Request</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-id-card"></i><div><p class="qr-want">Upload or replace ID documents</p><span class="qr-go"><b>Profile</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-hourglass-half"></i><div><p class="qr-want">See days of temporary access left</p><span class="qr-go"><b>Profile</b> — shown automatically</span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-user-check"></i><div><p class="qr-want">Approve or reject a colleague's request</p><span class="qr-go"><b>Approvals</b> — if applicable</span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-money-bill-transfer"></i><div><p class="qr-want">Track a refund or balance owed</p><span class="qr-go"><b>Cancellations</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-person-shelter"></i><div><p class="qr-want">Book travel for the Igatpuri meetup</p><span class="qr-go">Dashboard banner → <b>Book Travel</b></span></div></div>
+      <div class="qr-item"><i class="fa-solid fa-comments"></i><div><p class="qr-want">Ask PNC a question</p><span class="qr-go"><b>Chat Support</b> — if enabled</span></div></div>
+    </div>
+  </section>
+
+  <footer class="page-foot">
+    <p style="margin:0">Navgurukul Travel Desk — Employee Guide. Combined from the two employee handbooks and reconciled against the shipped application. Have a safe journey. <i class="fa-solid fa-plane-departure" style="color:var(--indigo-500);margin-left:.3rem"></i></p>
+  </footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // ---- theme ----
+  var root=document.documentElement, btn=document.getElementById('themeToggle'),
+      icon=document.getElementById('themeIcon'), label=document.getElementById('themeLabel');
+  function apply(t){
+    root.setAttribute('data-theme',t);
+    var dark=t==='dark';
+    icon.className='fa-solid '+(dark?'fa-sun':'fa-moon');
+    label.textContent=dark?'Light':'Dark';
+  }
+  apply(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  btn.addEventListener('click',function(){
+    apply(root.getAttribute('data-theme')==='dark'?'light':'dark');
+  });
+
+  // ---- scrollspy ----
+  var links=Array.prototype.slice.call(document.querySelectorAll('.navlink'));
+  var map={};
+  links.forEach(function(l){ map[l.getAttribute('href').slice(1)]=l; });
+  var sections=Array.prototype.slice.call(document.querySelectorAll('section[id]'));
+  function setActive(id){
+    links.forEach(function(l){ l.classList.remove('active'); });
+    if(map[id]) map[id].classList.add('active');
+  }
+  if('IntersectionObserver' in window){
+    var visible={};
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ visible[e.target.id]=e.isIntersecting; });
+      for(var i=0;i<sections.length;i++){
+        if(visible[sections[i].id]){ setActive(sections[i].id); break; }
+      }
+    },{rootMargin:'-10% 0px -70% 0px',threshold:0});
+    sections.forEach(function(s){ io.observe(s); });
+  }
+  links.forEach(function(l){
+    l.addEventListener('click',function(){ setActive(l.getAttribute('href').slice(1)); });
+  });
+})();
+</script>
+</body>
+</html>

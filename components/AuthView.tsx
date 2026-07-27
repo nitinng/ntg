@@ -184,7 +184,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = 
                             </button>
                         </div>
                     )}
-                    
+
                     {mode === 'login' && isEmailLoginEnabled && (
                         <div className="space-y-4 animate-in fade-in duration-300">
                             <div className="relative my-6">
@@ -195,7 +195,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = 
                                     <span className="px-2 bg-white dark:bg-slate-900 text-slate-400 font-bold tracking-wider uppercase text-2xs">Or continue with email</span>
                                 </div>
                             </div>
-                            <form onSubmit={handleAuth} className="space-y-4">
+                            <form onSubmit={handleEmailLogin} className="space-y-4">
                                 <Input
                                     label="Email Address"
                                     type="email"

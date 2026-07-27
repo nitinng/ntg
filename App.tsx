@@ -1768,6 +1768,55 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const [activeSubTab, setActiveSubTab] = useState<'travel' | 'advances' | 'cancellations'>('travel');
+  const [advances, setAdvances] = useState<any[]>([]);
+  const [cancellations, setCancellations] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+
+  // Pagination states
+  const [travelPage, setTravelPage] = useState(1);
+  const [advancesPage, setAdvancesPage] = useState(1);
+  const [cancellationsPage, setCancellationsPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Sorting state for Advances & Cancellations
+  const [advSort, setAdvSort] = useState<{ col: string, dir: 'asc' | 'desc' }>({ col: 'received_on', dir: 'desc' });
+  const [cancelSort, setCancelSort] = useState<{ col: string, dir: 'asc' | 'desc' }>({ col: 'cancellation_date', dir: 'desc' });
+
+  // Fetch advances and cancellations
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoadingData(true);
+      try {
+        const { data: advData, error: advError } = await supabase
+          .from('advances')
+          .select('*')
+          .order('received_on', { ascending: false });
+        if (advError) throw advError;
+        setAdvances(advData || []);
+
+        const { data: cancelData, error: cancelError } = await supabase
+          .from('cancellation_records')
+          .select(`
+            *,
+            travel_requests ( submission_id, purpose, split_tickets, advance_id, requester_name, requester_campus, requester_department )
+          `)
+          .order('cancellation_date', { ascending: false });
+        if (cancelError) throw cancelError;
+        setCancellations(cancelData || []);
+      } catch (err) {
+        console.error('Error loading data for analytics:', err);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    if (currentUser.role !== UserRole.EMPLOYEE) {
+      fetchData();
+    }
+  }, [currentUser]);
+
   const [deptChartType, setDeptChartType] = useState<'bar' | 'line' | 'scatter' | 'bubble' | 'pie'>('bar');
   const [deptSort, setDeptSort] = useState<{ col: 'dept' | 'count' | 'avg' | 'total', dir: 'asc' | 'desc' }>({ col: 'total', dir: 'desc' });
 
@@ -1790,7 +1839,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     return { start: null, end: null };
   }, [filters]);
 
-  // Compute date range for previous period (same duration, shifted back)
+  // Compute date range for previous period
   const getPreviousRange = useMemo(() => {
     const now = new Date();
     if (filters.period === 'This Month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
@@ -1816,8 +1865,33 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     });
   };
 
-  const filteredData = useMemo(() => applyFilters(requests, getCurrentRange), [requests, filters]);
-  const prevPeriodData = useMemo(() => showComparison ? applyFilters(requests, getPreviousRange) : [], [requests, filters, showComparison]);
+  const applyAdvanceFilters = (data: any[], range: { start: Date | null, end: Date | null }) => {
+    return data.filter(a => {
+      const advDate = new Date(a.received_on);
+      let matchDate = true;
+      if (range.start) matchDate = matchDate && advDate >= range.start;
+      if (range.end) matchDate = matchDate && advDate <= range.end;
+      return matchDate;
+    });
+  };
+
+  const applyCancellationFilters = (data: any[], range: { start: Date | null, end: Date | null }) => {
+    return data.filter(c => {
+      const matchCampus = filters.campuses.length === 0 || filters.campuses.includes(c.travel_requests?.requester_campus || '');
+      const matchDept = filters.departments.length === 0 || filters.departments.includes(c.travel_requests?.requester_department || '');
+      const cancelDate = new Date(c.cancellation_date);
+      let matchDate = true;
+      if (range.start) matchDate = matchDate && cancelDate >= range.start;
+      if (range.end) matchDate = matchDate && cancelDate <= range.end;
+      return matchCampus && matchDept && matchDate;
+    });
+  };
+
+  const filteredData = useMemo(() => applyFilters(requests, getCurrentRange), [requests, filters, getCurrentRange]);
+  const prevPeriodData = useMemo(() => showComparison ? applyFilters(requests, getPreviousRange) : [], [requests, filters, showComparison, getPreviousRange]);
+
+  const filteredAdvances = useMemo(() => applyAdvanceFilters(advances, getCurrentRange), [advances, getCurrentRange]);
+  const filteredCancellations = useMemo(() => applyCancellationFilters(cancellations, getCurrentRange), [cancellations, getCurrentRange]);
 
   const computeChange = (curr: number, prev: number): { pct: string, up: boolean } | null => {
     if (!showComparison) return null;
@@ -1827,7 +1901,14 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     return { pct: `${pct >= 0 ? '+' : ''}${Math.round(pct)}%`, up: pct >= 0 };
   };
 
-  // KPI Aggregations
+  // Reset pagination when active tab changes
+  useEffect(() => {
+    setTravelPage(1);
+    setAdvancesPage(1);
+    setCancellationsPage(1);
+  }, [activeSubTab]);
+
+  // Travel KPI Aggregations
   const totalRequests = filteredData.length;
   const prevTotalRequests = prevPeriodData.length;
   const totalBookings = filteredData.filter(r => r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED).length;
@@ -1836,7 +1917,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
   const totalSpend = Math.round(filteredData.reduce((acc, r) => acc + (r.ticketCost || 0), 0) * 100) / 100;
   const prevTotalSpend = Math.round(prevPeriodData.reduce((acc, r) => acc + (r.ticketCost || 0), 0) * 100) / 100;
 
-  // Avg cost: only tickets that are CLOSED (i.e. actually booked & fulfilled)
   const bookedWithCost = filteredData.filter(r => r.pncStatus === PNCStatus.CLOSED && (r.ticketCost || 0) > 0);
   const prevBookedWithCost = prevPeriodData.filter(r => r.pncStatus === PNCStatus.CLOSED && (r.ticketCost || 0) > 0);
   const avgTicketCost = bookedWithCost.length > 0 ? Math.round(bookedWithCost.reduce((acc, r) => acc + (r.ticketCost || 0), 0) / bookedWithCost.length) : 0;
@@ -1857,6 +1937,20 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
   const bookingsChange = computeChange(totalBookings, prevTotalBookings);
   const spendChange = computeChange(totalSpend, prevTotalSpend);
   const avgCostChange = computeChange(avgTicketCost, prevAvgTicketCost);
+
+  // Advances KPI Aggregations
+  const totalAdvReceived = useMemo(() => filteredAdvances.reduce((acc, a) => acc + (Number(a.amount_received) || 0), 0), [filteredAdvances]);
+  const totalAdvRemaining = useMemo(() => filteredAdvances.reduce((acc, a) => acc + (Number(a.amount_left) || 0), 0), [filteredAdvances]);
+  const totalAdvSpent = Math.max(0, totalAdvReceived - totalAdvRemaining);
+  const advUtilPct = totalAdvReceived > 0 ? (totalAdvSpent / totalAdvReceived) * 100 : 0;
+  const advSettledCount = filteredAdvances.filter(a => a.is_settled).length;
+
+  // Cancellations KPI Aggregations
+  const totalCancelOriginalFare = useMemo(() => filteredCancellations.reduce((acc, c) => acc + (Number(c.original_fare || c.originalFare) || 0), 0), [filteredCancellations]);
+  const totalCancelNetLoss = useMemo(() => filteredCancellations.reduce((acc, c) => acc + (Number(c.net_unrecovered_amount || c.netUnrecoveredAmount) || 0), 0), [filteredCancellations]);
+  const totalCancelEmployeeOwed = useMemo(() => filteredCancellations.reduce((acc, c) => acc + (Number(c.employee_owed_amount || c.employeeOwedAmount) || 0), 0), [filteredCancellations]);
+  const totalCancelOrgAbsorbed = useMemo(() => filteredCancellations.reduce((acc, c) => acc + (Number(c.org_absorbed_amount || c.orgAbsorbedAmount) || 0), 0), [filteredCancellations]);
+  const totalCancelVendorRefund = Math.max(0, totalCancelOriginalFare - totalCancelNetLoss);
 
   // Charts data
   const deptData = useMemo(() => {
@@ -1880,7 +1974,26 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     return Object.entries(counts).map(([label, value]) => ({ label: label.replace(/_/g, ' '), value, color: colors[label] || '#94a3b8' }));
   }, [filteredData]);
 
-  // Department summary table — avg cost on CLOSED tickets only
+  // Mode & Priority distributions
+  const modeData = useMemo(() => {
+    const counts: Record<string, number> = { Flight: 0, Train: 0, Bus: 0 };
+    filteredData.forEach(r => {
+      const m = r.mode || 'Flight';
+      counts[m] = (counts[m] || 0) + 1;
+    });
+    return Object.entries(counts);
+  }, [filteredData]);
+
+  const priorityData = useMemo(() => {
+    const counts: Record<string, number> = { Low: 0, Medium: 0, High: 0, Critical: 0 };
+    filteredData.forEach(r => {
+      const p = r.priority || 'Medium';
+      counts[p] = (counts[p] || 0) + 1;
+    });
+    return Object.entries(counts);
+  }, [filteredData]);
+
+  // Department summary table
   const deptSummary = useMemo(() => {
     const map: Record<string, { count: number, totalCost: number, closedCount: number, closedCost: number }> = {};
     filteredData.forEach(r => {
@@ -1911,23 +2024,48 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     });
   }, [deptSummary, deptSort]);
 
-  const toggleDeptSort = (col: typeof deptSort.col) => setDeptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+  // Advances Sorting
+  const sortedAdvances = useMemo(() => {
+    return [...filteredAdvances].sort((a, b) => {
+      const dir = advSort.dir === 'asc' ? 1 : -1;
+      if (advSort.col === 'received_on') return dir * (new Date(a.received_on).getTime() - new Date(b.received_on).getTime());
+      if (advSort.col === 'received_from') return dir * a.received_from.localeCompare(b.received_from);
+      if (advSort.col === 'amount_received') return dir * (Number(a.amount_received) - Number(b.amount_received));
+      if (advSort.col === 'amount_left') return dir * (Number(a.amount_left) - Number(b.amount_left));
+      return 0;
+    });
+  }, [filteredAdvances, advSort]);
 
-  const SortIcon = ({ col }: { col: typeof deptSort.col }) => (
-    <i className={`fa-solid ml-1 text-xs ${deptSort.col === col ? (deptSort.dir === 'asc' ? 'fa-arrow-up text-indigo-500' : 'fa-arrow-down text-indigo-500') : 'fa-arrows-up-down text-slate-300'}`}></i>
+  // Cancellations Sorting
+  const sortedCancellations = useMemo(() => {
+    return [...filteredCancellations].sort((a, b) => {
+      const dir = cancelSort.dir === 'asc' ? 1 : -1;
+      const dateA = new Date(a.cancellation_date || a.cancellationDate || 0).getTime();
+      const dateB = new Date(b.cancellation_date || b.cancellationDate || 0).getTime();
+      if (cancelSort.col === 'cancellation_date') return dir * (dateA - dateB);
+      if (cancelSort.col === 'original_fare') return dir * ((a.original_fare || a.originalFare || 0) - (b.original_fare || b.originalFare || 0));
+      if (cancelSort.col === 'status') return dir * (a.status || '').localeCompare(b.status || '');
+      return 0;
+    });
+  }, [filteredCancellations, cancelSort]);
+
+  const toggleDeptSort = (col: typeof deptSort.col) => setDeptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+  const toggleAdvSort = (col: string) => setAdvSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+  const toggleCancelSort = (col: string) => setCancelSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+
+  const SortIcon = ({ col, current }: { col: string, current: { col: string, dir: 'asc' | 'desc' } }) => (
+    <i className={`fa-solid ml-1 text-xs ${current.col === col ? (current.dir === 'asc' ? 'fa-arrow-up text-indigo-500' : 'fa-arrow-down text-indigo-500') : 'fa-arrows-up-down text-slate-300'}`}></i>
   );
 
   const uniqueCampuses = Array.from(new Set(requests.map(r => r.requesterCampus).filter(Boolean))) as string[];
   const uniqueDepts = Array.from(new Set(requests.map(r => r.requesterDepartment).filter(Boolean))) as string[];
   const CHART_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
-  // Department chart renderer
   const renderDeptChart = () => {
     if (deptData.length === 0) return (
       <div className="h-80 flex items-center justify-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-lg">No data for selected period.</div>
     );
 
-    // Shared chart dimensions
     const W = 440, H = 300, PL = 52, PR = 12, PT = 16, PB = 32;
     const cW = W - PL - PR, cH = H - PT - PB;
     const max = Math.max(...deptData.map(d => d.value), 1);
@@ -1941,17 +2079,16 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
       : `${v}`;
     const svgClass = "w-full h-80";
 
-    // Shared axes JSX (reused across all chart types)
     const axesJSX = (
       <>
         {gridVals.map((g, i) => (
           <g key={i}>
-            <line x1={PL} y1={g.y} x2={W - PR} y2={g.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={i === NUM_Y ? '0' : '4 3'} />
+            <line x1={PL} y1={g.y} x2={W - PR} y2={g.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={i === NUM_Y ? '0' : '4 3'} className="dark:stroke-slate-800" />
             <text x={PL - 5} y={g.y + 3} textAnchor="end" fill="#94a3b8" fontSize="8" fontWeight="600">{fmtVal(g.val)}</text>
           </g>
         ))}
-        <line x1={PL} y1={PT} x2={PL} y2={PT + cH} stroke="#cbd5e1" strokeWidth="1.5" />
-        <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="#cbd5e1" strokeWidth="1.5" />
+        <line x1={PL} y1={PT} x2={PL} y2={PT + cH} stroke="#cbd5e1" strokeWidth="1.5" className="dark:stroke-slate-700" />
+        <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="#cbd5e1" strokeWidth="1.5" className="dark:stroke-slate-700" />
       </>
     );
 
@@ -1974,7 +2111,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
             return (
               <g key={i}>
                 <rect x={x} y={y} width={barW} height={bH} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity="0.85" rx="3" />
-                <line x1={x + barW / 2} y1={PT + cH} x2={x + barW / 2} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+                <line x1={x + barW / 2} y1={PT + cH} x2={x + barW / 2} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" className="dark:stroke-slate-700" />
                 <text x={x + barW / 2} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{d.label.substring(0, 9)}</text>
               </g>
             );
@@ -1999,7 +2136,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           <path d={path} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           {pts.map((p, i) => (
             <g key={i}>
-              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" className="dark:stroke-slate-700" />
               <circle cx={p.x} cy={p.y} r="4.5" fill="#6366f1" stroke="white" strokeWidth="2" />
               <text x={p.x} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{p.d.label.substring(0, 9)}</text>
             </g>
@@ -2020,7 +2157,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           {axesJSX}
           {pts.map((p, i) => (
             <g key={i}>
-              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" className="dark:stroke-slate-700" />
               <circle cx={p.x} cy={p.y} r="9" fill={p.c} fillOpacity="0.75" stroke={p.c} strokeWidth="1.5" />
               <text x={p.x} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{p.d.label.substring(0, 9)}</text>
             </g>
@@ -2044,7 +2181,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           {axesJSX}
           {pts.map((p, i) => (
             <g key={i}>
-              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" />
+              <line x1={p.x} y1={PT + cH} x2={p.x} y2={PT + cH + 4} stroke="#cbd5e1" strokeWidth="1" className="dark:stroke-slate-700" />
               <circle cx={p.x} cy={p.y} r={p.r} fill={p.c} fillOpacity="0.55" stroke={p.c} strokeWidth="1.5" />
               <text x={p.x} y={H - 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="700">{p.d.label.substring(0, 9)}</text>
             </g>
@@ -2055,8 +2192,15 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
     return null;
   };
 
+  // Paginated Slices of Data
+  const totalTravelPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
+  const paginatedTravelData = useMemo(() => filteredData.slice((travelPage - 1) * itemsPerPage, travelPage * itemsPerPage), [filteredData, travelPage]);
 
+  const totalAdvancesPages = Math.ceil(sortedAdvances.length / itemsPerPage) || 1;
+  const paginatedAdvancesData = useMemo(() => sortedAdvances.slice((advancesPage - 1) * itemsPerPage, advancesPage * itemsPerPage), [sortedAdvances, advancesPage]);
 
+  const totalCancellationsPages = Math.ceil(sortedCancellations.length / itemsPerPage) || 1;
+  const paginatedCancellationsData = useMemo(() => sortedCancellations.slice((cancellationsPage - 1) * itemsPerPage, cancellationsPage * itemsPerPage), [sortedCancellations, cancellationsPage]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -2070,13 +2214,33 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           </p>
         </div>
         <button onClick={() => {
-          const csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
-          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `travel_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          let csv = '';
+          if (activeSubTab === 'travel') {
+            csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
+          } else if (activeSubTab === 'advances') {
+            csv = [['Advance ID', 'Received On', 'Received From', 'Amount Received', 'Amount Left', 'Settled Status', 'Comments'], ...filteredAdvances.map(a => [a.receipt_id || a.id, a.received_on, a.received_from, a.amount_received, a.amount_left, a.is_settled ? 'Settled' : 'Unsettled', a.comments || ''])].map(e => e.join(',')).join('\n');
+          } else {
+            csv = [['Cancellation ID', 'Request ID', 'Traveler', 'Cancellation Date', 'Original Fare', 'Net Loss', 'Status', 'Owed By Employee', 'Absorbed By Org'], ...filteredCancellations.map(c => [c.id, c.travel_requests?.submission_id || c.travel_request_id, c.travel_requests?.requester_name || '', new Date(c.cancellation_date).toLocaleDateString(), c.original_fare || c.originalFare, c.net_unrecovered_amount || c.netUnrecoveredAmount, c.status, c.employee_owed_amount || c.employeeOwedAmount, c.org_absorbed_amount || c.orgAbsorbedAmount])].map(e => e.join(',')).join('\n');
+          }
+          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${activeSubTab}_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
           toast.success('CSV exported!');
         }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
           <i className="fa-solid fa-download mr-2"></i>Export Report
         </button>
       </header>
+
+      {/* Navigation Sub-Tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800">
+        <button onClick={() => setActiveSubTab('travel')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'travel' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+          <i className="fa-solid fa-plane-departure text-xs"></i>Travel & Spend
+        </button>
+        <button onClick={() => setActiveSubTab('advances')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'advances' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+          <i className="fa-solid fa-wallet text-xs"></i>PNC Advances & Funds
+        </button>
+        <button onClick={() => setActiveSubTab('cancellations')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'cancellations' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+          <i className="fa-solid fa-rectangle-xmark text-xs"></i>Cancellations & Recovery
+        </button>
+      </div>
 
       {/* Filters */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-wrap gap-4 items-start shadow-sm">
@@ -2086,8 +2250,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         <div className="relative" ref={campusDropRef}>
           <button
             onClick={() => { setCampusDropOpen(v => !v); setDeptDropOpen(false); }}
-            className={`flex items-center gap-2 min-w-[140px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.campuses.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'
-              }`}
+            className={`flex items-center gap-2 min-w-[140px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.campuses.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}
           >
             <i className="fa-solid fa-building text-slate-400 text-xs"></i>
             <span className="flex-1 text-left truncate">
@@ -2108,11 +2271,9 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                   const checked = filters.campuses.includes(c);
                   return (
                     <button key={c} onClick={() => setFilters(f => ({ ...f, campuses: checked ? f.campuses.filter(x => x !== c) : [...f.campuses, c] }))}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                     >
-                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
-                        }`}>
+                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'}`}>
                         {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
                       </div>
                       {c}
@@ -2122,7 +2283,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
               </div>
             </div>
           )}
-          {/* Selected chips */}
           {filters.campuses.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {filters.campuses.map(c => (
@@ -2139,8 +2299,7 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         <div className="relative" ref={deptDropRef}>
           <button
             onClick={() => { setDeptDropOpen(v => !v); setCampusDropOpen(false); }}
-            className={`flex items-center gap-2 min-w-[160px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.departments.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'
-              }`}
+            className={`flex items-center gap-2 min-w-[160px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.departments.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}
           >
             <i className="fa-solid fa-sitemap text-slate-400 text-xs"></i>
             <span className="flex-1 text-left truncate">
@@ -2161,11 +2320,9 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
                   const checked = filters.departments.includes(d);
                   return (
                     <button key={d} onClick={() => setFilters(f => ({ ...f, departments: checked ? f.departments.filter(x => x !== d) : [...f.departments, d] }))}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                     >
-                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'
-                        }`}>
+                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'}`}>
                         {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
                       </div>
                       {d}
@@ -2175,7 +2332,6 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
               </div>
             </div>
           )}
-          {/* Selected chips */}
           {filters.departments.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {filters.departments.map(d => (
@@ -2203,12 +2359,8 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
           </div>
         )}
 
-        {/* Clear all */}
         {(filters.campuses.length > 0 || filters.departments.length > 0) && (
-          <button
-            onClick={() => setFilters(f => ({ ...f, campuses: [], departments: [] }))}
-            className="text-xs font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors"
-          >
+          <button onClick={() => setFilters(f => ({ ...f, campuses: [], departments: [] }))} className="text-xs font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors">
             <i className="fa-solid fa-xmark"></i> Clear All
           </button>
         )}
@@ -2221,139 +2373,478 @@ const AnalyticsView = ({ requests, currentUser }: { requests: TravelRequest[], c
         )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isPNCView ? (
-          <>
+      {loadingData ? (
+        <div className="h-64 flex flex-col items-center justify-center gap-3">
+          <i className="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500 animate-spin"></i>
+          <span className="text-sm font-bold text-slate-400">Loading analytics data...</span>
+        </div>
+      ) : activeSubTab === 'travel' ? (
+        // --- TRAVEL & SPEND SUB-TAB ---
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard title="Total Requests" value={totalRequests} icon={<i className="fa-solid fa-inbox"></i>} trend={reqChange?.pct} trendUp={reqChange?.up} description={showComparison ? `vs ${prevTotalRequests} prev period` : 'All time volume'} />
-            <StatCard title="Total Tickets" value={totalBookings} icon={<i className="fa-solid fa-check-double"></i>} trend={bookingsChange?.pct} trendUp={bookingsChange?.up} description={showComparison ? `vs ${prevTotalBookings} prev period` : 'Successfully closed'} />
+            {isFinancialView ? (
+              <StatCard title="Total Spend" value={`₹ ${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} trend={spendChange?.pct} trendUp={spendChange?.up !== undefined ? !spendChange.up : undefined} description="Actual ticket cost" />
+            ) : (
+              <StatCard title="Total Tickets" value={totalBookings} icon={<i className="fa-solid fa-check-double"></i>} trend={bookingsChange?.pct} trendUp={bookingsChange?.up} description={showComparison ? `vs ${prevTotalBookings} prev period` : 'Successfully closed'} />
+            )}
             <StatCard title="Open Requests" value={openRequests} icon={<i className="fa-solid fa-clock"></i>} description="Pending action" />
             <StatCard title="Avg Ticket Cost" value={avgTicketCost > 0 ? `₹${avgTicketCost.toLocaleString()}` : '—'} icon={<i className="fa-solid fa-calculator"></i>} trend={avgCostChange?.pct} trendUp={avgCostChange?.up} description={`${bookedWithCost.length} closed tickets`} />
-          </>
-        ) : (
-          <>
-            <StatCard title="Total Bookings" value={totalRequests} icon={<i className="fa-solid fa-ticket"></i>} trend={reqChange?.pct} trendUp={reqChange?.up} description={showComparison ? `vs ${prevTotalRequests} prev period` : 'Total requests in period'} />
-            {isFinancialView && <StatCard title="Total Spend" value={`₹ ${totalSpend.toLocaleString()}`} icon={<i className="fa-solid fa-indian-rupee-sign"></i>} trend={spendChange?.pct} trendUp={spendChange?.up !== undefined ? !spendChange.up : undefined} description="Actual ticket cost" />}
-            {isFinancialView && <StatCard title="Avg Ticket Cost" value={avgTicketCost > 0 ? `₹${avgTicketCost.toLocaleString()}` : '—'} icon={<i className="fa-solid fa-calculator"></i>} trend={avgCostChange?.pct} trendUp={avgCostChange?.up} description={`${bookedWithCost.length} closed tickets`} />}
-          </>
-        )}
-      </div>
+          </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {isPNCView && (
-          <Card className="p-6">
-            <h4 className="font-bold text-slate-800 dark:text-white mb-6">Request Status Breakdown</h4>
-            <DonutChart data={statusData} />
-          </Card>
-        )}
-        <Card className="p-6 flex flex-col" style={{ minHeight: '420px' }}>
-          <div className="flex justify-between items-center mb-5">
-            <h4 className="font-bold text-slate-800 dark:text-white">{isFinancialView ? 'Spend by Department' : 'Volume by Department'}</h4>
-            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-              {(['bar', 'line', 'scatter', 'bubble', 'pie'] as const).map(type => (
-                <button key={type} onClick={() => setDeptChartType(type)} title={type.charAt(0).toUpperCase() + type.slice(1)}
-                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all ${deptChartType === type ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
-                  <i className={`fa-solid ${CHART_ICONS[type]}`}></i>
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-6">Request Status Breakdown</h4>
+              <DonutChart data={statusData} />
+            </Card>
+            <Card className="p-6 flex flex-col" style={{ minHeight: '420px' }}>
+              <div className="flex justify-between items-center mb-5">
+                <h4 className="font-bold text-slate-800 dark:text-white">{isFinancialView ? 'Spend by Department' : 'Volume by Department'}</h4>
+                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                  {(['bar', 'line', 'scatter', 'bubble', 'pie'] as const).map(type => (
+                    <button key={type} onClick={() => setDeptChartType(type)} title={type.charAt(0).toUpperCase() + type.slice(1)}
+                      className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all ${deptChartType === type ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                      <i className={`fa-solid ${CHART_ICONS[type]}`}></i>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                {renderDeptChart()}
+              </div>
+            </Card>
           </div>
-          <div className="flex-1 flex flex-col justify-center">
-            {renderDeptChart()}
-          </div>
-        </Card>
-      </div>
 
-      {/* Department Summary Table */}
-      <Card className="overflow-hidden">
-        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-          <div>
-            <h4 className="font-bold text-slate-800 dark:text-white">Tickets by Department</h4>
-            <p className="text-xs text-slate-400 mt-0.5">Booking summary per department — click headers to sort</p>
-          </div>
-          <span className="text-xs font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-full">{filteredData.length} records</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
-              <tr>
-                <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('dept')}>Department <SortIcon col="dept" /></th>
-                <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('count')}># Tickets <SortIcon col="count" /></th>
-                {isFinancialView && <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('avg')}>Avg Cost <SortIcon col="avg" /></th>}
-                {isFinancialView && <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('total')}>Total Cost <SortIcon col="total" /></th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y dark:divide-slate-800">
-              {sortedDeptSummary.map((row, i) => (
-                <tr key={row.dept} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}></div>
-                      <span className="font-bold text-slate-800 dark:text-white">{row.dept}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-800 dark:text-white w-8">{row.count}</span>
-                      <div className="flex-1 max-w-[100px] h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(row.count / (Math.max(...sortedDeptSummary.map(r => r.count)) || 1)) * 100}%` }}></div>
+          {/* Mode & Priority distributions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2"><i className="fa-solid fa-plane text-sm text-indigo-500"></i> Travel Mode Distribution</h4>
+              <div className="space-y-4">
+                {modeData.map(([mode, count]) => {
+                  const maxVal = Math.max(...modeData.map(m => m[1]), 1);
+                  const pct = Math.round((count / (totalRequests || 1)) * 100);
+                  return (
+                    <div key={mode} className="space-y-1">
+                      <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>{mode}</span>
+                        <span>{count} ({pct}%)</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${(count / maxVal) * 100}%` }}></div>
                       </div>
                     </div>
-                  </td>
-                  {isFinancialView && <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400">₹{row.avgCost.toLocaleString()}</td>}
-                  {isFinancialView && <td className="px-6 py-4"><span className="font-bold text-slate-900 dark:text-white">₹{row.totalCost.toLocaleString()}</span></td>}
-                </tr>
-              ))}
-              {sortedDeptSummary.length === 0 && (
-                <tr><td colSpan={isFinancialView ? 4 : 2} className="px-6 py-12 text-center text-slate-400 text-sm">No data for the selected period.</td></tr>
-              )}
-            </tbody>
-            {sortedDeptSummary.length > 0 && isFinancialView && (
-              <tfoot className="bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700">
-                <tr>
-                  <td className="px-6 py-3 text-xs font-black text-slate-500 uppercase tracking-widest">Totals</td>
-                  <td className="px-6 py-3 font-black text-slate-800 dark:text-white">{sortedDeptSummary.reduce((a, r) => a + r.count, 0)}</td>
-                  <td className="px-6 py-3 font-mono text-slate-500">₹{avgTicketCost.toLocaleString()}</td>
-                  <td className="px-6 py-3 font-black text-indigo-600">₹{totalSpend.toLocaleString()}</td>
-                </tr>
-              </tfoot>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2"><i className="fa-solid fa-circle-exclamation text-sm text-amber-500"></i> Priority Distribution</h4>
+              <div className="space-y-4">
+                {priorityData.map(([pri, count]) => {
+                  const maxVal = Math.max(...priorityData.map(p => p[1]), 1);
+                  const pct = Math.round((count / (totalRequests || 1)) * 100);
+                  const colors: Record<string, string> = { Critical: 'bg-rose-500', High: 'bg-orange-500', Medium: 'bg-sky-500', Low: 'bg-slate-400' };
+                  return (
+                    <div key={pri} className="space-y-1">
+                      <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>{pri}</span>
+                        <span>{count} ({pct}%)</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full ${colors[pri] || 'bg-indigo-500'} rounded-full transition-all duration-500`} style={{ width: `${(count / maxVal) * 100}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+
+          {/* Department tickets summary */}
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-white">Tickets by Department</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Booking summary per department — click headers to sort</p>
+              </div>
+              <span className="text-xs font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-full">{filteredData.length} records</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('dept')}>Department <SortIcon col="dept" current={deptSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('count')}># Tickets <SortIcon col="count" current={deptSort} /></th>
+                    {isFinancialView && <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('avg')}>Avg Cost <SortIcon col="avg" current={deptSort} /></th>}
+                    {isFinancialView && <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 transition-colors select-none" onClick={() => toggleDeptSort('total')}>Total Cost <SortIcon col="total" current={deptSort} /></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {sortedDeptSummary.map((row, i) => (
+                    <tr key={row.dept} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}></div>
+                          <span className="font-bold text-slate-800 dark:text-white">{row.dept}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-slate-800 dark:text-white w-8">{row.count}</span>
+                          <div className="flex-1 max-w-[100px] h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(row.count / (Math.max(...sortedDeptSummary.map(r => r.count)) || 1)) * 100}%` }}></div>
+                          </div>
+                        </div>
+                      </td>
+                      {isFinancialView && <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400">₹{row.avgCost.toLocaleString()}</td>}
+                      {isFinancialView && <td className="px-6 py-4"><span className="font-bold text-slate-900 dark:text-white">₹{row.totalCost.toLocaleString()}</span></td>}
+                    </tr>
+                  ))}
+                  {sortedDeptSummary.length === 0 && (
+                    <tr><td colSpan={isFinancialView ? 4 : 2} className="px-6 py-12 text-center text-slate-400 text-sm">No data for the selected period.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Detailed Travel Report (Paginated) */}
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h4 className="font-bold text-slate-800 dark:text-white">Detailed Travel Report</h4>
+              <span className="text-xs font-bold text-slate-400">Showing {paginatedTravelData.length} of {filteredData.length} requests</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left whitespace-nowrap">
+                <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4">Request ID</th>
+                    <th className="px-6 py-4">Traveler</th>
+                    <th className="px-6 py-4">Dept / Campus</th>
+                    <th className="px-6 py-4">Route</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Ticket</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {paginatedTravelData.map((r: any) => (
+                    <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">{r.submissionId || r.id}</td>
+                      <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">{r.requesterName}</td>
+                      <td className="px-6 py-4 text-slate-500 text-xs">{r.requesterDepartment} <span className="text-slate-300 mx-1">•</span> {r.requesterCampus}</td>
+                      <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
+                      <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
+                      <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">View <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>) : <span className="text-slate-300">—</span>}</td>
+                    </tr>
+                  ))}
+                  {paginatedTravelData.length === 0 && (
+                    <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-sm">No data matching the current criteria.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalTravelPages > 1 && (
+              <div className="p-4 border-t dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20">
+                <button disabled={travelPage === 1} onClick={() => setTravelPage(p => p - 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  <i className="fa-solid fa-chevron-left mr-1"></i>Previous
+                </button>
+                <span className="text-xs font-bold text-slate-400">Page {travelPage} of {totalTravelPages}</span>
+                <button disabled={travelPage === totalTravelPages} onClick={() => setTravelPage(p => p + 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  Next<i className="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+              </div>
             )}
-          </table>
+          </Card>
         </div>
-      </Card>
+      ) : activeSubTab === 'advances' ? (
+        // --- ADVANCES & FUNDS SUB-TAB ---
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard title="Total Received" value={`₹ ${totalAdvReceived.toLocaleString()}`} icon={<i className="fa-solid fa-wallet text-indigo-500"></i>} description="Accumulated pool funds" />
+            <StatCard title="Remaining Balance" value={`₹ ${totalAdvRemaining.toLocaleString()}`} icon={<i className="fa-solid fa-money-bill-wave text-emerald-500"></i>} description="Active balance left" />
+            <StatCard title="Total Utilized" value={`₹ ${totalAdvSpent.toLocaleString()}`} icon={<i className="fa-solid fa-receipt text-amber-500"></i>} description="Total spent on tickets" />
+            <StatCard title="Settled Advances" value={`${advSettledCount} / ${filteredAdvances.length}`} icon={<i className="fa-solid fa-clipboard-check text-sky-500"></i>} description="Fully reconciled advances" />
+          </div>
 
-      {/* Detailed Report Table */}
-      <Card className="overflow-hidden">
-        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-          <h4 className="font-bold text-slate-800 dark:text-white">Detailed Report</h4>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left whitespace-nowrap">
-            <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
-              <tr>
-                <th className="px-6 py-4">Request ID</th><th className="px-6 py-4">Traveler</th>
-                <th className="px-6 py-4">Dept / Campus</th><th className="px-6 py-4">Route</th>
-                <th className="px-6 py-4">Date</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Ticket</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y dark:divide-slate-800">
-              {filteredData.map((r: any) => (
-                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">{r.submissionId || r.id}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">{r.requesterName}</td>
-                  <td className="px-6 py-4 text-slate-500 text-xs">{r.requesterDepartment} <span className="text-slate-300 mx-1">•</span> {r.requesterCampus}</td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
-                  <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                  <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">View <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>) : <span className="text-slate-300">—</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="p-6 flex flex-col items-center justify-center">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-6 w-full text-left">Funds Utilization Gauge</h4>
+              <div className="relative flex items-center justify-center h-48 w-full">
+                {(() => {
+                  const radius = 50;
+                  const circ = 2 * Math.PI * radius;
+                  const offset = circ - (Math.min(100, advUtilPct) / 100) * circ;
+                  return (
+                    <>
+                      <svg className="w-40 h-40 transform -rotate-90">
+                        <circle cx="80" cy="80" r={radius} stroke="#e2e8f0" strokeWidth="10" fill="transparent" className="dark:stroke-slate-800" />
+                        <circle cx="80" cy="80" r={radius} stroke="url(#advGaugeGrad)" strokeWidth="10" fill="transparent" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
+                        <defs>
+                          <linearGradient id="advGaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#6366f1" />
+                            <stop offset="100%" stopColor="#10b981" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-slate-800 dark:text-white">{advUtilPct.toFixed(1)}%</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Utilized</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <p className="text-xs text-slate-400 mt-2 text-center max-w-xs">
+                Reflects the percentage of total advance funds that have been converted into active travel ticket bookings.
+              </p>
+            </Card>
 
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2"><i className="fa-solid fa-landmark text-sm text-indigo-500"></i> Funding Source Breakdown</h4>
+              <div className="space-y-4">
+                {(() => {
+                  const sources: Record<string, number> = {};
+                  filteredAdvances.forEach(a => {
+                    sources[a.received_from] = (sources[a.received_from] || 0) + (Number(a.amount_received) || 0);
+                  });
+                  const entries = Object.entries(sources);
+                  const maxVal = Math.max(...entries.map(e => e[1]), 1);
+                  return entries.map(([src, amount]) => {
+                    const pct = Math.round((amount / (totalAdvReceived || 1)) * 100);
+                    return (
+                      <div key={src} className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                          <span>{src}</span>
+                          <span>₹{amount.toLocaleString()} ({pct}%)</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(amount / maxVal) * 100}%` }}></div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </Card>
+          </div>
+
+          {/* Advances detail list */}
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h4 className="font-bold text-slate-800 dark:text-white">Advances Log</h4>
+              <span className="text-xs font-bold text-slate-400">Showing {paginatedAdvancesData.length} of {filteredAdvances.length} records</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleAdvSort('received_on')}>Received Date <SortIcon col="received_on" current={advSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleAdvSort('received_from')}>Source <SortIcon col="received_from" current={advSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleAdvSort('amount_received')}>Received <SortIcon col="amount_received" current={advSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleAdvSort('amount_left')}>Remaining <SortIcon col="amount_left" current={advSort} /></th>
+                    <th className="px-6 py-4">Util. %</th>
+                    <th className="px-6 py-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {paginatedAdvancesData.map((a: any) => {
+                    const uPct = a.amount_received > 0 ? ((a.amount_received - a.amount_left) / a.amount_received) * 100 : 0;
+                    return (
+                      <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">{new Date(a.received_on).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 font-bold text-indigo-600">{a.received_from}</td>
+                        <td className="px-6 py-4 font-mono text-slate-900 dark:text-white font-bold">₹{Number(a.amount_received).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-mono text-emerald-600 dark:text-emerald-400">₹{Number(a.amount_left).toLocaleString()}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs">{uPct.toFixed(0)}%</span>
+                            <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${uPct}%` }}></div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${a.is_settled ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600' : 'bg-amber-50 dark:bg-amber-950/30 text-amber-600'}`}>
+                            {a.is_settled ? 'Settled' : 'Active'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedAdvancesData.length === 0 && (
+                    <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">No advances matched the current period.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {totalAdvancesPages > 1 && (
+              <div className="p-4 border-t dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20">
+                <button disabled={advancesPage === 1} onClick={() => setAdvancesPage(p => p - 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  <i className="fa-solid fa-chevron-left mr-1"></i>Previous
+                </button>
+                <span className="text-xs font-bold text-slate-400">Page {advancesPage} of {totalAdvancesPages}</span>
+                <button disabled={advancesPage === totalAdvancesPages} onClick={() => setAdvancesPage(p => p + 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  Next<i className="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : (
+        // --- CANCELLATIONS & RECOVERY SUB-TAB ---
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard title="Cancelled Bookings" value={filteredCancellations.length} icon={<i className="fa-solid fa-rectangle-xmark text-rose-500"></i>} description="Total cancellation records" />
+            <StatCard title="Original Value" value={`₹ ${totalCancelOriginalFare.toLocaleString()}`} icon={<i className="fa-solid fa-ticket text-slate-500"></i>} description="Sum of original ticket costs" />
+            <StatCard title="Recovered/Refunded" value={`₹ ${totalCancelVendorRefund.toLocaleString()}`} icon={<i className="fa-solid fa-arrow-down-long text-emerald-500"></i>} description="Vendor/Airline refunds" />
+            <StatCard title="Direct Org Loss" value={`₹ ${totalCancelOrgAbsorbed.toLocaleString()}`} icon={<i className="fa-solid fa-triangle-exclamation text-rose-500"></i>} description="Net loss absorbed by Org" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-6">Financial Recovery Split</h4>
+              {totalCancelOriginalFare > 0 ? (
+                <div className="space-y-6">
+                  {(() => {
+                    const vendPct = (totalCancelVendorRefund / totalCancelOriginalFare) * 100;
+                    const empPct = (totalCancelEmployeeOwed / totalCancelOriginalFare) * 100;
+                    const orgPct = (totalCancelOrgAbsorbed / totalCancelOriginalFare) * 100;
+                    return (
+                      <>
+                        <div className="h-6 w-full bg-slate-100 dark:bg-slate-800 rounded-full flex overflow-hidden">
+                          {vendPct > 0 && <div className="bg-emerald-500 h-full transition-all" style={{ width: `${vendPct}%` }} title="Vendor Refund" />}
+                          {empPct > 0 && <div className="bg-sky-500 h-full transition-all" style={{ width: `${empPct}%` }} title="Employee Owed" />}
+                          {orgPct > 0 && <div className="bg-rose-500 h-full transition-all" style={{ width: `${orgPct}%` }} title="Org Absorbed Loss" />}
+                        </div>
+                        <div className="grid grid-cols-3 gap-4 text-xs font-bold text-center">
+                          <div className="bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
+                            <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">Vendor Refunded</div>
+                            <div className="text-emerald-600 text-sm font-black">₹{totalCancelVendorRefund.toLocaleString()}</div>
+                            <div className="text-slate-400 text-[10px] mt-0.5">{vendPct.toFixed(1)}%</div>
+                          </div>
+                          <div className="bg-sky-50 dark:bg-sky-950/20 p-3 rounded-lg border border-sky-100 dark:border-sky-900/30">
+                            <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">Employee Owed</div>
+                            <div className="text-sky-600 text-sm font-black">₹{totalCancelEmployeeOwed.toLocaleString()}</div>
+                            <div className="text-slate-400 text-[10px] mt-0.5">{empPct.toFixed(1)}%</div>
+                          </div>
+                          <div className="bg-rose-50 dark:bg-rose-950/20 p-3 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                            <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">Org Absorbed</div>
+                            <div className="text-rose-600 text-sm font-black">₹{totalCancelOrgAbsorbed.toLocaleString()}</div>
+                            <div className="text-slate-400 text-[10px] mt-0.5">{orgPct.toFixed(1)}%</div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="h-40 flex items-center justify-center text-slate-400 text-sm italic">
+                  No cancellation metrics available for the selected period.
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2"><i className="fa-solid fa-users-gear text-sm text-indigo-500"></i> Cancelled By Distribution</h4>
+              <div className="space-y-4">
+                {(() => {
+                  let employeeCount = 0;
+                  let orgCount = 0;
+                  filteredCancellations.forEach(c => {
+                    if (c.cancelled_by === 'Employee' || c.cancelledBy === 'Employee') employeeCount++;
+                    else orgCount++;
+                  });
+                  const total = employeeCount + orgCount || 1;
+                  const empPct = Math.round((employeeCount / total) * 100);
+                  const orgPct = Math.round((orgCount / total) * 100);
+                  const maxVal = Math.max(employeeCount, orgCount, 1);
+                  return (
+                    <>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                          <span>Employee Personal Reasons</span>
+                          <span>{employeeCount} ({empPct}%)</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-rose-500 rounded-full transition-all duration-500" style={{ width: `${(employeeCount / maxVal) * 100}%` }}></div>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                          <span>Organization Decision</span>
+                          <span>{orgCount} ({orgPct}%)</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${(orgCount / maxVal) * 100}%` }}></div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </Card>
+          </div>
+
+          {/* Cancellations list */}
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h4 className="font-bold text-slate-800 dark:text-white">Cancellations Ledger</h4>
+              <span className="text-xs font-bold text-slate-400">Showing {paginatedCancellationsData.length} of {filteredCancellations.length} records</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left whitespace-nowrap">
+                <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCancelSort('cancellation_date')}>Cancel Date <SortIcon col="cancellation_date" current={cancelSort} /></th>
+                    <th className="px-6 py-4">Submission ID</th>
+                    <th className="px-6 py-4">Traveler</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCancelSort('original_fare')}>Original Fare <SortIcon col="original_fare" current={cancelSort} /></th>
+                    <th className="px-6 py-4">Direct Org Loss</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCancelSort('status')}>Status <SortIcon col="status" current={cancelSort} /></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {paginatedCancellationsData.map((c: any) => (
+                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-600 dark:text-slate-400">{new Date(c.cancellation_date || c.cancellationDate || 0).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">{c.travel_requests?.submission_id || '—'}</td>
+                      <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">{c.travel_requests?.requester_name || '—'}</td>
+                      <td className="px-6 py-4 font-mono text-slate-900 dark:text-white font-bold">₹{Number(c.original_fare || c.originalFare || 0).toLocaleString()}</td>
+                      <td className="px-6 py-4 font-mono text-rose-600 dark:text-rose-400 font-bold">₹{Number(c.org_absorbed_amount || c.orgAbsorbedAmount || 0).toLocaleString()}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${c.status === 'Reconciled' || c.status === 'Fully Refunded' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600' : 'bg-amber-50 dark:bg-amber-950/30 text-amber-600'}`}>
+                          {c.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedCancellationsData.length === 0 && (
+                    <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">No cancellation records found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {totalCancellationsPages > 1 && (
+              <div className="p-4 border-t dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20">
+                <button disabled={cancellationsPage === 1} onClick={() => setCancellationsPage(p => p - 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  <i className="fa-solid fa-chevron-left mr-1"></i>Previous
+                </button>
+                <span className="text-xs font-bold text-slate-400">Page {cancellationsPage} of {totalCancellationsPages}</span>
+                <button disabled={cancellationsPage === totalCancellationsPages} onClick={() => setCancellationsPage(p => p + 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  Next<i className="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
@@ -4563,10 +5054,10 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
         </div>
 
         {availableStatuses.length > 0 && (
-          <div className="flex flex-wrap gap-2 bg-slate-150/40 dark:bg-slate-800/40 p-1.5 rounded-lg max-w-fit border border-slate-200/50 dark:border-slate-800/50">
+          <div className="flex overflow-x-auto whitespace-nowrap flex-nowrap gap-2 bg-slate-150/40 dark:bg-slate-800/40 p-1.5 rounded-lg max-w-full border border-slate-200/50 dark:border-slate-800/50 custom-scrollbar">
             <button
               onClick={() => setPastRequestsTab('All')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${pastRequestsTab === 'All'
+              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${pastRequestsTab === 'All'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
                 }`}
@@ -4579,7 +5070,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                 <button
                   key={status}
                   onClick={() => setPastRequestsTab(status)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${pastRequestsTab === status
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${pastRequestsTab === status
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
                     }`}
@@ -4596,11 +5087,11 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
             <table className="w-full text-left border-collapse block md:table">
               <thead className="hidden md:table-header-group">
                 <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-xs font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
-                  <th className="px-8 py-6">Request ID</th>
-                  <th className="px-8 py-6">Destination</th>
-                  <th className="px-8 py-6">Travel Date</th>
-                  <th className="px-8 py-6">Status</th>
-                  <th className="px-8 py-6 text-right">Details</th>
+                  <th className="px-6 py-4">Request ID</th>
+                  <th className="px-6 py-4">Destination</th>
+                  <th className="px-6 py-4">Travel Date</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-800 block md:table-row-group">
@@ -4608,7 +5099,7 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                   const isMeetup = r.purpose === 'Igatpuri Meetup';
                   return (
                     <tr key={r.id} className="flex flex-col md:table-row hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group p-4 md:p-0">
-                      <td className={`px-4 md:px-8 py-4 md:py-6 text-sm font-black uppercase tracking-widest ${isMeetup ? 'text-emerald-500' : 'text-indigo-500'} flex items-center justify-between md:table-cell gap-3`}>
+                      <td className={`px-4 md:px-6 py-3 md:py-3.5 text-sm font-black uppercase tracking-widest ${isMeetup ? 'text-emerald-500' : 'text-indigo-500'} flex items-center justify-between md:table-cell gap-3`}>
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isMeetup ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-indigo-50 dark:bg-indigo-900/30'} group-hover:scale-110 transition-transform`}>
                             <i className={`fa-solid ${r.mode === 'Flight' ? 'fa-plane' : r.mode === 'Train' ? 'fa-train' : 'fa-bus'} text-sm`}></i>
@@ -4617,23 +5108,23 @@ const EmployeeDashboard = ({ requests, onNewRequest, onView, isWarningVisible, c
                         </div>
                         <span className="md:hidden text-xs text-slate-400 font-bold">REQ ID</span>
                       </td>
-                      <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
+                      <td className="px-4 md:px-6 py-2.5 md:py-3 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
                         <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">DESTINATION</span>
                         <div className="text-right md:text-left">
                           <p className={`text-sm font-black uppercase tracking-tight ${isMeetup ? 'text-emerald-600' : 'text-slate-800 dark:text-white'}`}>{r.to}</p>
                           {isMeetup && <p className="text-xs text-emerald-500 font-bold uppercase tracking-widest mt-1"><i className="fa-solid fa-star mr-1"></i> Meetup</p>}
                         </div>
                       </td>
-                      <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
+                      <td className="px-4 md:px-6 py-2.5 md:py-3 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
                         <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">TRAVEL DATE</span>
                         <span className="text-sm font-bold text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       </td>
-                      <td className="px-4 md:px-8 py-3 md:py-6 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
+                      <td className="px-4 md:px-6 py-2.5 md:py-3 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
                         <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">STATUS</span>
                         <StatusBadge type="pnc" value={r.pncStatus} />
                       </td>
-                      <td className="px-4 md:px-8 py-4 md:py-6 block md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50 md:text-right">
-                        <button onClick={() => onView(r)} className={`w-full md:w-10 h-10 ${isMeetup ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-600'} rounded-lg transition-all shadow-sm hover:shadow active:scale-95 border border-slate-200 dark:border-slate-700 hover:border-transparent flex items-center justify-center md:ml-auto group/btn`}>
+                      <td className="px-4 md:px-6 py-3 md:py-3.5 block md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50 md:text-right">
+                        <button onClick={() => onView(r)} className={`w-full md:w-8 h-8 ${isMeetup ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-600'} rounded-lg transition-all shadow-sm hover:shadow active:scale-95 border border-slate-200 dark:border-slate-700 hover:border-transparent flex items-center justify-center md:ml-auto group/btn`}>
                           <span className="md:hidden mr-2 font-black text-xs uppercase tracking-widest">View Details</span>
                           <i className="fa-solid fa-arrow-right text-sm group-hover/btn:translate-x-0.5 transition-transform"></i>
                         </button>

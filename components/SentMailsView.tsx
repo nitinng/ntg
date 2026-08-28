@@ -184,6 +184,30 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
     }
   };
 
+  // Clear all queue items
+  const [isClearingQueue, setIsClearingQueue] = useState(false);
+  const handleClearQueue = async () => {
+    if (!window.confirm('Are you sure you want to clear all outgoing email records from the queue? This will purge all old test/pending/sent logs.')) {
+      return;
+    }
+    setIsClearingQueue(true);
+    try {
+      const { error } = await supabase
+        .from('email_queue')
+        .delete()
+        .gt('created_at', '1970-01-01T00:00:00Z');
+
+      if (error) throw error;
+
+      toast.success('Outgoing email queue cleared successfully.');
+      await fetchEmailLogs();
+    } catch (err: any) {
+      toast.error('Failed to clear queue: ' + err.message);
+    } finally {
+      setIsClearingQueue(false);
+    }
+  };
+
   // Quick fill "Send to Yourself"
   const handleFillSelfEmail = () => {
     if (currentUser?.email) {
@@ -299,6 +323,17 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {emails.length > 0 && (
+            <button
+              onClick={handleClearQueue}
+              disabled={isClearingQueue}
+              className="bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-3.5 py-2.5 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
+              title="Clear all old logs from the database table"
+            >
+              <i className={`fa-solid fa-trash-can ${isClearingQueue ? 'fa-spin' : ''}`}></i>
+              Clear Queue
+            </button>
+          )}
           <button
             onClick={fetchEmailLogs}
             disabled={loading}

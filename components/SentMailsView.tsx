@@ -45,9 +45,14 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
 
   // Filters & Search
   const [statusFilter, setStatusFilter] = useState<'all' | 'Sent' | 'Pending' | 'Processing' | 'Failed'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Available Templates for Test Sender
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('custom');
 
   // Manual Trigger Worker Loading State
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
@@ -81,17 +86,27 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
   `.trim());
   const [isSendingTest, setIsSendingTest] = useState(false);
 
-  // Fetch email queue records
+  // Fetch email queue records and templates
   const fetchEmailLogs = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('email_queue')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [queueRes, templateRes] = await Promise.all([
+        supabase
+          .from('email_queue')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('mail_templates')
+          .select('id, name, subject, body, status_trigger, audience, status')
+          .order('name', { ascending: true })
+      ]);
 
-      if (error) throw error;
-      setEmails((data as any) || []);
+      if (queueRes.error) throw queueRes.error;
+      setEmails((queueRes.data as any) || []);
+
+      if (!templateRes.error && templateRes.data) {
+        setAvailableTemplates(templateRes.data);
+      }
     } catch (err: any) {
       console.error('Error fetching email queue logs:', err);
       toast.error('Failed to load email logs: ' + err.message);
@@ -104,21 +119,52 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
     fetchEmailLogs();
   }, []);
 
+  // Handle template selection change
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (templateId === 'custom') {
+      setTestSubject(`Travel Desk Delivery Test - ${new Date().toLocaleTimeString()}`);
+      return;
+    }
+    const t = availableTemplates.find(tpl => tpl.id === templateId);
+    if (t) {
+      setTestSubject(`[TEST] ${t.subject || t.name}`);
+      let sampleBody = t.body || '';
+      sampleBody = sampleBody
+        .replace(/\{\{request_id\}\}/g, 'TRV-TEST-001')
+        .replace(/\{\{submissionId\}\}/g, 'TRV-TEST-001')
+        .replace(/\{\{requester_name\}\}/g, currentUser?.name || 'Test User')
+        .replace(/\{\{requesterName\}\}/g, currentUser?.name || 'Test User')
+        .replace(/\{\{origin\}\}/g, 'Pune')
+        .replace(/\{\{destination\}\}/g, 'Bangalore')
+        .replace(/\{\{departure_date\}\}/g, '2026-09-15')
+        .replace(/\{\{travel_mode\}\}/g, 'Flight')
+        .replace(/\{\{purpose\}\}/g, 'Annual Team Review')
+        .replace(/\{\{estimated_cost\}\}/g, '4500')
+        .replace(/\{\{portal_url\}\}/g, 'https://travel.navgurukul.org');
+      setTestBody(sampleBody);
+      toast.info(`Loaded "${t.name}" template with sample data`);
+    }
+  };
+
   // Filtered & Paginated Emails
   const filteredEmails = useMemo(() => {
     return emails.filter(e => {
       const matchesStatus = statusFilter === 'all' || e.status === statusFilter;
+      const isTestMail = e.to_status === 'Test Email' || (e.idempotency_key && e.idempotency_key.startsWith('test-'));
+      const matchesType = typeFilter === 'all' || (typeFilter === 'test' ? isTestMail : !isTestMail);
+
       const rec = Array.isArray(e.recipients) ? e.recipients.join(' ') : (e.recipient || '');
       const query = searchQuery.toLowerCase();
       const matchesSearch = !query ||
         rec.toLowerCase().includes(query) ||
         e.subject.toLowerCase().includes(query) ||
-        (e.template_name && e.template_name.toLowerCase().includes(query)) ||
+        (e.to_status && e.to_status.toLowerCase().includes(query)) ||
         (e.provider_message_id && e.provider_message_id.toLowerCase().includes(query));
 
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesType && matchesSearch;
     });
-  }, [emails, statusFilter, searchQuery]);
+  }, [emails, statusFilter, typeFilter, searchQuery]);
 
   const totalPages = Math.ceil(filteredEmails.length / itemsPerPage) || 1;
   const paginatedEmails = useMemo(() => {
@@ -442,29 +488,52 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
               )}
             </div>
 
-            {/* Status Filter Buttons */}
-            <div className="flex flex-wrap gap-1.5">
-              {(['all', 'Sent', 'Pending', 'Processing', 'Failed'] as const).map(status => {
-                const count = status === 'all'
-                  ? emails.length
-                  : emails.filter(e => e.status === status).length;
-                return (
+            {/* Status & Type Filter Buttons */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Type Filter */}
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                {(['all', 'production', 'test'] as const).map(t => (
                   <button
-                    key={status}
+                    key={t}
                     onClick={() => {
-                      setStatusFilter(status);
+                      setTypeFilter(t);
                       setCurrentPage(1);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      statusFilter === status
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    className={`px-2.5 py-1 rounded text-xs font-bold capitalize transition-all ${
+                      typeFilter === t
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                     }`}
                   >
-                    {status === 'all' ? 'All' : status} ({count})
+                    {t === 'all' ? 'All Types' : t === 'production' ? 'Live Production' : 'Test Mails'}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex flex-wrap gap-1">
+                {(['all', 'Sent', 'Pending', 'Processing', 'Failed'] as const).map(status => {
+                  const count = status === 'all'
+                    ? emails.length
+                    : emails.filter(e => e.status === status).length;
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => {
+                        setStatusFilter(status);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        statusFilter === status
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {status === 'all' ? 'All' : status} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -608,6 +677,25 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
             </div>
 
             <form onSubmit={handleSendTestEmail} className="space-y-5">
+              {/* Template Selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 block">
+                  Select Mail Template to Test
+                </label>
+                <select
+                  value={selectedTemplateId}
+                  onChange={e => handleSelectTemplate(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:border-indigo-600 outline-none text-slate-900 dark:text-white transition-all font-medium"
+                >
+                  <option value="custom">-- Custom Test Email (Default Diagnostic HTML) --</option>
+                  {availableTemplates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.status_trigger || 'General'} • {t.audience || 'employee'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Recipient Field */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">

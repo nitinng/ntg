@@ -107,11 +107,16 @@ export const PolicyManagement = ({
   const [isCapacityEnabled, setIsCapacityEnabled] = useState(false);
   const [isCalendarEnabled, setIsCalendarEnabled] = useState(true);
 
+  // --- Global Email CC State ---
+  const [globalCcList, setGlobalCcList] = useState<string[]>(['travel.team@navgurukul.org', 'nitin.s@navgurukul.org']);
+  const [newCcInput, setNewCcInput] = useState('');
+  const [isSavingCc, setIsSavingCc] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       setApproversLoading(true);
       try {
-        const [approversRes, settingsRes] = await Promise.all([
+        const [approversRes, settingsRes, ccRes] = await Promise.all([
           supabase
             .from('meetup_approvers')
             .select('*')
@@ -119,8 +124,17 @@ export const PolicyManagement = ({
           supabase
             .from('meetup_settings')
             .select('*')
-            .in('setting_key', ['total_seats', 'is_capacity_enabled', 'is_calendar_enabled', 'is_igatpuri_enabled'])
+            .in('setting_key', ['total_seats', 'is_capacity_enabled', 'is_calendar_enabled', 'is_igatpuri_enabled']),
+          supabase
+            .from('settings')
+            .select('setting_value')
+            .eq('setting_key', 'global_email_cc')
+            .maybeSingle()
         ]);
+
+        if (ccRes?.data?.setting_value && Array.isArray(ccRes.data.setting_value)) {
+          setGlobalCcList(ccRes.data.setting_value);
+        }
 
         if (approversRes.error) throw approversRes.error;
         let finalApprovers = approversRes.data || [];
@@ -162,6 +176,7 @@ export const PolicyManagement = ({
         setApproversLoading(false);
       }
     };
+
     fetchData();
   }, [users]);
 
@@ -278,6 +293,62 @@ export const PolicyManagement = ({
     } catch (err: any) {
       toast.error("Failed to update status: " + err.message);
       setIsEmailLoginEnabled(!newState);
+    }
+  };
+
+  const handleAddCc = async () => {
+    const trimmed = newCcInput.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmed || !emailRegex.test(trimmed)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    if (globalCcList.includes(trimmed)) {
+      toast.error('This email is already in the CC list');
+      return;
+    }
+
+    const updated = [...globalCcList, trimmed];
+    setIsSavingCc(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          setting_key: 'global_email_cc',
+          setting_value: updated,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      setGlobalCcList(updated);
+      setNewCcInput('');
+      toast.success(`Added ${trimmed} to global CC list`);
+    } catch (err: any) {
+      toast.error('Failed to update CC settings: ' + err.message);
+    } finally {
+      setIsSavingCc(false);
+    }
+  };
+
+  const handleRemoveCc = async (emailToRemove: string) => {
+    const updated = globalCcList.filter(e => e !== emailToRemove);
+    setIsSavingCc(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          setting_key: 'global_email_cc',
+          setting_value: updated,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (error) throw error;
+      setGlobalCcList(updated);
+      toast.success(`Removed ${emailToRemove} from global CC list`);
+    } catch (err: any) {
+      toast.error('Failed to update CC settings: ' + err.message);
+    } finally {
+      setIsSavingCc(false);
     }
   };
 
@@ -457,6 +528,92 @@ export const PolicyManagement = ({
                   onBlur={() => handleUpdatePolicy({ tatBookingHours: policy.tatBookingHours })}
                 />
               </div>
+            </div>
+          </Card>
+        </section>
+      )}
+
+      {/* Global Email CC Configuration (Admin only) */}
+      {currentUser.role === UserRole.ADMIN && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <i className="fa-solid fa-at text-indigo-500"></i>
+              Global Transactional Email CC
+            </h3>
+            <span className="text-xs text-slate-400 font-mono">
+              {globalCcList.length} configured
+            </span>
+          </div>
+
+          <Card className="p-8 space-y-6">
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Centrally Configured CC Recipients</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                All automated transactional lifecycle emails (approvals, booking confirmations, cancellations) copy these addresses automatically.
+              </p>
+            </div>
+
+            {/* Add New CC Email */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+              <div className="flex-1">
+                <Input
+                  label="Add CC Email Address"
+                  type="email"
+                  placeholder="e.g. audit.team@navgurukul.org"
+                  value={newCcInput}
+                  onChange={e => setNewCcInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCc();
+                    }
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddCc}
+                disabled={isSavingCc || !newCcInput.trim()}
+                className="bg-indigo-600 text-white px-6 py-3 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 h-[46px]"
+              >
+                <i className="fa-solid fa-plus"></i> Add Address
+              </button>
+            </div>
+
+            {/* CC List */}
+            <div className="space-y-2.5 pt-2">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active CC List</p>
+              {globalCcList.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-4 text-center border border-dashed rounded-lg">
+                  No global CC addresses configured.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {globalCcList.map(email => (
+                    <div
+                      key={email}
+                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-[10px]">
+                          @
+                        </div>
+                        <span className="font-medium text-slate-800 dark:text-slate-200 truncate">{email}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCc(email)}
+                        disabled={isSavingCc}
+                        className="text-slate-400 hover:text-rose-500 p-1 rounded transition-colors opacity-80 group-hover:opacity-100"
+                        title="Remove CC address"
+                      >
+                        <i className="fa-solid fa-trash-can text-xs"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
         </section>

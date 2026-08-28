@@ -1,14 +1,103 @@
 import { supabase } from '../supabaseClient';
 import { TravelRequest, PNCStatus } from '../types';
 
+export const DEFAULT_GLOBAL_CC = [
+  'travel.team@navgurukul.org',
+  'nitin.s@navgurukul.org'
+];
+
 /**
- * Automatically fetches the correct published email templates, resolves placeholders,
- * and pushes the rendered emails into the DB email_queue table.
+ * Resolves the active Global CC recipient list from the settings table.
+ */
+export const getGlobalEmailCc = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('setting_value')
+      .eq('setting_key', 'global_email_cc')
+      .maybeSingle();
+
+    if (!error && data?.setting_value && Array.isArray(data.setting_value) && data.setting_value.length > 0) {
+      return data.setting_value.filter(Boolean);
+    }
+  } catch (err) {
+    console.warn('Failed to fetch global_email_cc from settings, using default:', err);
+  }
+  return DEFAULT_GLOBAL_CC;
+};
+
+/**
+ * Safely resolves dynamic variables inside an email template subject or body.
+ */
+export const resolveTemplateVariables = (
+  content: string,
+  request: TravelRequest,
+  extraContext?: Record<string, any>
+): string => {
+  if (!content) return '';
+
+  const bookingRef = request.bookingReference ||
+    (request.legs && request.legs[0]?.pnr) ||
+    'CONFIRMED';
+
+  const variables: Record<string, string> = {
+    '{{request_id}}': request.submissionId || request.id || '',
+    '{{submissionId}}': request.submissionId || request.id || '',
+    '{{requester_name}}': request.requesterName || 'Employee',
+    '{{requesterName}}': request.requesterName || 'Employee',
+    '{{requester_email}}': request.requesterEmail || '',
+    '{{requesterEmail}}': request.requesterEmail || '',
+    '{{manager_name}}': request.approvingManagerName || request.managerName || 'Approving Manager',
+    '{{manager_email}}': request.approvingManagerEmail || request.managerEmail || '',
+    '{{origin}}': request.from || '',
+    '{{from}}': request.from || '',
+    '{{destination}}': request.to || '',
+    '{{to}}': request.to || '',
+    '{{departure_date}}': request.dateOfTravel || '',
+    '{{dateOfTravel}}': request.dateOfTravel || '',
+    '{{travel_mode}}': request.mode || 'Flight',
+    '{{mode}}': request.mode || 'Flight',
+    '{{trip_type}}': request.tripType || 'One-way',
+    '{{tripType}}': request.tripType || 'One-way',
+    '{{purpose}}': request.purpose || '',
+    '{{estimated_cost}}': request.ticketCost ? String(request.ticketCost) : '0',
+    '{{ticketCost}}': request.ticketCost ? String(request.ticketCost) : '0',
+    '{{ticket_cost}}': request.ticketCost ? String(request.ticketCost) : '0',
+    '{{vendor_name}}': request.vendorName || 'Travel Partner',
+    '{{vendorName}}': request.vendorName || 'Travel Partner',
+    '{{invoiceUrl}}': request.invoiceUrl || '',
+    '{{violation_reasons}}': request.violationReason || 'Policy advance booking notice / expense threshold limit',
+    '{{rejection_reason}}': request.statusChangeReason || 'Policy guidelines exceeded',
+    '{{statusChangeReason}}': request.statusChangeReason || '',
+    '{{information_requested}}': request.infoRequested || '',
+    '{{infoRequested}}': request.infoRequested || '',
+    '{{employee_response}}': request.employeeResponse || '',
+    '{{employeeResponse}}': request.employeeResponse || '',
+    '{{booking_reference}}': bookingRef,
+    '{{cancellation_reason}}': request.cancelledReason || request.statusChangeReason || 'Plans changed',
+    '{{cancelledReason}}': request.cancelledReason || '',
+    '{{portal_url}}': 'https://travel.navgurukul.org',
+    ...(extraContext || {})
+  };
+
+  let rendered = content;
+  for (const [placeholder, value] of Object.entries(variables)) {
+    const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    rendered = rendered.replace(new RegExp(escaped, 'g'), String(value ?? ''));
+  }
+
+  return rendered;
+};
+
+/**
+ * Automatically maps lifecycle state transitions to published mail templates,
+ * resolves placeholders & global CC, and inserts deterministic snapshot records into public.email_queue.
  */
 export const queueEmailsForTransition = async (
   request: TravelRequest,
   fromStatus: PNCStatus | null,
-  toStatus: PNCStatus
+  toStatus: PNCStatus,
+  extraContext?: Record<string, any>
 ) => {
   try {
     const transitions: { audience: 'employee' | 'manager' | 'pnc'; trigger: string; getRecipients: () => Promise<string[]> }[] = [];
@@ -19,7 +108,7 @@ export const queueEmailsForTransition = async (
       return data?.map(u => u.email).filter(Boolean) as string[] || [];
     };
 
-    // Transition mapping rules
+    // Transition mapping rules based on mail_sender_routine.md
     if (toStatus === PNCStatus.NOT_STARTED) {
       transitions.push({
         audience: 'employee',
@@ -100,7 +189,7 @@ export const queueEmailsForTransition = async (
           getRecipients: async () => [request.approvingManagerEmail!]
         });
       }
-      if (fromStatus === PNCStatus.PROCESSING || fromStatus === PNCStatus.ON_HOLD) {
+      if (fromStatus === PNCStatus.PROCESSING || fromStatus === PNCStatus.ON_HOLD || fromStatus === PNCStatus.BOOKED) {
         transitions.push({
           audience: 'pnc',
           trigger: 'Cancelled by Employee',
@@ -121,10 +210,13 @@ export const queueEmailsForTransition = async (
       });
     }
 
+    // Resolve global CC recipients
+    const globalCc = await getGlobalEmailCc();
+
     // Process each transition's template fetching and email insertion
     for (const t of transitions) {
       const recipients = await t.getRecipients();
-      if (recipients.length === 0) continue;
+      if (!recipients || recipients.length === 0) continue;
 
       // Find published mail template matching (status_trigger, audience)
       const { data: templates } = await supabase
@@ -132,57 +224,45 @@ export const queueEmailsForTransition = async (
         .select('*')
         .eq('status_trigger', t.trigger)
         .eq('audience', t.audience)
-        .eq('is_draft', false);
+        .or('status.eq.Published,is_draft.eq.false');
 
       const template = templates && templates.length > 0 ? templates[0] : null;
       let subject = '';
       let body = '';
-
-      const mergeFields = (text: string) => {
-        if (!text) return '';
-        return text
-          .replace(/\{\{requesterName\}\}/g, request.requesterName || '')
-          .replace(/\{\{requesterEmail\}\}/g, request.requesterEmail || '')
-          .replace(/\{\{submissionId\}\}/g, request.submissionId || request.id || '')
-          .replace(/\{\{from\}\}/g, request.from || '')
-          .replace(/\{\{to\}\}/g, request.to || '')
-          .replace(/\{\{dateOfTravel\}\}/g, request.dateOfTravel || '')
-          .replace(/\{\{ticketCost\}\}/g, request.ticketCost ? String(request.ticketCost) : '')
-          .replace(/\{\{vendorName\}\}/g, request.vendorName || '')
-          .replace(/\{\{invoiceUrl\}\}/g, request.invoiceUrl || '')
-          .replace(/\{\{purpose\}\}/g, request.purpose || '')
-          .replace(/\{\{infoRequested\}\}/g, request.infoRequested || '')
-          .replace(/\{\{employeeResponse\}\}/g, request.employeeResponse || '')
-          .replace(/\{\{statusChangeReason\}\}/g, request.statusChangeReason || '')
-          .replace(/\{\{cancelledReason\}\}/g, request.cancelledReason || '');
-      };
+      let isTemplatePublished = true;
 
       if (template) {
-        subject = mergeFields(template.subject);
-        body = mergeFields(template.body);
+        subject = resolveTemplateVariables(template.subject, request, extraContext);
+        body = resolveTemplateVariables(template.body, request, extraContext);
       } else {
-        // Fallback default structure if no template is published
+        // Fallback default structure
         subject = `Update on Travel Request: ${t.trigger} (${request.submissionId || request.id})`;
-        body = `<p>Hi ${request.requesterName},</p>
-                <p>The status of your travel request has been updated to: <strong>${t.trigger}</strong>.</p>
-                <p>Please log in to the portal for more details.</p>`;
+        body = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+                  <p>Hi ${request.requesterName || 'there'},</p>
+                  <p>The status of travel request <strong>${request.submissionId || request.id}</strong> has been updated to: <strong>${t.trigger}</strong>.</p>
+                  <p>Please log in to the Navgurukul Travel Portal for full details.</p>
+                </div>`;
       }
 
-      const idempotencyKey = `ticket:${request.id}:status:${toStatus}:aud:${t.audience}:${recipients.slice().sort().join(',')}`;
+      const sortedRecipients = recipients.slice().sort().join(',');
+      const idempotencyKey = `ticket:${request.id}:status:${toStatus}:aud:${t.audience}:${sortedRecipients}`;
 
       await supabase.from('email_queue').insert({
         ticket_id: request.id,
         to_status: toStatus,
         recipients,
+        cc: globalCc,
         subject,
         body,
-        status: 'Pending',
+        status: isTemplatePublished ? 'Pending' : 'Failed',
+        last_error: isTemplatePublished ? null : 'Template not published or missing',
         idempotency_key: idempotencyKey,
         retry_count: 0,
         attempt_count: 0
       });
     }
   } catch (err) {
-    console.error('Error in queueEmailsForTransition:', err);
+    // Non-blocking resilience: travel transition continues uninterrupted
+    console.error('Non-blocking error in queueEmailsForTransition:', err);
   }
 };

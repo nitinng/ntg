@@ -5,13 +5,22 @@ import { supabase } from '../supabaseClient';
 
 vi.mock('../supabaseClient', () => {
   const insertMock = vi.fn().mockResolvedValue({ error: null });
-  const selectMock = vi.fn();
-  const eqMock = vi.fn();
-  const inMock = vi.fn();
 
   return {
     supabase: {
       from: vi.fn((table: string) => {
+        if (table === 'settings') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { setting_value: ['travel.team@navgurukul.org', 'nitin.s@navgurukul.org'] },
+                  error: null
+                })
+              })
+            })
+          };
+        }
         if (table === 'profiles') {
           return {
             select: vi.fn().mockReturnValue({
@@ -30,14 +39,15 @@ vi.mock('../supabaseClient', () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockResolvedValue({
+                  or: vi.fn().mockResolvedValue({
                     data: [
                       {
                         status_trigger: 'Approval Pending',
                         audience: 'manager',
                         subject: 'Action Required: Approval for {{requesterName}} ({{submissionId}})',
                         body: '<p>Hi Manager, please review trip to {{to}} on {{dateOfTravel}}.</p>',
-                        is_draft: false
+                        is_draft: false,
+                        status: 'Published'
                       }
                     ],
                     error: null

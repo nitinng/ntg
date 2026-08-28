@@ -249,6 +249,8 @@ export interface TravelModePolicy {
   updatedAt?: string;
 }
 
+export type MailTemplateStatus = 'Draft' | 'Published' | 'Archived';
+
 export interface MailTemplate {
   id: string;
   name: string;
@@ -256,9 +258,27 @@ export interface MailTemplate {
   body: string; // HTML supported
   statusTrigger: string; // e.g., 'Approved', 'Rejected'
   isDraft: boolean;
+  status: MailTemplateStatus;
+  version: number;
   audience: 'employee' | 'manager' | 'pnc';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MailTemplateHistory {
+  id: string;
+  templateId: string;
+  templateName: string;
+  changedBy: string;
+  changedAt: string;
+  action: 'Created' | 'Edited' | 'Published' | 'Moved to Draft' | 'Archived' | 'Restored';
+  previousSubject?: string;
+  newSubject?: string;
+  previousBody?: string;
+  newBody?: string;
+  previousStatus?: string;
+  newStatus?: string;
+  version: number;
 }
 
 export interface MeetupApprover {

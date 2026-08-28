@@ -13,6 +13,10 @@ ALTER TABLE public.email_queue ADD COLUMN IF NOT EXISTS attempt_count INTEGER DE
 ALTER TABLE public.email_queue ADD COLUMN IF NOT EXISTS cc TEXT[] DEFAULT '{}'::text[];
 ALTER TABLE public.email_queue ADD COLUMN IF NOT EXISTS bcc TEXT[] DEFAULT '{}'::text[];
 
+-- Allow standalone test emails without requiring a travel request ticket_id
+ALTER TABLE public.email_queue ALTER COLUMN ticket_id DROP NOT NULL;
+ALTER TABLE public.email_queue ALTER COLUMN to_status DROP NOT NULL;
+
 -- Update status check constraint if needed to include 'Processing'
 ALTER TABLE public.email_queue DROP CONSTRAINT IF EXISTS email_queue_status_check;
 ALTER TABLE public.email_queue ADD CONSTRAINT email_queue_status_check 

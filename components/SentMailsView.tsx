@@ -23,7 +23,7 @@ export interface EmailQueueRecord {
   last_error?: string;
   provider?: string;
   provider_message_id?: string;
-  template_name?: string;
+  to_status?: string;
   idempotency_key?: string;
 }
 
@@ -242,7 +242,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
           subject: testSubject,
           body: renderedHtml,
           status: 'Pending',
-          template_name: 'Manual Test Email',
+          to_status: 'Test Email',
           idempotency_key: `test-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
         }])
         .select()

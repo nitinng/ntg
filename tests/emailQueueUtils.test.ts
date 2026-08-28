@@ -37,22 +37,18 @@ vi.mock('../supabaseClient', () => {
         if (table === 'mail_templates') {
           return {
             select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  or: vi.fn().mockResolvedValue({
-                    data: [
-                      {
-                        status_trigger: 'Approval Pending',
-                        audience: 'manager',
-                        subject: 'Action Required: Approval for {{requesterName}} ({{submissionId}})',
-                        body: '<p>Hi Manager, please review trip to {{to}} on {{dateOfTravel}}.</p>',
-                        is_draft: false,
-                        status: 'Published'
-                      }
-                    ],
-                    error: null
-                  })
-                })
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    status_trigger: 'Approval Pending',
+                    audience: 'manager',
+                    subject: 'Action Required: Approval for {{requesterName}} ({{submissionId}})',
+                    body: '<p>Hi Manager, please review trip to {{to}} on {{dateOfTravel}}.</p>',
+                    is_draft: false,
+                    status: 'Published'
+                  }
+                ],
+                error: null
               })
             })
           };

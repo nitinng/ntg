@@ -72,6 +72,7 @@ const SettingsView = React.lazy(() => import('./components/SettingsView'));
 const AdminQueueView = React.lazy(() => import('./components/AdminQueueView'));
 const PastRequestsView = React.lazy(() => import('./components/PastRequestsView'));
 const SentMailsView = React.lazy(() => import('./components/SentMailsView'));
+const VersionChangelogView = React.lazy(() => import('./components/VersionChangelogView'));
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -738,6 +739,9 @@ const App: React.FC = () => {
       case 'sent-mails':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <SentMailsView currentUser={currentUser} onTabChange={handleTabChange} />;
+      case 'changelog':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <VersionChangelogView currentUser={currentUser} />;
       case 'requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         // Filter out rejected and closed requests from queue
@@ -1057,6 +1061,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                 <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
                 <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
+                <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
               </div>
 
             </>
@@ -1068,6 +1073,7 @@ const App: React.FC = () => {
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
               </div>
 
             </>
@@ -1089,6 +1095,7 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                 <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
                 <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
+                <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
               </div>
 
             </>

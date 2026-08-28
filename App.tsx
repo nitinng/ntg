@@ -18,6 +18,7 @@ const ChatView = React.lazy(() => import('./components/ChatView'));
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
 import { queueEmailsForTransition } from './utils/emailQueueUtils';
+import { calculateProfileCompleteness, isUserVerified, isAppLockedForUser } from './utils/verificationUtils';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -3609,68 +3610,8 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   };
 
-  // Calculate profile completeness (excluding email)
-  // Fields: name, department, campus, managerName, managerEmail, passportPhoto, idProof = 7 fields
-  const calculateProfileCompleteness = (user: User | null): number => {
-    if (!user) return 0;
-    let completed = 0;
-    const total = 7;
-
-    if (user.name && user.name.trim() !== '') completed++;
-    if (user.department && user.department.trim() !== '') completed++;
-    if (user.campus && user.campus.trim() !== '') completed++;
-    if (user.managerName && user.managerName.trim() !== '') completed++;
-    if (user.managerEmail && user.managerEmail.trim() !== '') completed++;
-    if (user.passportPhoto?.fileUrl) completed++;
-    if (user.idProof?.fileUrl) completed++;
-    if (user.phone && user.phone.trim() !== '') completed++;
-    if (user.emergencyContactName && user.emergencyContactName.trim() !== '') completed++;
-    if (user.emergencyContactPhone && user.emergencyContactPhone.trim() !== '') completed++;
-    if (user.bloodGroup && user.bloodGroup.trim() !== '') completed++;
-
-    return Math.round((completed / 11) * 100);
-  };
-
-  const isUserVerified = (user: User | null) => {
-    if (!user) return false;
-    const passportOk = !policy.isPassportRequired || user.passportPhoto?.status === VerificationStatus.APPROVED;
-    const idOk = !policy.isIdRequired || user.idProof?.status === VerificationStatus.APPROVED;
-
-    // If already approved, return true
-    if (passportOk && idOk) return true;
-
-    // Check if user skipped verification and is still within the skip period
-    if (user.skippedVerificationAt) {
-      const now = new Date();
-      const skippedDate = new Date(user.skippedVerificationAt);
-      const daysSinceSkip = (now.getTime() - skippedDate.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceSkip <= policy.temporaryUnlockDays) {
-        return true; // Still within skip period
-      }
-    }
-
-    // Check for temporary unlock: if documents are uploaded and within the unlock period
-    const now = new Date();
-    const checkTemporaryUnlock = (doc?: UserDocument) => {
-      if (!doc?.uploadedAt || !doc?.fileUrl) return false;
-      if (doc.status === VerificationStatus.REJECTED) return false; // Rejected docs don't get temporary unlock
-
-      const uploadedDate = new Date(doc.uploadedAt);
-      const daysSinceUpload = (now.getTime() - uploadedDate.getTime()) / (1000 * 60 * 60 * 24);
-      return daysSinceUpload <= policy.temporaryUnlockDays;
-    };
-
-    const passportTempUnlock = !policy.isPassportRequired || checkTemporaryUnlock(user.passportPhoto);
-    const idTempUnlock = !policy.isIdRequired || checkTemporaryUnlock(user.idProof);
-
-    return passportTempUnlock && idTempUnlock;
-  };
-
   const isLocked = useMemo(() => {
-    if (!currentUser) return false; // Don't lock if user isn't loaded yet
-    if (currentUser.role === UserRole.ADMIN) return false;
-    if (!policy.isEnforcementEnabled) return false;
-    return !isUserVerified(currentUser);
+    return isAppLockedForUser(currentUser, policy);
   }, [currentUser, policy]);
 
   // ─── Profile-only update (never touches the role column) ───────────────────
@@ -3865,7 +3806,7 @@ const App: React.FC = () => {
               setIsNewRequestModalOpen(true);
             }}
             onView={setSelectedRequest}
-            isWarningVisible={!isUserVerified(currentUser) && !policy.isEnforcementEnabled}
+            isWarningVisible={!isUserVerified(currentUser, policy) && !policy.isEnforcementEnabled}
             completeness={completeness}
             onViewProfile={() => handleTabChange('profile')}
             user={currentUser}

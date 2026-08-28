@@ -126,7 +126,7 @@ const App: React.FC = () => {
   const [isMeetupApprover, setIsMeetupApprover] = useState(false);
   const [isIgatpuriEnabled, setIsIgatpuriEnabled] = useState(true);
   const [isChatEnabled, setIsChatEnabled] = useState(true);
-  const [isEmailLoginEnabled, setIsEmailLoginEnabled] = useState(true);
+  const [isEmailLoginEnabled, setIsEmailLoginEnabled] = useState(false);
 
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);

@@ -11,7 +11,7 @@ interface AuthViewProps {
     isEmailLoginEnabled?: boolean;
 }
 
-const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = true }: AuthViewProps) => {
+const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = false }: AuthViewProps) => {
     const [mode, setMode] = useState<AuthMode>(initialMode);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');

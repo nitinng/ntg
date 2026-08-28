@@ -168,13 +168,18 @@ export const queueEmailsForTransition = async (
                 <p>Please log in to the portal for more details.</p>`;
       }
 
+      const idempotencyKey = `ticket:${request.id}:status:${toStatus}:aud:${t.audience}:${recipients.slice().sort().join(',')}`;
+
       await supabase.from('email_queue').insert({
         ticket_id: request.id,
         to_status: toStatus,
         recipients,
         subject,
         body,
-        status: 'Pending'
+        status: 'Pending',
+        idempotency_key: idempotencyKey,
+        retry_count: 0,
+        attempt_count: 0
       });
     }
   } catch (err) {

@@ -23,5 +23,5 @@ dist-ssr
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
+supabase/.temp/

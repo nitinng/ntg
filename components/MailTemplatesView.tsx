@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { MailTemplate, UserRole, PNCStatus, TravelRequest, Priority, TravelMode, TripType, ApprovalStatus } from '../types';
+import { User, MailTemplate, UserRole, PNCStatus, TravelRequest, Priority, TravelMode, TripType, ApprovalStatus } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import Input from './Input';
 import TextArea from './TextArea';
 import Select from './Select';
+import SentMailsView from './SentMailsView';
 
 const SAMPLE_REQUEST: TravelRequest = {
     id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
@@ -41,13 +42,16 @@ const SAMPLE_REQUEST: TravelRequest = {
 // localStorage key for unsaved in-progress new template form
 const DRAFT_KEY = 'mail_template_draft';
 
+type MainSection = 'templates' | 'sent-mails' | 'test-email';
 type Tab = 'published' | 'drafts';
 
 interface MailTemplatesViewProps {
     currentUserRole: UserRole;
+    currentUser?: User | null;
 }
 
-const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }) => {
+const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole, currentUser }) => {
+    const [mainSection, setMainSection] = useState<MainSection>('templates');
     const [templates, setTemplates] = useState<MailTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<Tab>('published');
@@ -312,8 +316,97 @@ const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUserRole }
         </div>
     );
 
+    if (mainSection === 'sent-mails') {
+        return (
+            <div className="space-y-8 animate-in fade-in duration-500">
+                {/* Top Section Nav Switcher */}
+                <div className="flex border-b border-slate-200 dark:border-slate-800">
+                    <button
+                        onClick={() => setMainSection('templates')}
+                        className="py-4 px-6 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 transition-all"
+                    >
+                        <i className="fa-solid fa-envelope-open-text text-xs"></i>
+                        Email Templates
+                    </button>
+                    <button
+                        onClick={() => setMainSection('sent-mails')}
+                        className="py-4 px-6 font-bold text-sm border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition-all"
+                    >
+                        <i className="fa-solid fa-paper-plane text-xs"></i>
+                        Sent Mails & Delivery Logs
+                    </button>
+                    <button
+                        onClick={() => setMainSection('test-email')}
+                        className="py-4 px-6 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 transition-all"
+                    >
+                        <i className="fa-solid fa-flask text-xs"></i>
+                        Send Test Email
+                    </button>
+                </div>
+                <SentMailsView currentUser={currentUser} defaultSubTab="logs" />
+            </div>
+        );
+    }
+
+    if (mainSection === 'test-email') {
+        return (
+            <div className="space-y-8 animate-in fade-in duration-500">
+                {/* Top Section Nav Switcher */}
+                <div className="flex border-b border-slate-200 dark:border-slate-800">
+                    <button
+                        onClick={() => setMainSection('templates')}
+                        className="py-4 px-6 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 transition-all"
+                    >
+                        <i className="fa-solid fa-envelope-open-text text-xs"></i>
+                        Email Templates
+                    </button>
+                    <button
+                        onClick={() => setMainSection('sent-mails')}
+                        className="py-4 px-6 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 transition-all"
+                    >
+                        <i className="fa-solid fa-paper-plane text-xs"></i>
+                        Sent Mails & Delivery Logs
+                    </button>
+                    <button
+                        onClick={() => setMainSection('test-email')}
+                        className="py-4 px-6 font-bold text-sm border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition-all"
+                    >
+                        <i className="fa-solid fa-flask text-xs"></i>
+                        Send Test Email
+                    </button>
+                </div>
+                <SentMailsView currentUser={currentUser} defaultSubTab="test-email" />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Top Section Nav Switcher */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800">
+                <button
+                    onClick={() => setMainSection('templates')}
+                    className="py-4 px-6 font-bold text-sm border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition-all"
+                >
+                    <i className="fa-solid fa-envelope-open-text text-xs"></i>
+                    Email Templates
+                </button>
+                <button
+                    onClick={() => setMainSection('sent-mails')}
+                    className="py-4 px-6 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 transition-all"
+                >
+                    <i className="fa-solid fa-paper-plane text-xs"></i>
+                    Sent Mails & Delivery Logs
+                </button>
+                <button
+                    onClick={() => setMainSection('test-email')}
+                    className="py-4 px-6 font-bold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 transition-all"
+                >
+                    <i className="fa-solid fa-flask text-xs"></i>
+                    Send Test Email
+                </button>
+            </div>
+
             {/* Header */}
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>

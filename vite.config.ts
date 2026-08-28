@@ -3,33 +3,45 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import dns from 'node:dns';
 
-/**
- * CRITICAL: Supabase Same-Origin Proxy & Custom DNS Lookup
- * This proxy and DNS lookup workaround resolves ISP-level DNS/routing failures reaching *.supabase.co directly (e.g. Jio/Airtel edge DNS degradation in India).
- * DO NOT remove or "simplify" this proxy or the matching vercel.json rewrite without verifying that the underlying network/DNS resolution issue is resolved.
- */
-const reliableSupabaseLookup = (hostname: string, options: any, callback: any) => {
-  if (hostname === 'bzjzgykbfqfbbqibxexw.supabase.co') {
-    // Force the connection to Cloudflare's stable global IP instead of broken ISP edge IP
-    return callback(null, '104.18.38.10', 4);
-  }
-  return dns.lookup(hostname, options, callback);
-};
+// Prioritize IPv4 over IPv6 in Node DNS lookups to prevent dual-stack resolution hangs
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  // Ignore in environments where setDefaultResultOrder is not supported
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  const supabaseTarget = env.VITE_SUPABASE_URL || 'https://bzjzgykbfqfbbqibxexw.supabase.co';
+  let supabaseHostname = '';
+  try {
+    supabaseHostname = new URL(supabaseTarget).hostname;
+  } catch {
+    supabaseHostname = 'bzjzgykbfqfbbqibxexw.supabase.co';
+  }
+
+  // Optional manual IP override for restricted network environments (via SUPABASE_PINNED_IP env var)
+  const pinnedIp = env.SUPABASE_PINNED_IP || process.env.SUPABASE_PINNED_IP;
+  const customDnsLookup = pinnedIp
+    ? (hostname: string, options: any, callback: any) => {
+        if (hostname === supabaseHostname) {
+          return callback(null, pinnedIp, 4);
+        }
+        return dns.lookup(hostname, options, callback);
+      }
+    : undefined;
+
   return {
     server: {
       port: 3000,
       host: '0.0.0.0',
       proxy: {
         '/supabase-api': {
-          target: 'https://bzjzgykbfqfbbqibxexw.supabase.co',
+          target: supabaseTarget,
           changeOrigin: true,
           secure: true,
           ws: true, // Enable WebSockets proxy for Realtime
-          // @ts-ignore - lookup is supported by node-http-proxy
-          lookup: reliableSupabaseLookup,
+          ...(customDnsLookup ? { lookup: customDnsLookup } : {}),
           rewrite: (path) => path.replace(/^\/supabase-api/, ''),
           configure: (proxy, _options) => {
             proxy.on('proxyReq', (proxyReq, _req, _res) => {

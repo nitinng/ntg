@@ -1,167 +1,141 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { queueEmailsForTransition } from '../utils/emailQueueUtils';
-import { PNCStatus, TravelRequest, TripType, TravelMode, Priority, ApprovalStatus } from '../types';
-import { supabase } from '../supabaseClient';
+import { PNCStatus, TravelEvent } from '../types';
+import {
+  createSupabaseMock,
+  createMockRequest,
+  template
+} from './helpers/emailMocks';
 
-vi.mock('../supabaseClient', () => {
-  const insertMock = vi.fn().mockResolvedValue({ error: null });
-
-  return {
-    supabase: {
-      from: vi.fn((table: string) => {
-        if (table === 'settings') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: { setting_value: ['travel.team@navgurukul.org', 'nitin.s@navgurukul.org'] },
-                  error: null
-                })
-              })
-            })
-          };
-        }
-        if (table === 'profiles') {
-          return {
-            select: vi.fn().mockReturnValue({
-              in: vi.fn().mockResolvedValue({
-                data: [
-                  { email: 'pnc1@navgurukul.org' },
-                  { email: 'admin1@navgurukul.org' }
-                ],
-                error: null
-              })
-            })
-          };
-        }
-        if (table === 'mail_templates') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({
-                data: [
-                  {
-                    status_trigger: 'Approval Pending',
-                    audience: 'manager',
-                    subject: 'Action Required: Approval for {{requesterName}} ({{submissionId}})',
-                    body: '<p>Hi Manager, please review trip to {{to}} on {{dateOfTravel}}.</p>',
-                    is_draft: false,
-                    status: 'Published'
-                  }
-                ],
-                error: null
-              })
-            })
-          };
-        }
-        if (table === 'email_queue') {
-          return {
-            insert: insertMock
-          };
-        }
-        return {};
-      })
-    }
-  };
+const mocks = createSupabaseMock({
+  templates: [
+    template(TravelEvent.POLICY_VIOLATION_DETECTED, 'employee'),
+    template(TravelEvent.POLICY_VIOLATION_DETECTED, 'manager'),
+    template(TravelEvent.POLICY_EVALUATION_PASSED, 'employee'),
+    template(TravelEvent.MANAGER_APPROVED, 'employee'),
+    template(TravelEvent.INFO_PROVIDED, 'pnc'),
+    template(TravelEvent.BOOKING_CONFIRMED, 'employee'),
+    template(TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, 'employee'),
+    template(TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, 'manager')
+  ]
 });
 
-const createMockRequest = (overrides?: Partial<TravelRequest>): TravelRequest => ({
-  id: 'req-123',
-  submissionId: 'TRV-5555',
-  timestamp: '2026-09-01T10:00:00.000Z',
-  requesterId: 'usr-1',
-  requesterName: 'Priya Sharma',
-  requesterEmail: 'priya@navgurukul.org',
-  requesterPhone: '9876543210',
-  emergencyContactName: 'Contact Person',
-  emergencyContactPhone: '9876543211',
-  emergencyContactRelation: 'Parent',
-  bloodGroup: 'B+',
-  purpose: 'Annual Conference',
-  approvingManagerName: 'Manager Verma',
-  approvingManagerEmail: 'verma@navgurukul.org',
-  tripType: TripType.ONE_WAY,
-  mode: TravelMode.FLIGHT,
-  from: 'Delhi',
-  to: 'Bangalore',
-  dateOfTravel: '2026-09-25',
-  numberOfTravelers: 1,
-  priority: Priority.HIGH,
-  approvalStatus: ApprovalStatus.PENDING,
-  pncStatus: PNCStatus.APPROVAL_PENDING,
-  hasViolation: true,
-  ticketCost: 6500,
-  vendorName: 'IndiGo',
-  timeline: [],
-  ...overrides
-});
+vi.mock('../supabaseClient', () => ({ supabase: mocks.supabase }));
 
-describe('Email Queue Side Effects: queueEmailsForTransition', () => {
+// Imported after the mock so the module graph picks up the double.
+const { queueEmailsForTransition } = await import('../utils/emailQueueUtils');
+const { invalidateRoutingConfigCache } = await import('../utils/emailTriggers');
+
+describe('queueEmailsForTransition', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mocks.insertMock.mockClear();
+    mocks.invokeMock.mockClear();
+    invalidateRoutingConfigCache();
   });
 
-  it('queues manager approval email with replaced merge fields for APPROVAL_PENDING', async () => {
-    const request = createMockRequest();
-    await queueEmailsForTransition(request, PNCStatus.NOT_STARTED, PNCStatus.APPROVAL_PENDING);
+  it('stays silent on submission, because the policy verdict carries the notice', async () => {
+    // Sheet row 1: REQUEST_SUBMITTED sends nothing; the transition that follows
+    // (row 2 or row 4) is what reaches the employee.
+    await queueEmailsForTransition(createMockRequest(), null, PNCStatus.NOT_STARTED);
+    expect(mocks.insertMock).not.toHaveBeenCalled();
+  });
 
-    const emailQueueTable = supabase.from('email_queue');
-    expect(emailQueueTable.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ticket_id: 'req-123',
-        to_status: PNCStatus.APPROVAL_PENDING,
-        recipients: ['verma@navgurukul.org'],
-        subject: 'Action Required: Approval for Priya Sharma (TRV-5555)',
-        body: '<p>Hi Manager, please review trip to Bangalore on 2026-09-25.</p>',
-        status: 'Pending'
-      })
+  it('mails both the employee and the manager on a policy violation', async () => {
+    // Sheet rows 2 and 3.
+    await queueEmailsForTransition(
+      createMockRequest(),
+      PNCStatus.NOT_STARTED,
+      PNCStatus.APPROVAL_PENDING
     );
+
+    expect(mocks.insertMock).toHaveBeenCalledTimes(2);
+    const audiences = mocks.insertMock.mock.calls.map(c => c[0].audience).sort();
+    expect(audiences).toEqual(['employee', 'manager']);
   });
 
-  it('queues employee receipt email on NOT_STARTED entry', async () => {
-    const request = createMockRequest();
-    await queueEmailsForTransition(request, null, PNCStatus.NOT_STARTED);
-
-    const emailQueueTable = supabase.from('email_queue');
-    expect(emailQueueTable.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ticket_id: 'req-123',
-        to_status: PNCStatus.NOT_STARTED,
-        recipients: ['priya@navgurukul.org']
-      })
+  it('records the event and template that produced each queued message', async () => {
+    await queueEmailsForTransition(
+      createMockRequest(),
+      PNCStatus.NOT_STARTED,
+      PNCStatus.APPROVAL_PENDING
     );
-  });
 
-  it('notifies both employee and manager when request is APPROVED', async () => {
-    const request = createMockRequest();
-    await queueEmailsForTransition(request, PNCStatus.APPROVAL_PENDING, PNCStatus.APPROVED);
-
-    const emailQueueTable = supabase.from('email_queue');
-    // Expect 2 inserts: one for employee, one for manager
-    expect(emailQueueTable.insert).toHaveBeenCalledTimes(2);
-  });
-
-  it('notifies PNC team when employee responds to ON_HOLD', async () => {
-    const request = createMockRequest({
-      employeeResponse: 'Selected morning flight as requested'
+    const row = mocks.insertMock.mock.calls.find(c => c[0].audience === 'manager')![0];
+    expect(row).toMatchObject({
+      ticket_id: 'req-123',
+      event: TravelEvent.POLICY_VIOLATION_DETECTED,
+      audience: 'manager',
+      to_status: PNCStatus.APPROVAL_PENDING,
+      status: 'Pending',
+      recipients: ['verma@navgurukul.org']
     });
-    await queueEmailsForTransition(request, PNCStatus.ON_HOLD, PNCStatus.PROCESSING);
-
-    const emailQueueTable = supabase.from('email_queue');
-    expect(emailQueueTable.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ticket_id: 'req-123',
-        to_status: PNCStatus.PROCESSING,
-        recipients: expect.arrayContaining(['pnc1@navgurukul.org', 'admin1@navgurukul.org'])
-      })
-    );
+    expect(row.template_key).toBe('policy_violation_detected.manager.default');
   });
 
-  it('notifies manager and PNC when request is cancelled while in pending/processing queues', async () => {
-    const request = createMockRequest();
-    await queueEmailsForTransition(request, PNCStatus.APPROVAL_PENDING, PNCStatus.CANCELLED_BY_EMPLOYEE);
+  it('routes a passed policy evaluation straight to the employee', async () => {
+    // Sheet row 4: no approval needed, request enters the PNC queue.
+    await queueEmailsForTransition(
+      createMockRequest(),
+      PNCStatus.NOT_STARTED,
+      PNCStatus.PROCESSING
+    );
 
-    const emailQueueTable = supabase.from('email_queue');
-    // Employee received confirmation + manager received notice
-    expect(emailQueueTable.insert).toHaveBeenCalledTimes(2);
+    expect(mocks.insertMock).toHaveBeenCalledTimes(1);
+    expect(mocks.insertMock.mock.calls[0][0]).toMatchObject({
+      event: TravelEvent.POLICY_EVALUATION_PASSED,
+      audience: 'employee'
+    });
+  });
+
+  it('notifies PNC, not the employee, when the employee answers a hold', async () => {
+    // Sheet row 25: the response goes back to the desk that asked for it.
+    await queueEmailsForTransition(
+      createMockRequest({ pncStatus: PNCStatus.ON_HOLD }),
+      PNCStatus.ON_HOLD,
+      PNCStatus.PROCESSING
+    );
+
+    expect(mocks.insertMock).toHaveBeenCalledTimes(1);
+    expect(mocks.insertMock.mock.calls[0][0]).toMatchObject({
+      event: TravelEvent.INFO_PROVIDED,
+      audience: 'pnc',
+      recipients: ['pnc1@navgurukul.org', 'admin1@navgurukul.org']
+    });
+  });
+
+  it('tells both sides when the employee withdraws before a manager decision', async () => {
+    // Sheet rows 8 and 9: the manager's pending task is closed out explicitly.
+    await queueEmailsForTransition(
+      createMockRequest(),
+      PNCStatus.APPROVAL_PENDING,
+      PNCStatus.CANCELLED_BY_EMPLOYEE
+    );
+
+    expect(mocks.insertMock).toHaveBeenCalledTimes(2);
+    const audiences = mocks.insertMock.mock.calls.map(c => c[0].audience).sort();
+    expect(audiences).toEqual(['employee', 'manager']);
+  });
+
+  it('sends nothing for a transition the sheet marks silent', async () => {
+    // Sheet row 6: Approved -> Processing. Row 5 already said it is with the desk.
+    await queueEmailsForTransition(
+      createMockRequest(),
+      PNCStatus.APPROVED,
+      PNCStatus.PROCESSING
+    );
+    expect(mocks.insertMock).not.toHaveBeenCalled();
+  });
+
+  it('nudges the delivery worker once mail is queued', async () => {
+    await queueEmailsForTransition(
+      createMockRequest(),
+      PNCStatus.APPROVAL_PENDING,
+      PNCStatus.APPROVED
+    );
+    expect(mocks.invokeMock).toHaveBeenCalledWith('process-email-queue', expect.anything());
+  });
+
+  it('does not wake the worker when nothing was queued', async () => {
+    await queueEmailsForTransition(createMockRequest(), null, PNCStatus.NOT_STARTED);
+    expect(mocks.invokeMock).not.toHaveBeenCalled();
   });
 });

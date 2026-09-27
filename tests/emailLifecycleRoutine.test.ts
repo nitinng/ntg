@@ -1,137 +1,172 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Template variable resolution.
+ *
+ * The triggers sheet interpolates thirty variables across its thirty-seven mails.
+ * A variable that silently resolves to an empty string produces a mail that reads
+ * as broken - "Recovered:  " on a settlement statement - so every group the sheet
+ * uses is pinned here, including the ones with no value yet.
+ *
+ * Transition and audience routing is covered in emailQueueUtils.test.ts and
+ * emailTriggers.test.ts; this file does not repeat it.
+ */
+
+import { describe, it, expect, vi } from 'vitest';
 import { PNCStatus, TravelRequest, TripType, TravelMode, Priority, ApprovalStatus } from '../types';
-import { queueEmailsForTransition, resolveTemplateVariables, DEFAULT_GLOBAL_CC } from '../utils/emailQueueUtils';
-import { supabase } from '../supabaseClient';
+import { resolveTemplateVariables } from '../utils/emailQueueUtils';
 
-vi.mock('../supabaseClient', () => {
-  const insertMock = vi.fn().mockResolvedValue({ data: null, error: null });
-  const fromMock = vi.fn().mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          or: vi.fn().mockResolvedValue({ data: [], error: null })
-        }),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { setting_value: ['travel.team@navgurukul.org', 'nitin.s@navgurukul.org'] },
-          error: null
-        })
-      }),
-      in: vi.fn().mockResolvedValue({
-        data: [{ email: 'pnc1@navgurukul.org' }, { email: 'admin1@navgurukul.org' }],
-        error: null
-      })
-    }),
-    insert: insertMock
+vi.mock('../supabaseClient', () => ({
+  supabase: { from: vi.fn(() => ({})), functions: { invoke: vi.fn() } }
+}));
+
+const baseRequest: TravelRequest = {
+  id: 'req-001',
+  submissionId: 'TRV-O-260828-001',
+  timestamp: '2026-08-28T10:00:00Z',
+  requesterId: 'user-001',
+  requesterName: 'Priya Sharma',
+  requesterEmail: 'priya@navgurukul.org',
+  requesterPhone: '9876543210',
+  emergencyContactName: 'Contact Person',
+  emergencyContactPhone: '9876543211',
+  emergencyContactRelation: 'Parent',
+  bloodGroup: 'B+',
+  approvingManagerName: 'Rahul Verma',
+  approvingManagerEmail: 'rahul.manager@navgurukul.org',
+  purpose: 'Campus Hackathon',
+  tripType: TripType.ONE_WAY,
+  mode: TravelMode.FLIGHT,
+  from: 'Delhi',
+  to: 'Bangalore',
+  dateOfTravel: '2026-09-10',
+  numberOfTravelers: 1,
+  ticketCost: 5200,
+  vendorName: 'Air India',
+  bookingReference: 'AI-99124',
+  violationDetails: 'Flight notice < 15 days',
+  statusChangeReason: 'Approved for critical event',
+  priority: Priority.HIGH,
+  approvalStatus: ApprovalStatus.APPROVED,
+  pncStatus: PNCStatus.APPROVED,
+  hasViolation: true,
+  timeline: []
+};
+
+describe('template variable resolution', () => {
+  it('resolves the trip variables used by most of the sheet', () => {
+    const subject = 'Travel Request {{request_id}} for {{requester_name}}';
+    const body =
+      '<p>Hello {{requester_name}}, your {{travel_mode}} from {{origin}} to {{destination}} ' +
+      'on {{departure_date}} (Ref: {{booking_reference}}), approved by {{manager_name}}.</p>';
+
+    expect(resolveTemplateVariables(subject, baseRequest))
+      .toBe('Travel Request TRV-O-260828-001 for Priya Sharma');
+
+    const rendered = resolveTemplateVariables(body, baseRequest);
+    expect(rendered).toContain('your Flight from Delhi to Bangalore on 2026-09-10');
+    expect(rendered).toContain('Ref: AI-99124');
+    expect(rendered).toContain('approved by Rahul Verma');
+    expect(rendered).not.toContain('{{');
   });
 
-  return {
-    supabase: {
-      from: fromMock
-    }
-  };
-});
-
-describe('Transactional Email Lifecycle Routine', () => {
-  const mockRequest: TravelRequest = {
-    id: 'req-001',
-    submissionId: 'TRV-O-260828-001',
-    timestamp: '2026-08-28T10:00:00Z',
-    requesterId: 'user-001',
-    requesterName: 'Priya Sharma',
-    requesterEmail: 'priya@navgurukul.org',
-    approvingManagerName: 'Rahul Verma',
-    approvingManagerEmail: 'rahul.manager@navgurukul.org',
-    purpose: 'Campus Hackathon',
-    tripType: TripType.ONE_WAY,
-    mode: TravelMode.FLIGHT,
-    from: 'Delhi',
-    to: 'Bangalore',
-    dateOfTravel: '2026-09-10',
-    ticketCost: 5200,
-    vendorName: 'Air India',
-    bookingReference: 'AI-99124',
-    violationReason: 'Flight notice < 15 days',
-    statusChangeReason: 'Approved for critical event',
-    priority: Priority.HIGH,
-    approvalStatus: ApprovalStatus.APPROVED,
-    pncStatus: PNCStatus.APPROVED,
-    timeline: []
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it('accepts both the snake_case and camelCase spellings the sheet mixes', () => {
+    const rendered = resolveTemplateVariables(
+      '{{submissionId}} {{request_id}} {{requesterName}} {{requester_name}}',
+      baseRequest
+    );
+    expect(rendered).toBe('TRV-O-260828-001 TRV-O-260828-001 Priya Sharma Priya Sharma');
   });
 
-  it('resolves all dynamic template variables correctly', () => {
-    const templateSubject = 'Travel Request {{request_id}} for {{requester_name}}';
-    const templateBody = '<p>Hello {{requester_name}}, your {{travel_mode}} from {{origin}} to {{destination}} on {{departure_date}} costs ₹{{estimated_cost}} (Ref: {{booking_reference}}).</p>';
+  it('formats settlement amounts consistently', () => {
+    // Sheet rows 48 and 50 put four amounts side by side. A bare number next to a
+    // formatted one reads as a different currency.
+    const rendered = resolveTemplateVariables(
+      'Original {{original_fare}} | Recovered {{refund_amount}} | ' +
+      'Absorbed {{org_absorbed_amount}} | Due {{employee_owed_amount}}',
+      {
+        ...baseRequest,
+        originalFare: 5200,
+        refundAmount: 3200.5,
+        orgAbsorbedAmount: 2000,
+        employeeOwedAmount: 0
+      }
+    );
 
-    const resolvedSubject = resolveTemplateVariables(templateSubject, mockRequest);
-    const resolvedBody = resolveTemplateVariables(templateBody, mockRequest);
-
-    expect(resolvedSubject).toBe('Travel Request TRV-O-260828-001 for Priya Sharma');
-    expect(resolvedBody).toContain('Hello Priya Sharma, your Flight from Delhi to Bangalore on 2026-09-10 costs ₹5200 (Ref: AI-99124).');
-    expect(resolvedBody).not.toContain('{{');
+    expect(rendered).toBe(
+      'Original Rs. 5,200.00 | Recovered Rs. 3,200.50 | ' +
+      'Absorbed Rs. 2,000.00 | Due Rs. 0.00'
+    );
   });
 
-  it('queues an email with Global CC when request is submitted (Not Started)', async () => {
-    await queueEmailsForTransition(mockRequest, null, PNCStatus.NOT_STARTED);
-
-    expect(supabase.from).toHaveBeenCalledWith('email_queue');
-    const insertMock = supabase.from('email_queue').insert as any;
-    expect(insertMock).toHaveBeenCalled();
-    const queuedItem = insertMock.mock.calls[0][0];
-
-    expect(queuedItem.recipients).toEqual(['priya@navgurukul.org']);
-    expect(queuedItem.cc).toEqual(DEFAULT_GLOBAL_CC);
-    expect(queuedItem.to_status).toBe(PNCStatus.NOT_STARTED);
-    expect(queuedItem.idempotency_key).toContain('ticket:req-001:status:Not Started:aud:employee:priya@navgurukul.org');
+  it('says so rather than rendering a blank when an amount is not yet known', () => {
+    // Sheet row 37 deliberately quotes no amount before the refund is known.
+    const rendered = resolveTemplateVariables('Refund: {{refund_amount}}', baseRequest);
+    expect(rendered).toBe('Refund: Not yet determined');
   });
 
-  it('queues manager approval email when status moves to Approval Pending', async () => {
-    await queueEmailsForTransition(mockRequest, PNCStatus.NOT_STARTED, PNCStatus.APPROVAL_PENDING);
-
-    const insertMock = supabase.from('email_queue').insert as any;
-    expect(insertMock).toHaveBeenCalled();
-    const queuedItem = insertMock.mock.calls[0][0];
-
-    expect(queuedItem.recipients).toEqual(['rahul.manager@navgurukul.org']);
-    expect(queuedItem.cc).toEqual(DEFAULT_GLOBAL_CC);
-    expect(queuedItem.to_status).toBe(PNCStatus.APPROVAL_PENDING);
-    expect(queuedItem.idempotency_key).toContain('aud:manager:rahul.manager@navgurukul.org');
+  it('derives the outstanding balance from expected minus recovered', () => {
+    const rendered = resolveTemplateVariables('{{outstanding_amount}}', {
+      ...baseRequest,
+      expectedRefund: 5000,
+      refundAmount: 3000
+    });
+    expect(rendered).toBe('Rs. 2,000.00');
   });
 
-  it('queues both employee and manager emails on Approved transition', async () => {
-    await queueEmailsForTransition(mockRequest, PNCStatus.APPROVAL_PENDING, PNCStatus.APPROVED);
-
-    const insertMock = supabase.from('email_queue').insert as any;
-    expect(insertMock).toHaveBeenCalledTimes(2);
-
-    const empEmail = insertMock.mock.calls[0][0];
-    const mgrEmail = insertMock.mock.calls[1][0];
-
-    expect(empEmail.recipients).toEqual(['priya@navgurukul.org']);
-    expect(mgrEmail.recipients).toEqual(['rahul.manager@navgurukul.org']);
+  it('falls back to the ticket cost when no original fare was recorded', () => {
+    const rendered = resolveTemplateVariables('{{original_fare}}', baseRequest);
+    expect(rendered).toBe('Rs. 5,200.00');
   });
 
-  it('queues PNC alert email when employee responds to On Hold clarification', async () => {
-    await queueEmailsForTransition(mockRequest, PNCStatus.ON_HOLD, PNCStatus.PROCESSING);
-
-    const insertMock = supabase.from('email_queue').insert as any;
-    expect(insertMock).toHaveBeenCalled();
-    const pncItem = insertMock.mock.calls[0][0];
-
-    expect(pncItem.recipients).toEqual(['pnc1@navgurukul.org', 'admin1@navgurukul.org']);
+  it('counts days on hold for the reminder and escalation mails', () => {
+    // Sheet rows 26, 26b and 27 lead with how long the request has been waiting.
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const rendered = resolveTemplateVariables('{{days_on_hold}}', {
+      ...baseRequest,
+      infoRequestedAt: threeDaysAgo
+    });
+    expect(rendered).toBe('3');
   });
 
-  it('queues confirmation with itinerary details when ticket is Booked', async () => {
-    await queueEmailsForTransition(mockRequest, PNCStatus.PROCESSING, PNCStatus.BOOKED);
+  it('reports zero days on hold when the request was never held', () => {
+    expect(resolveTemplateVariables('{{days_on_hold}}', baseRequest)).toBe('0');
+  });
 
-    const insertMock = supabase.from('email_queue').insert as any;
-    expect(insertMock).toHaveBeenCalled();
-    const bookedItem = insertMock.mock.calls[0][0];
+  it('points segment variables at the portal when no itinerary text is stored', () => {
+    // Sheet row 43 names both what is gone and what remains - an empty list there
+    // would defeat the entire purpose of the mail.
+    const rendered = resolveTemplateVariables(
+      'Cancelled: {{cancelled_segments}} / Active: {{active_segments}}',
+      baseRequest
+    );
+    expect(rendered).not.toContain('Cancelled:  /');
+    expect(rendered).toContain('Travel Desk');
+  });
 
-    expect(bookedItem.recipients).toEqual(['priya@navgurukul.org']);
-    expect(bookedItem.to_status).toBe(PNCStatus.BOOKED);
+  it('lets the caller override any variable through extra context', () => {
+    // The reminder scan supplies days_on_hold itself, computed from the scan window.
+    const rendered = resolveTemplateVariables('{{days_on_hold}}', baseRequest, {
+      '{{days_on_hold}}': '9'
+    });
+    expect(rendered).toBe('9');
+  });
+
+  it('leaves no unresolved placeholder across the sheet variable set', () => {
+    const allVariables = [
+      'submissionId', 'requester_name', 'requester_email', 'manager_name', 'origin',
+      'destination', 'departure_date', 'travel_mode', 'purpose', 'ticket_cost',
+      'vendor_name', 'violation_reasons', 'rejection_reason', 'information_requested',
+      'employee_response', 'booking_reference', 'cancellation_reason', 'original_fare',
+      'refund_amount', 'expected_refund', 'written_off_amount', 'employee_owed_amount',
+      'org_absorbed_amount', 'outstanding_amount', 'cancelled_segments', 'active_segments',
+      'change_summary', 'days_on_hold', 'current_status', 'support_email', 'portal_url'
+    ];
+
+    const rendered = resolveTemplateVariables(
+      allVariables.map(v => `{{${v}}}`).join(' | '),
+      baseRequest
+    );
+
+    expect(rendered).not.toContain('{{');
+    expect(rendered).not.toContain('}}');
   });
 });

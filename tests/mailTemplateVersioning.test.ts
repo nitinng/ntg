@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MailTemplate, MailTemplateHistory } from '../types';
+import { MailTemplate, MailTemplateHistory, TravelEvent } from '../types';
 
 describe('Mail Template Versioning & Audit History', () => {
   const initialTemplate: MailTemplate = {
@@ -13,7 +13,17 @@ describe('Mail Template Versioning & Audit History', () => {
     version: 1,
     audience: 'employee',
     createdAt: '2026-08-28T09:00:00Z',
-    updatedAt: '2026-08-28T09:00:00Z'
+    updatedAt: '2026-08-28T09:00:00Z',
+
+    templateKey: 'booking_confirmed.employee.default',
+    event: TravelEvent.BOOKING_CONFIRMED,
+    contextKey: null,
+    fromStatus: 'Processing',
+    toStatus: 'Booked',
+    ccRule: 'default',
+    isActive: true,
+    sheetRow: '22',
+    sheetSummary: null
   };
 
   it('correctly categorizes template status states', () => {

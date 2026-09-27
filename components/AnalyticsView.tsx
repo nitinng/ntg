@@ -128,7 +128,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   }>({
     campuses: [],
     departments: [],
-    period: 'All Time',
+    period: 'ALL TIME',
     startDate: '',
     endDate: ''
   });
@@ -204,16 +204,30 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const [deptSort, setDeptSort] = useState<{ col: 'dept' | 'count' | 'avg' | 'total'; dir: 'asc' | 'desc' }>({ col: 'total', dir: 'desc' });
 
   const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC;
-  const showComparison = filters.period !== 'All Time';
+  const showComparison = (filters.period || '').toUpperCase() !== 'ALL TIME';
 
   const CHART_ICONS: Record<string, string> = { bar: 'fa-chart-bar', line: 'fa-chart-line', scatter: 'fa-braille', bubble: 'fa-circle-dot', pie: 'fa-chart-pie' };
 
   // Compute date range for current period
   const getCurrentRange = useMemo(() => {
     const now = new Date();
-    if (filters.period === 'This Month') return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999) };
-    if (filters.period === 'Last Month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
-    if (filters.period === 'Custom Date') {
+    const p = (filters.period || '').toUpperCase();
+    if (p === 'LAST 24 HOURS') {
+      return { start: new Date(now.getTime() - 24 * 60 * 60 * 1000), end: now };
+    }
+    if (p === 'LAST 7 DAYS') {
+      return { start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), end: now };
+    }
+    if (p === 'LAST 30 DAYS') {
+      return { start: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), end: now };
+    }
+    if (p === 'THIS MONTH') {
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999) };
+    }
+    if (p === 'LAST MONTH') {
+      return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
+    }
+    if (p === 'CUSTOM DATE') {
       const start = filters.startDate ? new Date(filters.startDate) : null;
       const end = filters.endDate ? (() => { const d = new Date(filters.endDate); d.setHours(23, 59, 59, 999); return d; })() : null;
       return { start, end };
@@ -224,9 +238,23 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   // Compute date range for previous period
   const getPreviousRange = useMemo(() => {
     const now = new Date();
-    if (filters.period === 'This Month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
-    if (filters.period === 'Last Month') return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1), end: new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999) };
-    if (filters.period === 'Custom Date' && filters.startDate && filters.endDate) {
+    const p = (filters.period || '').toUpperCase();
+    if (p === 'LAST 24 HOURS') {
+      return { start: new Date(now.getTime() - 48 * 60 * 60 * 1000), end: new Date(now.getTime() - 24 * 60 * 60 * 1000) };
+    }
+    if (p === 'LAST 7 DAYS') {
+      return { start: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000), end: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
+    }
+    if (p === 'LAST 30 DAYS') {
+      return { start: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000), end: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
+    }
+    if (p === 'THIS MONTH') {
+      return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1), end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
+    }
+    if (p === 'LAST MONTH') {
+      return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1), end: new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999) };
+    }
+    if (p === 'CUSTOM DATE' && filters.startDate && filters.endDate) {
       const s = new Date(filters.startDate);
       const e = new Date(filters.endDate); e.setHours(23, 59, 59, 999);
       const dur = e.getTime() - s.getTime();
@@ -805,150 +833,172 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
       </PageBanner>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800">
-        <button onClick={() => setActiveSubTab('travel')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'travel' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
-          <i className="fa-solid fa-plane-departure text-xs"></i>Travel & Spend
+      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <button
+          onClick={() => setActiveSubTab('travel')}
+          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
+            activeSubTab === 'travel'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          <i className="fa-solid fa-plane text-sm"></i>Travel & Spend
         </button>
-        <button onClick={() => setActiveSubTab('advances')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'advances' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
-          <i className="fa-solid fa-wallet text-xs"></i>PNC Advances & Funds
+        <button
+          onClick={() => setActiveSubTab('advances')}
+          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
+            activeSubTab === 'advances'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          <i className="fa-solid fa-wallet text-sm"></i>PNC Advances & Funds
         </button>
-        <button onClick={() => setActiveSubTab('cancellations')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'cancellations' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
-          <i className="fa-solid fa-rectangle-xmark text-xs"></i>Cancellations & Recovery
+        <button
+          onClick={() => setActiveSubTab('cancellations')}
+          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
+            activeSubTab === 'cancellations'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          <i className="fa-solid fa-rectangle-xmark text-sm"></i>Cancellations & Recovery
         </button>
-        <button onClick={() => setActiveSubTab('tat-sla')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'tat-sla' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
-          <i className="fa-solid fa-stopwatch text-xs"></i>TAT and SLAs
+        <button
+          onClick={() => setActiveSubTab('tat-sla')}
+          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
+            activeSubTab === 'tat-sla'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          <i className="fa-solid fa-stopwatch text-sm"></i>TAT and SLAs
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-wrap gap-4 items-start shadow-sm">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mt-2"><i className="fa-solid fa-filter"></i> Filters</div>
+      {/* Filter & Period Controls Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        {/* Period Pill Group (Design from user screenshot) */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 inline-flex flex-wrap items-center gap-1 shadow-sm">
+          {['ALL TIME', 'LAST 24 HOURS', 'LAST 7 DAYS', 'LAST 30 DAYS', 'THIS MONTH', 'LAST MONTH'].map(periodOption => {
+            const isSelected = (filters.period || '').toUpperCase() === periodOption;
+            return (
+              <button
+                key={periodOption}
+                type="button"
+                onClick={() => setFilters(f => ({ ...f, period: periodOption }))}
+                className={`px-3.5 py-1.5 rounded-lg text-xs uppercase tracking-wider transition-all ${
+                  isSelected
+                    ? 'bg-blue-600 text-white font-black shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 font-bold hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                }`}
+              >
+                {periodOption}
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Campus multi-select */}
-        <div className="relative" ref={campusDropRef}>
-          <button
-            onClick={() => { setCampusDropOpen(v => !v); setDeptDropOpen(false); }}
-            className={`flex items-center gap-2 min-w-[140px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.campuses.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}
-          >
-            <i className="fa-solid fa-building text-slate-400 text-xs"></i>
-            <span className="flex-1 text-left truncate">
-              {filters.campuses.length === 0 ? 'All Campuses' : filters.campuses.length === 1 ? filters.campuses[0] : `${filters.campuses.length} Campuses`}
-            </span>
-            <i className={`fa-solid fa-chevron-${campusDropOpen ? 'up' : 'down'} text-xs text-slate-400`}></i>
-          </button>
-          {campusDropOpen && (
-            <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-              <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Campus</span>
-                {filters.campuses.length > 0 && (
-                  <button onClick={() => setFilters(f => ({ ...f, campuses: [] }))} className="text-xs font-bold text-rose-500 hover:text-rose-600">Clear</button>
-                )}
+        {/* Dimension Filters (Campuses, Departments, Custom Date & Clear) */}
+        <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-wrap gap-2.5 items-center shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+            <i className="fa-solid fa-filter text-xs"></i>
+          </div>
+
+          {/* Campus multi-select */}
+          <div className="relative" ref={campusDropRef}>
+            <button
+              onClick={() => { setCampusDropOpen(v => !v); setDeptDropOpen(false); }}
+              className={`flex items-center gap-2 min-w-[130px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.campuses.length > 0 ? 'border-blue-400 dark:border-blue-500 font-bold text-blue-600' : 'border-slate-200 dark:border-slate-700'}`}
+            >
+              <i className="fa-solid fa-building text-slate-400 text-xs"></i>
+              <span className="flex-1 text-left truncate">
+                {filters.campuses.length === 0 ? 'All Campuses' : filters.campuses.length === 1 ? filters.campuses[0] : `${filters.campuses.length} Campuses`}
+              </span>
+              <i className={`fa-solid fa-chevron-${campusDropOpen ? 'up' : 'down'} text-[10px] text-slate-400`}></i>
+            </button>
+            {campusDropOpen && (
+              <div className="absolute top-full right-0 lg:left-0 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Campus</span>
+                  {filters.campuses.length > 0 && (
+                    <button onClick={() => setFilters(f => ({ ...f, campuses: [] }))} className="text-xs font-bold text-rose-500 hover:text-rose-600">Clear</button>
+                  )}
+                </div>
+                <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                  {uniqueCampuses.map(c => {
+                    const checked = filters.campuses.includes(c);
+                    return (
+                      <button key={c} onClick={() => setFilters(f => ({ ...f, campuses: checked ? f.campuses.filter(x => x !== c) : [...f.campuses, c] }))}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600'}`}>
+                          {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
+                        </div>
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                {uniqueCampuses.map(c => {
-                  const checked = filters.campuses.includes(c);
-                  return (
-                    <button key={c} onClick={() => setFilters(f => ({ ...f, campuses: checked ? f.campuses.filter(x => x !== c) : [...f.campuses, c] }))}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                        {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
-                      </div>
-                      {c}
-                    </button>
-                  );
-                })}
+            )}
+          </div>
+
+          {/* Department multi-select */}
+          <div className="relative" ref={deptDropRef}>
+            <button
+              onClick={() => { setDeptDropOpen(v => !v); setCampusDropOpen(false); }}
+              className={`flex items-center gap-2 min-w-[140px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.departments.length > 0 ? 'border-blue-400 dark:border-blue-500 font-bold text-blue-600' : 'border-slate-200 dark:border-slate-700'}`}
+            >
+              <i className="fa-solid fa-sitemap text-slate-400 text-xs"></i>
+              <span className="flex-1 text-left truncate">
+                {filters.departments.length === 0 ? 'All Depts' : filters.departments.length === 1 ? filters.departments[0] : `${filters.departments.length} Depts`}
+              </span>
+              <i className={`fa-solid fa-chevron-${deptDropOpen ? 'up' : 'down'} text-[10px] text-slate-400`}></i>
+            </button>
+            {deptDropOpen && (
+              <div className="absolute top-full right-0 lg:left-0 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Department</span>
+                  {filters.departments.length > 0 && (
+                    <button onClick={() => setFilters(f => ({ ...f, departments: [] }))} className="text-xs font-bold text-rose-500 hover:text-rose-600">Clear</button>
+                  )}
+                </div>
+                <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                  {uniqueDepts.map(d => {
+                    const checked = filters.departments.includes(d);
+                    return (
+                      <button key={d} onClick={() => setFilters(f => ({ ...f, departments: checked ? f.departments.filter(x => x !== d) : [...f.departments, d] }))}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600'}`}>
+                          {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
+                        </div>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+
+          {(filters.campuses.length > 0 || filters.departments.length > 0) && (
+            <button
+              onClick={() => setFilters(f => ({ ...f, campuses: [], departments: [] }))}
+              className="text-xs font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors px-1"
+            >
+              <i className="fa-solid fa-xmark"></i> Clear
+            </button>
           )}
-          {filters.campuses.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              {filters.campuses.map(c => (
-                <span key={c} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2 py-0.5 rounded-full">
-                  {c}
-                  <button onClick={() => setFilters(f => ({ ...f, campuses: f.campuses.filter(x => x !== c) }))} className="hover:text-rose-500 transition-colors"><i className="fa-solid fa-xmark text-[8px]"></i></button>
-                </span>
-              ))}
+
+          {showComparison && (
+            <div className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1 rounded-full">
+              <i className="fa-solid fa-arrows-left-right text-[10px]"></i>
+              vs previous
             </div>
           )}
         </div>
-
-        {/* Department multi-select */}
-        <div className="relative" ref={deptDropRef}>
-          <button
-            onClick={() => { setDeptDropOpen(v => !v); setCampusDropOpen(false); }}
-            className={`flex items-center gap-2 min-w-[160px] bg-slate-50 dark:bg-slate-800 border rounded-lg px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 outline-none transition-all ${filters.departments.length > 0 ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}
-          >
-            <i className="fa-solid fa-sitemap text-slate-400 text-xs"></i>
-            <span className="flex-1 text-left truncate">
-              {filters.departments.length === 0 ? 'All Departments' : filters.departments.length === 1 ? filters.departments[0] : `${filters.departments.length} Departments`}
-            </span>
-            <i className={`fa-solid fa-chevron-${deptDropOpen ? 'up' : 'down'} text-xs text-slate-400`}></i>
-          </button>
-          {deptDropOpen && (
-            <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-              <div className="p-2 border-b dark:border-slate-800 flex justify-between items-center">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Department</span>
-                {filters.departments.length > 0 && (
-                  <button onClick={() => setFilters(f => ({ ...f, departments: [] }))} className="text-xs font-bold text-rose-500 hover:text-rose-600">Clear</button>
-                )}
-              </div>
-              <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                {uniqueDepts.map(d => {
-                  const checked = filters.departments.includes(d);
-                  return (
-                    <button key={d} onClick={() => setFilters(f => ({ ...f, departments: checked ? f.departments.filter(x => x !== d) : [...f.departments, d] }))}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-all ${checked ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                        {checked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
-                      </div>
-                      {d}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {filters.departments.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              {filters.departments.map(d => (
-                <span key={d} className="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2 py-0.5 rounded-full">
-                  {d}
-                  <button onClick={() => setFilters(f => ({ ...f, departments: f.departments.filter(x => x !== d) }))} className="hover:text-rose-500 transition-colors"><i className="fa-solid fa-xmark text-[8px]"></i></button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Period select */}
-        <select className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
-          <option value="All Time">All Time</option>
-          <option value="This Month">This Month</option>
-          <option value="Last Month">Last Month</option>
-          <option value="Custom Date">Custom Date</option>
-        </select>
-        {filters.period === 'Custom Date' && (
-          <div className="flex items-center gap-2">
-            <input type="date" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.startDate} onChange={e => setFilters({ ...filters, startDate: e.target.value })} />
-            <span className="text-slate-400 font-bold">–</span>
-            <input type="date" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-indigo-500 text-slate-600 dark:text-slate-300" value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} />
-          </div>
-        )}
-
-        {(filters.campuses.length > 0 || filters.departments.length > 0) && (
-          <button onClick={() => setFilters(f => ({ ...f, campuses: [], departments: [] }))} className="text-xs font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors">
-            <i className="fa-solid fa-xmark"></i> Clear All
-          </button>
-        )}
-
-        {showComparison && (
-          <div className="ml-auto flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-full">
-            <i className="fa-solid fa-arrows-left-right"></i>
-            vs previous {filters.period === 'Custom Date' ? 'period' : 'month'}
-          </div>
-        )}
       </div>
 
       {loadingData ? (

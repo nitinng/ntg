@@ -48,23 +48,35 @@ export const Navbar = ({
 
   return (
     <nav className="h-16 app-navbar bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-200">
-      <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex items-center">
         {onToggleSidebar && (
-          <button onClick={onToggleSidebar} className="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-colors flex-shrink-0">
+          <button onClick={onToggleSidebar} className="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-colors flex-shrink-0 mr-3">
             <i className={`fa-solid ${isSidebarOpen ? 'fa-xmark' : 'fa-bars'} text-xl`}></i>
           </button>
         )}
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-600/20 flex-shrink-0">N</div>
-        <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 hidden md:block tracking-tight whitespace-nowrap">NG Travel Desk</h1>
+        <div className="flex items-center gap-3 md:w-[calc(16rem-1.5rem)] flex-shrink-0">
+          <img
+            src="/ng-icon.png"
+            alt="NavGurukul Logo"
+            className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
+          />
+          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight whitespace-nowrap">
+            NG Travel Desk
+          </h1>
+        </div>
         {visibleRoles.length > 0 && (
           <>
-            {/* Desktop standard role tabs */}
-            <div className="ml-4 hidden md:flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors duration-200">
+            {/* Desktop standard role tabs - starts beyond the sidenav line */}
+            <div className="hidden md:flex ml-6 gap-1 p-1 bg-slate-100 dark:bg-slate-950 border border-transparent dark:border-slate-800/80 rounded-lg transition-colors duration-200">
               {visibleRoles.map(role => (
                 <button
                    key={role}
                    onClick={() => onToggleRole(role)}
-                   className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${currentUser.role === role ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                   className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all duration-200 ${
+                     currentUser.role === role
+                       ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm dark:shadow-sm border border-slate-200/60 dark:border-slate-800 font-black'
+                       : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-900/50'
+                   }`}
                 >
                   {role}
                 </button>
@@ -75,7 +87,7 @@ export const Navbar = ({
             <div className="ml-2 md:hidden relative role-dropdown-container">
               <button
                 onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                className="flex items-center justify-between min-w-[100px] bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-xs sm:text-xs font-black uppercase tracking-widest py-1.5 pl-3.5 pr-2.5 rounded-full outline-none shadow-sm shadow-indigo-500/5 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200"
+                className="flex items-center justify-between min-w-[100px] bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 text-xs sm:text-xs font-black uppercase tracking-widest py-1.5 pl-3.5 pr-2.5 rounded-full outline-none shadow-sm shadow-indigo-500/5 border border-slate-200 dark:border-slate-700/80 hover:border-indigo-300 dark:hover:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200"
               >
                 <span>{currentUser.role}</span>
                 <div className="w-4 h-4 ml-2 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center transition-colors">
@@ -85,7 +97,7 @@ export const Navbar = ({
 
               {/* Dropdown Menu */}
               {isRoleDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 w-[140px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl shadow-slate-900/10 dark:shadow-black/30 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-[140px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl shadow-slate-900/10 dark:shadow-black/40 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-1.5 flex flex-col gap-0.5">
                     {visibleRoles.map(role => (
                       <button
@@ -94,10 +106,11 @@ export const Navbar = ({
                           onToggleRole(role);
                           setIsRoleDropdownOpen(false);
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-xs sm:text-xs font-black uppercase tracking-widest transition-all duration-200 flex items-center justify-between group ${currentUser.role === role
-                          ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
-                          }`}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs sm:text-xs font-black uppercase tracking-widest transition-all duration-200 flex items-center justify-between group ${
+                          currentUser.role === role
+                            ? 'bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 dark:border dark:border-slate-800'
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-800 dark:hover:text-slate-100'
+                        }`}
                       >
                         {role}
                         {currentUser.role === role && (
@@ -115,7 +128,7 @@ export const Navbar = ({
       <div className="flex items-center gap-4">
         <button
           onClick={onToggleTheme}
-          className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-transparent hover:border-indigo-500/20 transition-all duration-200 shadow-sm"
+          className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-amber-400 flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-800 transition-all duration-200 shadow-sm"
           aria-label="Toggle Dark Mode"
         >
           <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} text-lg`}></i>
@@ -128,7 +141,7 @@ export const Navbar = ({
           </div>
           <button
             onClick={onOpenProfile}
-            className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-lg overflow-hidden border-2 border-transparent hover:border-indigo-500/20 flex items-center justify-center transition-all"
+            className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 font-bold rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-slate-700 flex items-center justify-center transition-all"
           >
             {currentUser.avatar ? (
               <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />

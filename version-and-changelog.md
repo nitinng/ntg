@@ -7,13 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.4.0 (2026-08-28)](#v240---2026-08-28)
+* [Current Release — v2.5.0 (2026-09-28)](#v250---2026-09-28)
+* [v2.4.0 (2026-08-28)](#v240---2026-08-28)
 * [v2.3.0 (2026-08-28)](#v230---2026-08-28)
 * [v2.2.0 (2026-07-28)](#v220---2026-07-28)
 * [v2.1.0 (2026-07-26)](#v210---2026-07-26)
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.5.0] - 2026-09-28
+
+### 🎨 Dark Mode Neutral Palette Alignment & Email Template Enhancements
+
+* Dark mode aligned to neutral palette (matches PNC ELC); fixed ~300 invalid Tailwind shade classes.
+* Remapped `slate` palette through CSS variables (`--slate-50` to `--slate-950`) to resolve to shadcn pure neutral tones in `.dark` mode while keeping light mode pixel-identical.
+* Synchronized Mermaid diagrams and custom scrollbars to pure neutral dark styling on theme toggle.
+* Navbar active role tab background aligned directly to the navbar header background (`dark:bg-slate-900`), and dark mode theme toggle styled with clean neutral container and warm sun accent.
+* Email templates updated with official NavGurukul brand logo image header, orange divider rule, live preview toggle in template editor, and CTA links redirected to `https://ng-travel-desk.vercel.app/`.
+* Mail template modals fixed with strict 90vw width and 90vh height dimensions.
+* Supabase RLS policy updated allowing all authenticated staff (Admin, PNC, Finance) to access mail templates and history.
 
 ---
 

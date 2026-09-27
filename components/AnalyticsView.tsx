@@ -833,47 +833,50 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
       </PageBanner>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
-        <button
-          onClick={() => setActiveSubTab('travel')}
-          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
-            activeSubTab === 'travel'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          }`}
-        >
-          <i className="fa-solid fa-plane text-sm"></i>Travel & Spend
-        </button>
-        <button
-          onClick={() => setActiveSubTab('advances')}
-          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
-            activeSubTab === 'advances'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          }`}
-        >
-          <i className="fa-solid fa-wallet text-sm"></i>PNC Advances & Funds
-        </button>
-        <button
-          onClick={() => setActiveSubTab('cancellations')}
-          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
-            activeSubTab === 'cancellations'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          }`}
-        >
-          <i className="fa-solid fa-rectangle-xmark text-sm"></i>Cancellations & Recovery
-        </button>
-        <button
-          onClick={() => setActiveSubTab('tat-sla')}
-          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2.5 whitespace-nowrap transition-all ${
-            activeSubTab === 'tat-sla'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          }`}
-        >
-          <i className="fa-solid fa-stopwatch text-sm"></i>TAT and SLAs
-        </button>
+      <div className="flex items-center justify-between flex-wrap gap-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="bg-slate-100/90 dark:bg-slate-900/90 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-1.5 shadow-xs">
+          {[
+            { id: 'travel', label: 'Travel & Spend', icon: 'fa-plane', badge: filteredData.length },
+            { id: 'advances', label: 'PNC Advances & Funds', icon: 'fa-wallet', badge: filteredAdvances.length },
+            { id: 'cancellations', label: 'Cancellations & Recovery', icon: 'fa-rectangle-xmark', badge: filteredCancellations.length },
+            { id: 'tat-sla', label: 'TAT and SLAs', icon: 'fa-stopwatch', badge: `${overallCompliancePct}% Met` }
+          ].map(tab => {
+            const isActive = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2.5 transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-800/80'
+                }`}
+              >
+                <i className={`fa-solid ${tab.icon} text-xs ${isActive ? 'text-white' : 'text-slate-400'}`}></i>
+                <span>{tab.label}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                }`}>
+                  {tab.badge}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Dynamic Context Tag */}
+        <div className="hidden md:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40 px-3.5 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800">
+          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+          <span>
+            {activeSubTab === 'travel' && `Showing ${filteredData.length} bookings across ${uniqueCampuses.length} campuses`}
+            {activeSubTab === 'advances' && `Showing ${filteredAdvances.length} advance records • ₹${totalAdvReceived.toLocaleString()} total pool`}
+            {activeSubTab === 'cancellations' && `Showing ${filteredCancellations.length} cancellation cases • ₹${totalCancelOrgAbsorbed.toLocaleString()} absorbed loss`}
+            {activeSubTab === 'tat-sla' && `SLA Compliance: ${overallCompliancePct}% • Mode: ${enableUrgencySla ? 'Urgency-Tiered' : `${tatBookingTarget}h Fixed`}`}
+          </span>
+        </div>
       </div>
 
       {/* Filter & Period Controls Bar */}

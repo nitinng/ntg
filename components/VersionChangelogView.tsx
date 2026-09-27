@@ -49,11 +49,19 @@ export const RELEASES_DATA: ChangelogRelease[] = [
         ]
       },
       {
-        category: '⚡ Booking Urgency & Priority Settings',
+        category: '⚡ Dynamic Urgency & Configurable SLAs',
         items: [
-          'Added Booking Urgency & Priority configuration in Settings and Policy Management.',
-          'Configurable default booking urgency (Low, Medium, High, Critical) and automatic escalation based on departure date.',
-          'Wired urgency selection into booking requests with dynamic SLA turnaround tracking.'
+          'Engineered automatic progression urgency engine: Critical (<2d), High (2-10d), Medium (10-20d), Low (>20d) that scales as travel date nears.',
+          'Configurable generic SLA targets for Manager Approval (24h), PNC Processing (48h), and Ticketing Fulfillment (72h).',
+          'Urgency SLA toggle enabling tier-specific targets (4h / 12h / 24h / 48h) with soft pastel priority badges.'
+        ]
+      },
+      {
+        category: '📊 Analytics "TAT and SLAs" Hub',
+        items: [
+          'Added 4th Analytics sub-tab "TAT and SLAs" with overall compliance %, avg fulfillment TAT, and breach monitoring.',
+          'Built 4-tier urgency performance matrix and lifecycle stage bottleneck diagnostic (Approval → Processing → Ticketing).',
+          'Added Campus SLA Scorecard and filterable/sortable Request SLA Audit Ledger with CSV export.'
         ]
       }
     ],

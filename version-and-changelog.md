@@ -33,17 +33,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * Mail template modals fixed with strict 90vw width and 90vh height dimensions.
 * Supabase RLS policy updated allowing all authenticated staff (Admin, PNC, Finance) to access mail templates and history.
 
-#### ⚡ Booking Urgency & Priority Settings
-* **Settings & Policy Management**:
-  * Added dedicated Booking Urgency & Priority configuration to both **Settings (`SettingsView.tsx`)** and **Policies (`PolicyManagement.tsx`)**.
-  * Configurable default booking urgency (`Low`, `Medium`, `High`, `Critical`) with instantaneous Supabase persistence to `meetup_settings.policy_config`.
-  * Toggle for requester urgency selection (`allowRequesterUrgency`).
-  * Auto-escalation threshold input (`autoEscalateUrgentDays`) automatically elevating imminent requests to High urgency based on departure date.
-  * Turnaround target configuration (`urgencySlaHours`) for Critical, High, Medium, and Low priorities.
-* **End-to-End Booking Wiring**:
-  * Wired interactive urgency selection pills into **Employee Booking Modal (`NewRequestModal.tsx`)** with automatic escalation indicator for imminent travel.
-  * Wired urgency selection pills into **PNC Direct Booking Modal (`PNCBookingModal.tsx`)**.
-  * Dynamic priority resolution in request submission handlers (`data.priority || policy.defaultBookingUrgency || Priority.MEDIUM`).
+#### ⚡ Dynamic Booking Urgency & Configurable SLA Architecture
+* **Dynamic Urgency Progression Engine**:
+  * Removed static default urgency dropdown in favor of an automated rule-based progression engine based on days remaining to travel:
+    * **Critical**: `< 2 days`
+    * **High**: `2 – 10 days`
+    * **Medium**: `10 – 20 days`
+    * **Low**: `> 20 days`
+  * When a booking request is raised with 22 days to go, it automatically starts at Low; as time progresses and days drop below 20, it automatically escalates to Medium, High, and Critical.
+  * Replaced jarring saturated urgency colors with refined modern soft pastel badges (`rose-500/10`, `amber-500/10`, `sky-500/10`, `emerald-500/10`).
+* **Configurable SLA Target System**:
+  * **Generic SLA Targets**: Configurable turnaround times for Manager Approval (default 24h), PNC Processing (default 48h), and Ticketing Fulfillment (default 72h).
+  * **Urgency SLA Toggle**: Added an active toggle to enable tier-specific turnaround targets (Critical: 4h, High: 12h, Medium: 24h, Low: 48h) or fall back to the standard generic 72h ticketing target.
+  * Polished neutral input containers across Settings (`SettingsView.tsx`) and Policies (`PolicyManagement.tsx`).
+
+#### 📊 Analytics "TAT and SLAs" Intelligence Hub
+* Added a dedicated 4th sub-tab **"TAT and SLAs"** directly after `Cancellations & Recovery` in `AnalyticsView.tsx`.
+* **Executive Performance KPIs**: Overall SLA Compliance rate (%), Average Fulfillment TAT, Average Manager Approval TAT, and Breached / At Risk request counters.
+* **Active Policy Status Banner**: Real-time indicator displaying whether Standard or Urgency-Tiered SLA enforcement is active.
+* **Performance by Urgency Tier Matrix**: 4 distinct metric cards displaying days to travel rule, Target SLA vs Actual Average TAT, breach counts, and compliance progress bar.
+* **Lifecycle Stage Bottleneck Diagnostic**: Visual progress pipeline breaking down turnaround time across Manager Approval, PNC Processing, and Ticketing Fulfillment to isolate delays.
+* **Campus SLA Scorecard**: Campus rankings evaluated by ticket compliance %, breach volume, and average fulfillment turnaround.
+* **Individual Request SLA Audit Ledger**: Detailed audit table with real-time text search, urgency tier filtering, SLA state filtering (`Met`, `On Track`, `At Risk`, `Breached`), sortable columns, and clean pagination.
+* **Dedicated CSV Export**: Generates full audit ledger CSV export covering travel date, urgency tier, days to travel, SLA targets, and stage hours.
 
 #### 📝 Commits in this Release
 * `1e30236` — `feat(settings): add booking urgency configuration and wire into request flow and policies`

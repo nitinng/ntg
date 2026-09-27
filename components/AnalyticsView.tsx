@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TravelRequest, User, UserRole, PNCStatus } from '../types';
+import { TravelRequest, User, UserRole, PNCStatus, ApprovalStatus, Priority, PolicyConfig } from '../types';
 import Card from './Card';
 import StatCard from './StatCard';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { PageBanner } from './PageBanner';
+import { calculateDynamicUrgency, getEffectiveBookingSlaHours, getDaysRemaining } from '../utils/policyUtils';
 
 // --- Chart Components (CSS/SVG based) ---
 export const DonutChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
@@ -117,7 +118,7 @@ export const PieChartInteractive = ({ data, isFinancial }: { data: { label: stri
   );
 };
 
-export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: User }> = ({ requests, currentUser }) => {
+export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: User; policy?: PolicyConfig }> = ({ requests, currentUser, policy }) => {
   const [filters, setFilters] = useState<{
     campuses: string[];
     departments: string[];
@@ -146,7 +147,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const [activeSubTab, setActiveSubTab] = useState<'travel' | 'advances' | 'cancellations'>('travel');
+  const [activeSubTab, setActiveSubTab] = useState<'travel' | 'advances' | 'cancellations' | 'tat-sla'>('travel');
   const [advances, setAdvances] = useState<any[]>([]);
   const [cancellations, setCancellations] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -155,6 +156,11 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const [travelPage, setTravelPage] = useState(1);
   const [advancesPage, setAdvancesPage] = useState(1);
   const [cancellationsPage, setCancellationsPage] = useState(1);
+  const [slaPage, setSlaPage] = useState(1);
+  const [slaSearch, setSlaSearch] = useState('');
+  const [slaPriorityFilter, setSlaPriorityFilter] = useState<'all' | Priority>('all');
+  const [slaStatusFilter, setSlaStatusFilter] = useState<'all' | 'Met' | 'On Track' | 'At Risk' | 'Breached'>('all');
+  const [slaSort, setSlaSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'actualTatHours', dir: 'desc' });
   const itemsPerPage = 10;
 
   // Sorting state for Advances & Cancellations
@@ -282,6 +288,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
     setTravelPage(1);
     setAdvancesPage(1);
     setCancellationsPage(1);
+    setSlaPage(1);
   }, [activeSubTab]);
 
   // Travel KPI Aggregations
@@ -417,6 +424,207 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const toggleDeptSort = (col: typeof deptSort.col) => setDeptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
   const toggleAdvSort = (col: string) => setAdvSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
   const toggleCancelSort = (col: string) => setCancelSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+  const toggleSlaSort = (col: string) => setSlaSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+
+  // --- TAT and SLA Analytics Aggregations ---
+  const tatApprovalTarget = policy?.tatApprovalHours || 24;
+  const tatProcessingTarget = policy?.tatProcessingHours || 48;
+  const tatBookingTarget = policy?.tatBookingHours || 72;
+  const enableUrgencySla = policy?.enableUrgencySla === true;
+
+  const slaData = useMemo(() => {
+    return filteredData.map(r => {
+      const timeline = r.timeline || [];
+      const createdAt = new Date(r.timestamp || Date.now()).getTime();
+
+      // 1. Manager Approval TAT
+      const approvedEvent = timeline.find(e =>
+        e.event.toLowerCase().includes('approved') ||
+        e.event.toLowerCase().includes('status changed to: approved')
+      );
+      const approvalTime = approvedEvent ? new Date(approvedEvent.timestamp).getTime() : null;
+      const approvalHours = approvalTime
+        ? Math.max(0.1, (approvalTime - createdAt) / (1000 * 60 * 60))
+        : (r.approvalStatus === ApprovalStatus.APPROVED
+            ? 12
+            : Math.max(0.1, (Date.now() - createdAt) / (1000 * 60 * 60)));
+
+      // 2. PNC Processing TAT
+      const processingEvent = timeline.find(e => e.event.toLowerCase().includes('processing'));
+      const processingTime = processingEvent ? new Date(processingEvent.timestamp).getTime() : (approvalTime || createdAt);
+      const isClosedOrBooked = r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED;
+
+      const bookedEvent = timeline.find(e =>
+        e.event.toLowerCase().includes('booked') ||
+        e.event.toLowerCase().includes('closed') ||
+        e.event.toLowerCase().includes('ticket')
+      );
+      const bookedTime = bookedEvent ? new Date(bookedEvent.timestamp).getTime() : null;
+
+      const processingHours = bookedTime
+        ? Math.max(0.1, (bookedTime - processingTime) / (1000 * 60 * 60))
+        : Math.max(0.1, (Date.now() - processingTime) / (1000 * 60 * 60));
+
+      // 3. Overall Ticketing / Fulfillment TAT
+      const completionTime = bookedTime
+        ? bookedTime
+        : (isClosedOrBooked ? createdAt + (36 * 3600 * 1000) : Date.now());
+
+      const actualTatHours = Math.max(0.2, (completionTime - createdAt) / (1000 * 60 * 60));
+
+      // Dynamic Urgency & Effective SLA Target
+      const dynamicPriority = (policy?.allowRequesterUrgency && r.priority)
+        ? r.priority
+        : calculateDynamicUrgency(r.dateOfTravel, policy);
+
+      const targetSlaHours = getEffectiveBookingSlaHours(dynamicPriority, policy);
+      const isBreached = actualTatHours > targetSlaHours;
+      const isAtRisk = !isClosedOrBooked && !isBreached && actualTatHours > (targetSlaHours * 0.75);
+
+      const daysRemaining = getDaysRemaining(r.dateOfTravel);
+
+      let slaStatus: 'Met' | 'On Track' | 'At Risk' | 'Breached' = 'On Track';
+      if (isBreached) {
+        slaStatus = 'Breached';
+      } else if (isClosedOrBooked) {
+        slaStatus = 'Met';
+      } else if (isAtRisk) {
+        slaStatus = 'At Risk';
+      }
+
+      return {
+        ...r,
+        dynamicPriority,
+        daysRemaining,
+        approvalHours,
+        processingHours,
+        actualTatHours,
+        targetSlaHours,
+        isBreached,
+        isAtRisk,
+        slaStatus,
+        isClosedOrBooked
+      };
+    });
+  }, [filteredData, policy]);
+
+  // Executive SLA KPIs
+  const totalSlaRequests = slaData.length;
+  const closedCount = slaData.filter(d => d.isClosedOrBooked).length;
+  const closedOnTime = slaData.filter(d => d.isClosedOrBooked && !d.isBreached).length;
+  const totalBreaches = slaData.filter(d => d.isBreached).length;
+  const activeAtRisk = slaData.filter(d => d.slaStatus === 'At Risk').length;
+  const overallCompliancePct = closedCount > 0
+    ? Math.round((closedOnTime / closedCount) * 100)
+    : (totalSlaRequests > 0 ? Math.round(((totalSlaRequests - totalBreaches) / totalSlaRequests) * 100) : 100);
+
+  const avgFulfillmentHours = totalSlaRequests > 0
+    ? Math.round((slaData.reduce((acc, d) => acc + d.actualTatHours, 0) / totalSlaRequests) * 10) / 10
+    : 0;
+
+  const avgApprovalHours = totalSlaRequests > 0
+    ? Math.round((slaData.reduce((acc, d) => acc + d.approvalHours, 0) / totalSlaRequests) * 10) / 10
+    : 0;
+
+  const avgProcessingHours = totalSlaRequests > 0
+    ? Math.round((slaData.reduce((acc, d) => acc + d.processingHours, 0) / totalSlaRequests) * 10) / 10
+    : 0;
+
+  // Breakdown by Priority / Urgency Tier
+  const tierStats = useMemo(() => {
+    const tiers = [Priority.CRITICAL, Priority.HIGH, Priority.MEDIUM, Priority.LOW];
+    return tiers.map(tier => {
+      const items = slaData.filter(d => d.dynamicPriority === tier);
+      const count = items.length;
+      const targetHours = getEffectiveBookingSlaHours(tier, policy);
+      const avgTat = count > 0 ? Math.round((items.reduce((acc, d) => acc + d.actualTatHours, 0) / count) * 10) / 10 : 0;
+      const breaches = items.filter(d => d.isBreached).length;
+      const compliance = count > 0 ? Math.round(((count - breaches) / count) * 100) : 100;
+      return {
+        tier,
+        count,
+        targetHours,
+        avgTat,
+        breaches,
+        compliance
+      };
+    });
+  }, [slaData, policy]);
+
+  // Breakdown by Stage
+  const stageStats = [
+    {
+      name: 'Manager Approval',
+      target: tatApprovalTarget,
+      avg: avgApprovalHours,
+      breaches: slaData.filter(d => d.approvalHours > tatApprovalTarget).length,
+      icon: 'fa-user-check'
+    },
+    {
+      name: 'PNC Processing',
+      target: tatProcessingTarget,
+      avg: avgProcessingHours,
+      breaches: slaData.filter(d => d.processingHours > tatProcessingTarget).length,
+      icon: 'fa-gears'
+    },
+    {
+      name: 'Ticketing Fulfillment',
+      target: tatBookingTarget,
+      avg: avgFulfillmentHours,
+      breaches: totalBreaches,
+      icon: 'fa-ticket'
+    }
+  ];
+
+  // Campus SLA ranking
+  const campusSlaRanking = useMemo(() => {
+    const map: Record<string, { count: number; tatSum: number; breaches: number }> = {};
+    slaData.forEach(d => {
+      const c = d.requesterCampus || 'Navgurukul';
+      if (!map[c]) map[c] = { count: 0, tatSum: 0, breaches: 0 };
+      map[c].count++;
+      map[c].tatSum += d.actualTatHours;
+      if (d.isBreached) map[c].breaches++;
+    });
+    return Object.entries(map).map(([campus, stat]) => ({
+      campus,
+      count: stat.count,
+      avgTat: Math.round((stat.tatSum / stat.count) * 10) / 10,
+      compliance: Math.round(((stat.count - stat.breaches) / stat.count) * 100),
+      breaches: stat.breaches
+    })).sort((a, b) => b.compliance - a.compliance);
+  }, [slaData]);
+
+  // Filtered & Sorted SLA ledger rows
+  const sortedSlaRows = useMemo(() => {
+    const filtered = slaData.filter(d => {
+      const matchSearch = slaSearch.trim() === '' ||
+        d.submissionId?.toLowerCase().includes(slaSearch.toLowerCase()) ||
+        d.requesterName?.toLowerCase().includes(slaSearch.toLowerCase()) ||
+        d.from?.toLowerCase().includes(slaSearch.toLowerCase()) ||
+        d.to?.toLowerCase().includes(slaSearch.toLowerCase());
+      const matchPriority = slaPriorityFilter === 'all' || d.dynamicPriority === slaPriorityFilter;
+      const matchStatus = slaStatusFilter === 'all' || d.slaStatus === slaStatusFilter;
+      return matchSearch && matchPriority && matchStatus;
+    });
+
+    return filtered.sort((a, b) => {
+      const dir = slaSort.dir === 'asc' ? 1 : -1;
+      if (slaSort.col === 'submissionId') return dir * (a.submissionId || '').localeCompare(b.submissionId || '');
+      if (slaSort.col === 'requesterName') return dir * (a.requesterName || '').localeCompare(b.requesterName || '');
+      if (slaSort.col === 'actualTatHours') return dir * (a.actualTatHours - b.actualTatHours);
+      if (slaSort.col === 'targetSlaHours') return dir * (a.targetSlaHours - b.targetSlaHours);
+      if (slaSort.col === 'dateOfTravel') return dir * (new Date(a.dateOfTravel || 0).getTime() - new Date(b.dateOfTravel || 0).getTime());
+      if (slaSort.col === 'slaStatus') return dir * a.slaStatus.localeCompare(b.slaStatus);
+      return 0;
+    });
+  }, [slaData, slaSearch, slaPriorityFilter, slaStatusFilter, slaSort]);
+
+  const totalSlaPages = Math.ceil(sortedSlaRows.length / itemsPerPage) || 1;
+  const paginatedSlaData = useMemo(() => {
+    const start = (slaPage - 1) * itemsPerPage;
+    return sortedSlaRows.slice(start, start + itemsPerPage);
+  }, [sortedSlaRows, slaPage, itemsPerPage]);
 
   const SortIcon = ({ col, current }: { col: string; current: { col: string; dir: 'asc' | 'desc' } }) => (
     <i className={`fa-solid ml-1 text-xs ${current.col === col ? (current.dir === 'asc' ? 'fa-arrow-up text-indigo-500' : 'fa-arrow-down text-indigo-500') : 'fa-arrows-up-down text-slate-300'}`}></i>
@@ -581,8 +789,10 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
               csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
             } else if (activeSubTab === 'advances') {
               csv = [['Advance ID', 'Received On', 'Received From', 'Amount Received', 'Amount Left', 'Settled Status', 'Comments'], ...filteredAdvances.map(a => [a.receipt_id || a.id, a.received_on, a.received_from, a.amount_received, a.amount_left, a.is_settled ? 'Settled' : 'Unsettled', a.comments || ''])].map(e => e.join(',')).join('\n');
-            } else {
+            } else if (activeSubTab === 'cancellations') {
               csv = [['Cancellation ID', 'Request ID', 'Traveler', 'Cancellation Date', 'Original Fare', 'Net Loss', 'Status', 'Owed By Employee', 'Absorbed By Org'], ...filteredCancellations.map(c => [c.id, c.travel_requests?.submission_id || c.travel_request_id, c.travel_requests?.requester_name || '', new Date(c.cancellation_date).toLocaleDateString(), c.original_fare || c.originalFare, c.net_unrecovered_amount || c.netUnrecoveredAmount, c.status, c.employee_owed_amount || c.employeeOwedAmount, c.org_absorbed_amount || c.orgAbsorbedAmount])].map(e => e.join(',')).join('\n');
+            } else {
+              csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Travel Date', 'Urgency Tier', 'Days to Travel', 'Target SLA (Hrs)', 'Actual TAT (Hrs)', 'SLA Status', 'Manager Approval (Hrs)', 'PNC Processing (Hrs)'], ...sortedSlaRows.map(s => [s.submissionId || s.id, s.requesterName, s.requesterDepartment, s.requesterCampus, new Date(s.dateOfTravel).toLocaleDateString(), s.dynamicPriority, s.daysRemaining, s.targetSlaHours, s.actualTatHours.toFixed(1), s.slaStatus, s.approvalHours.toFixed(1), s.processingHours.toFixed(1)])].map(e => e.join(',')).join('\n');
             }
             const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${activeSubTab}_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
             toast.success('CSV exported!');
@@ -604,6 +814,9 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
         </button>
         <button onClick={() => setActiveSubTab('cancellations')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'cancellations' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
           <i className="fa-solid fa-rectangle-xmark text-xs"></i>Cancellations & Recovery
+        </button>
+        <button onClick={() => setActiveSubTab('tat-sla')} className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${activeSubTab === 'tat-sla' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+          <i className="fa-solid fa-stopwatch text-xs"></i>TAT and SLAs
         </button>
       </div>
 
@@ -1061,7 +1274,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
             )}
           </Card>
         </div>
-      ) : (
+      ) : activeSubTab === 'cancellations' ? (
         // --- CANCELLATIONS & RECOVERY SUB-TAB ---
         <div className="space-y-8 animate-in fade-in duration-300">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1203,6 +1416,411 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                 </button>
                 <span className="text-xs font-bold text-slate-400">Page {cancellationsPage} of {totalCancellationsPages}</span>
                 <button disabled={cancellationsPage === totalCancellationsPages} onClick={() => setCancellationsPage(p => p + 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  Next<i className="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : (
+        // --- TAT AND SLAS SUB-TAB ---
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Executive Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard
+              title="Overall SLA Compliance"
+              value={`${overallCompliancePct}%`}
+              icon={<i className="fa-solid fa-shield-halved text-emerald-500"></i>}
+              description={`${closedOnTime} of ${closedCount || totalSlaRequests} resolved within target`}
+            />
+            <StatCard
+              title="Avg Fulfillment TAT"
+              value={`${avgFulfillmentHours} hrs`}
+              icon={<i className="fa-solid fa-stopwatch text-indigo-500"></i>}
+              description={enableUrgencySla ? 'Urgency-tiered dynamic limits' : `Target: ${tatBookingTarget} hrs`}
+            />
+            <StatCard
+              title="Avg Manager Approval"
+              value={`${avgApprovalHours} hrs`}
+              icon={<i className="fa-solid fa-user-check text-sky-500"></i>}
+              description={`Target: ${tatApprovalTarget} hrs limit`}
+            />
+            <StatCard
+              title="Breached / At Risk"
+              value={`${totalBreaches} / ${activeAtRisk}`}
+              icon={<i className="fa-solid fa-triangle-exclamation text-rose-500"></i>}
+              description={`${totalBreaches} past target, ${activeAtRisk} nearing limit`}
+            />
+          </div>
+
+          {/* Active Policy Status & SLA Enforcement Banner */}
+          <div className="bg-gradient-to-r from-indigo-500/10 via-slate-50 to-emerald-500/10 dark:from-indigo-950/30 dark:via-slate-900 dark:to-emerald-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                <i className="fa-solid fa-sliders text-base"></i>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-black text-slate-800 dark:text-white text-sm">
+                    {enableUrgencySla ? 'Urgency-Tiered SLA Enforcement Active' : 'Standard Fixed SLA Mode Active'}
+                  </h4>
+                  <span className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${enableUrgencySla ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                    {enableUrgencySla ? 'Urgency Mode' : 'Standard Mode'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {enableUrgencySla
+                    ? 'Target turnaround times scale with travel proximity: Critical (<2d) 4h, High (2-10d) 12h, Medium (10-20d) 24h, Low (>20d) 48h.'
+                    : `All booking fulfillments are evaluated against the standard target of ${tatBookingTarget} hours (Approval: ${tatApprovalTarget}h, Processing: ${tatProcessingTarget}h).`}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+              <i className="fa-solid fa-clock-rotate-left text-indigo-500"></i>
+              <span>Active Total: {totalSlaRequests} Requests</span>
+            </div>
+          </div>
+
+          {/* Urgency-Tier SLA Breakdown (4 Tiers) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-slate-800 dark:text-white text-base flex items-center gap-2">
+                <i className="fa-solid fa-layer-group text-indigo-500"></i>
+                Performance by Urgency Tier
+              </h4>
+              <span className="text-xs text-slate-400 font-medium">Dynamic classification based on days until travel date</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {tierStats.map(stat => {
+                const isCritical = stat.tier === Priority.CRITICAL;
+                const isHigh = stat.tier === Priority.HIGH;
+                const isMedium = stat.tier === Priority.MEDIUM;
+
+                const borderColor = isCritical ? 'border-rose-200 dark:border-rose-900/40' :
+                  isHigh ? 'border-amber-200 dark:border-amber-900/40' :
+                  isMedium ? 'border-sky-200 dark:border-sky-900/40' :
+                  'border-emerald-200 dark:border-emerald-900/40';
+
+                const badgeBg = isCritical ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
+                  isHigh ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                  isMedium ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' :
+                  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+
+                const barBg = isCritical ? 'bg-rose-500' : isHigh ? 'bg-amber-500' : isMedium ? 'bg-sky-500' : 'bg-emerald-500';
+
+                const daysLabel = isCritical ? '< 2 Days' : isHigh ? '2 – 10 Days' : isMedium ? '10 – 20 Days' : '> 20 Days';
+
+                return (
+                  <Card key={stat.tier} className={`p-5 border ${borderColor} hover:shadow-md transition-shadow`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider ${badgeBg}`}>
+                          <i className={`fa-solid ${isCritical ? 'fa-fire' : isHigh ? 'fa-bolt' : isMedium ? 'fa-clock' : 'fa-leaf'} text-[10px]`}></i>
+                          {stat.tier}
+                        </span>
+                        <div className="text-[11px] font-bold text-slate-400 mt-1">Travel in {daysLabel}</div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-slate-800 dark:text-white">{stat.count}</span>
+                        <span className="block text-[10px] uppercase font-bold text-slate-400">Tickets</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Target SLA:</span>
+                        <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{stat.targetHours}h</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Actual Avg TAT:</span>
+                        <span className={`font-mono font-bold ${stat.avgTat > stat.targetHours ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          {stat.avgTat}h
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Breaches:</span>
+                        <span className={`font-bold ${stat.breaches > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{stat.breaches}</span>
+                      </div>
+
+                      <div className="pt-2">
+                        <div className="flex justify-between text-[11px] font-bold mb-1">
+                          <span className="text-slate-400">Compliance</span>
+                          <span className="text-slate-700 dark:text-slate-300">{stat.compliance}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className={`h-full ${barBg} rounded-full transition-all duration-500`} style={{ width: `${stat.compliance}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Lifecycle Stage Bottleneck Diagnostic & Campus Scorecard */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Stage Bottleneck Diagnostic */}
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                <i className="fa-solid fa-arrows-split-up-and-left text-indigo-500"></i>
+                Lifecycle Stage Bottleneck Diagnostic
+              </h4>
+              <p className="text-xs text-slate-400 mb-6">Identifies where delays occur across the travel approval and fulfillment pipeline.</p>
+
+              <div className="space-y-6">
+                {stageStats.map(stage => {
+                  const isBreachedOverall = stage.avg > stage.target;
+                  const ratio = stage.target > 0 ? Math.min(100, Math.round((stage.avg / stage.target) * 100)) : 0;
+                  return (
+                    <div key={stage.name} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs">
+                            <i className={`fa-solid ${stage.icon}`}></i>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-800 dark:text-white">{stage.name}</span>
+                            <span className="text-xs text-slate-400 ml-2">Target: {stage.target}h</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`font-mono font-bold ${isBreachedOverall ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            {stage.avg}h avg
+                          </span>
+                          <span className="text-[10px] text-slate-400 ml-2">({stage.breaches} breaches)</span>
+                        </div>
+                      </div>
+
+                      <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${isBreachedOverall ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                          style={{ width: `${Math.min(100, ratio)}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>0h</span>
+                        <span>{stage.target}h target limit</span>
+                        <span>{Math.max(stage.target, Math.round(stage.avg * 1.2))}h</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Campus SLA Scorecard */}
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                <i className="fa-solid fa-ranking-star text-indigo-500"></i>
+                Campus SLA Scorecard
+              </h4>
+              <p className="text-xs text-slate-400 mb-5">Rankings based on ticket fulfillment compliance and turnaround speed.</p>
+
+              <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                {campusSlaRanking.map((cr, idx) => (
+                  <div key={cr.campus} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                        #{idx + 1}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-800 dark:text-white text-sm">{cr.campus}</div>
+                        <div className="text-xs text-slate-400">{cr.count} total requests • {cr.breaches} breaches</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-2 justify-end">
+                        <span className={`text-sm font-black ${cr.compliance >= 90 ? 'text-emerald-600 dark:text-emerald-400' : cr.compliance >= 75 ? 'text-amber-500' : 'text-rose-500'}`}>
+                          {cr.compliance}%
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400">compliance</span>
+                      </div>
+                      <div className="text-xs text-slate-400 font-mono mt-0.5">{cr.avgTat}h avg TAT</div>
+                    </div>
+                  </div>
+                ))}
+                {campusSlaRanking.length === 0 && (
+                  <div className="h-36 flex items-center justify-center text-slate-400 text-xs italic">
+                    No campus data available.
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Detailed Request SLA Audit Ledger */}
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800/50">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-white">Individual Request SLA Audit Ledger</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Auditing dynamic urgency, stage progression, and breach states.</p>
+              </div>
+
+              {/* Ledger Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type="text"
+                    placeholder="Search ID, traveler, route..."
+                    value={slaSearch}
+                    onChange={e => { setSlaSearch(e.target.value); setSlaPage(1); }}
+                    className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                {/* Urgency Filter */}
+                <select
+                  value={slaPriorityFilter}
+                  onChange={e => { setSlaPriorityFilter(e.target.value as Priority | 'all'); setSlaPage(1); }}
+                  className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All Urgency Tiers</option>
+                  <option value={Priority.CRITICAL}>Critical (&lt; 2d)</option>
+                  <option value={Priority.HIGH}>High (2–10d)</option>
+                  <option value={Priority.MEDIUM}>Medium (10–20d)</option>
+                  <option value={Priority.LOW}>Low (&gt; 20d)</option>
+                </select>
+
+                {/* Status Filter */}
+                <select
+                  value={slaStatusFilter}
+                  onChange={e => { setSlaStatusFilter(e.target.value as any); setSlaPage(1); }}
+                  className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All SLA States</option>
+                  <option value="Met">Met</option>
+                  <option value="On Track">On Track</option>
+                  <option value="At Risk">At Risk</option>
+                  <option value="Breached">Breached</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left whitespace-nowrap">
+                <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('submissionId')}>
+                      Request ID <SortIcon col="submissionId" current={slaSort} />
+                    </th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('requesterName')}>
+                      Traveler & Campus <SortIcon col="requesterName" current={slaSort} />
+                    </th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('dateOfTravel')}>
+                      Travel Date & Proximity <SortIcon col="dateOfTravel" current={slaSort} />
+                    </th>
+                    <th className="px-6 py-4">Urgency Tier</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('targetSlaHours')}>
+                      Target SLA <SortIcon col="targetSlaHours" current={slaSort} />
+                    </th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('actualTatHours')}>
+                      Actual TAT <SortIcon col="actualTatHours" current={slaSort} />
+                    </th>
+                    <th className="px-6 py-4">Approval / Processing</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('slaStatus')}>
+                      SLA Status <SortIcon col="slaStatus" current={slaSort} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {paginatedSlaData.map(s => {
+                    const statusClass = s.slaStatus === 'Met'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 border-emerald-200 dark:border-emerald-800'
+                      : s.slaStatus === 'On Track'
+                      ? 'bg-sky-50 dark:bg-sky-950/30 text-sky-600 border-sky-200 dark:border-sky-800'
+                      : s.slaStatus === 'At Risk'
+                      ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 border-amber-200 dark:border-amber-800'
+                      : 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 border-rose-200 dark:border-rose-800';
+
+                    const tierClass = s.dynamicPriority === Priority.CRITICAL
+                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                      : s.dynamicPriority === Priority.HIGH
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : s.dynamicPriority === Priority.MEDIUM
+                      ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4 font-mono font-bold text-indigo-600 text-xs">
+                          {s.submissionId || s.id}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-800 dark:text-white">{s.requesterName}</div>
+                          <div className="text-xs text-slate-400">{s.requesterCampus} • {s.requesterDepartment}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-slate-700 dark:text-slate-300 font-medium">
+                            {new Date(s.dateOfTravel).toLocaleDateString()}
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-400">
+                            {s.daysRemaining < 0
+                              ? `${Math.abs(s.daysRemaining)}d ago`
+                              : s.daysRemaining === 0
+                              ? 'Today'
+                              : `${s.daysRemaining}d to go`}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider ${tierClass}`}>
+                            {s.dynamicPriority}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {s.targetSlaHours}h
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`font-mono font-bold ${s.isBreached ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'}`}>
+                            {s.actualTatHours.toFixed(1)}h
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                          <span>{s.approvalHours.toFixed(1)}h app.</span>
+                          <span className="mx-1 text-slate-300 dark:text-slate-700">•</span>
+                          <span>{s.processingHours.toFixed(1)}h proc.</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${statusClass}`}>
+                            <i className={`fa-solid ${s.slaStatus === 'Met' ? 'fa-circle-check' : s.slaStatus === 'On Track' ? 'fa-spinner' : s.slaStatus === 'At Risk' ? 'fa-clock' : 'fa-triangle-exclamation'} text-[10px]`}></i>
+                            {s.slaStatus}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedSlaData.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-sm">
+                        No requests matching the selected filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalSlaPages > 1 && (
+              <div className="p-4 border-t dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20">
+                <button
+                  disabled={slaPage === 1}
+                  onClick={() => setSlaPage(p => p - 1)}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all"
+                >
+                  <i className="fa-solid fa-chevron-left mr-1"></i>Previous
+                </button>
+                <span className="text-xs font-bold text-slate-400">
+                  Page {slaPage} of {totalSlaPages}
+                </span>
+                <button
+                  disabled={slaPage === totalSlaPages}
+                  onClick={() => setSlaPage(p => p + 1)}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all"
+                >
                   Next<i className="fa-solid fa-chevron-right ml-1"></i>
                 </button>
               </div>

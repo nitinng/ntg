@@ -1,6 +1,8 @@
 import { EmailConfig, EmailMessage, EmailProvider, EmailSendResult } from './types';
 import { GmailProvider } from './gmailProvider';
 import { SesProvider } from './sesProvider';
+import { SmtpProvider } from './smtpProvider';
+import { ResendProvider } from './resendProvider';
 
 /**
  * In-memory Mock Email Provider for unit testing, dry-runs, and local development.
@@ -33,6 +35,10 @@ export class MockEmailProvider implements EmailProvider {
     };
   }
 
+  async testConnection(): Promise<{ ok: boolean; latencyMs: number; message: string }> {
+    return { ok: true, latencyMs: 5, message: 'Mock provider online' };
+  }
+
   clear() {
     this.sentMessages = [];
     this.shouldFail = false;
@@ -55,6 +61,18 @@ export const createEmailProvider = (config: EmailConfig): EmailProvider => {
         throw new Error('SES configuration missing for EMAIL_PROVIDER=ses');
       }
       return new SesProvider(config.ses);
+
+    case 'smtp':
+      if (!config.smtp) {
+        throw new Error('SMTP configuration missing for EMAIL_PROVIDER=smtp');
+      }
+      return new SmtpProvider(config.smtp);
+
+    case 'resend':
+      if (!config.resend) {
+        throw new Error('Resend configuration missing for EMAIL_PROVIDER=resend');
+      }
+      return new ResendProvider(config.resend);
 
     case 'mock':
       return new MockEmailProvider();

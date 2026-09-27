@@ -20,7 +20,7 @@ export interface EmailMessage {
 export interface EmailSendResult {
   success: boolean;
   messageId?: string;
-  provider: 'gmail' | 'ses' | 'mock';
+  provider: 'gmail' | 'ses' | 'smtp' | 'resend' | 'mock';
   error?: {
     code: string;
     message: string;
@@ -31,11 +31,12 @@ export interface EmailSendResult {
 }
 
 /**
- * Common interface that all email providers (Gmail, SES, Mock) must implement.
+ * Common interface that all email providers (Gmail, SES, SMTP, Resend, Mock) must implement.
  */
 export interface EmailProvider {
-  readonly name: 'gmail' | 'ses' | 'mock';
+  readonly name: 'gmail' | 'ses' | 'smtp' | 'resend' | 'mock';
   send(message: EmailMessage): Promise<EmailSendResult>;
+  testConnection?(): Promise<{ ok: boolean; latencyMs: number; message: string }>;
 }
 
 /**
@@ -59,6 +60,32 @@ export interface SesProviderConfig {
   secretAccessKey: string;
   senderEmail: string; // e.g. "travel@navgurukul.org"
   senderName?: string;
+  smtpEndpoint?: string;
+  configurationSet?: string;
+  fetchFn?: typeof fetch;
+}
+
+/**
+ * Configuration options for Custom SMTP provider.
+ */
+export interface SmtpProviderConfig {
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+  senderEmail?: string;
+  senderName?: string;
+  replyTo?: string;
+}
+
+/**
+ * Configuration options for Resend provider.
+ */
+export interface ResendProviderConfig {
+  apiKey: string;
+  senderEmail?: string;
+  senderName?: string;
+  replyTo?: string;
   fetchFn?: typeof fetch;
 }
 
@@ -66,9 +93,11 @@ export interface SesProviderConfig {
  * Unified provider selection configuration.
  */
 export interface EmailConfig {
-  providerType: 'gmail' | 'ses' | 'mock';
+  providerType: 'gmail' | 'ses' | 'smtp' | 'resend' | 'mock';
   gmail?: GmailProviderConfig;
   ses?: SesProviderConfig;
+  smtp?: SmtpProviderConfig;
+  resend?: ResendProviderConfig;
 }
 
 /**
@@ -76,14 +105,14 @@ export interface EmailConfig {
  */
 export interface EmailQueueItem {
   id: string;
-  ticket_id: string;
-  to_status: string;
+  ticket_id?: string | null;
+  to_status?: string | null;
   recipients: string[];
   cc?: string[];
   bcc?: string[];
   subject: string;
   body: string;
-  status: 'Pending' | 'Processing' | 'Sent' | 'Failed';
+  status: 'Pending' | 'Processing' | 'Sent' | 'Delivered' | 'Failed' | 'Bounced' | 'Cancelled' | 'Queued' | 'Sending';
   retry_count: number;
   attempt_count?: number;
   last_error?: string | null;
@@ -94,4 +123,12 @@ export interface EmailQueueItem {
   processed_at?: string | null;
   sent_at?: string | null;
   available_at?: string | null;
+  delivered_at?: string | null;
+  bounced_at?: string | null;
+  delivery_details?: any;
+  event?: string | null;
+  audience?: string | null;
+  context_key?: string | null;
+  template_key?: string | null;
+  template_name?: string | null;
 }

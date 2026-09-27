@@ -68,7 +68,7 @@ export const DEFAULT_ROUTING_SETTINGS = [
   { key: 'escalation_owners', value: ['escalation@navgurukul.org'] },
   { key: 'pnc_queue_cc', value: [] },
   { key: 'support_email', value: 'travel.team@navgurukul.org' },
-  { key: 'portal_url', value: 'https://travel.navgurukul.org' },
+  { key: 'portal_url', value: 'https://ng-travel-desk.vercel.app' },
   { key: 'info_reminder_first_hours', value: 24 },
   { key: 'info_reminder_final_hours', value: 72 },
   { key: 'info_escalation_days', value: 5 },

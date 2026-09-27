@@ -54,7 +54,7 @@ SELECT v.template_key, v.name, v.subject, v.body, v.event, v.audience, v.context
 FROM (VALUES
   ('policy_violation_detected.employee.default', 'Travel Request Received', 'Travel Request Received - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -71,7 +71,7 @@ FROM (VALUES
     </div>', 'POLICY_VIOLATION_DETECTED', 'employee', NULL, 'Not Started', 'Approval Pending', 'default', '2', 'Confirms we have the request, names the specific policy breach and the manager it has gone to, and makes clear no action is needed from the employee.'),
   ('policy_violation_detected.manager.default', 'Approval Needed: Travel Request for (Manager)', 'Approval Needed: Travel Request for {{requester_name}} - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Manager Action Required</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{manager_name}}</strong>,</p>
@@ -86,7 +86,7 @@ FROM (VALUES
     </div>', 'POLICY_VIOLATION_DETECTED', 'manager', NULL, 'Not Started', 'Approval Pending', 'default', '3', 'Gives the manager the violation and the full trip in the mail body so most approvals need no click-through. Subject names the employee so it can be triaged from the inbox.'),
   ('policy_evaluation_passed.employee.default', 'Your Travel Request is Being Processed', 'Your Travel Request is Being Processed - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -101,7 +101,7 @@ FROM (VALUES
     </div>', 'POLICY_EVALUATION_PASSED', 'employee', NULL, 'Not Started', 'Processing', 'default', '4', 'Explains why no approval was needed, sets the expectation of tickets by mail, and points changes at the travel desk rather than a reply.'),
   ('manager_approved.employee.default', 'Great news! Your Travel Request is Approved', 'Great news! Your Travel Request is Approved - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -116,7 +116,7 @@ FROM (VALUES
     </div>', 'MANAGER_APPROVED', 'employee', NULL, 'Approval Pending', 'Approved', 'default', '5', 'Names the approver and hands off to the booking expectation.'),
   ('manager_rejected.employee.default', 'Update on Your Travel Request', 'Update on Your Travel Request - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -133,7 +133,7 @@ FROM (VALUES
     </div>', 'MANAGER_REJECTED', 'employee', NULL, 'Approval Pending', 'Rejected by Manager', 'default', '7', 'Carries the rejection reason and explains that a compliant resubmission skips approval entirely.'),
   ('employee_cancelled_pre_approval.employee.default', 'Cancelled: Travel Request', 'Cancelled: Travel Request - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -147,7 +147,7 @@ FROM (VALUES
     </div>', 'EMPLOYEE_CANCELLED_PRE_APPROVAL', 'employee', NULL, 'Approval Pending', 'Cancelled by Employee', 'default', '8', 'Confirms withdrawal, confirms the manager has been stood down, and states plainly that there is nothing to settle.'),
   ('employee_cancelled_pre_approval.manager.default', 'No Action Needed: Travel Approval Withdrawn (Manager)', 'No Action Needed: Travel Approval Withdrawn - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Manager Action Required</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{manager_name}}</strong>,</p>
@@ -159,7 +159,7 @@ FROM (VALUES
     </div>', 'EMPLOYEE_CANCELLED_PRE_APPROVAL', 'manager', NULL, 'Approval Pending', 'Cancelled by Employee', 'default', '9', 'Closes the loop on the action mail the manager already received.'),
   ('policy_violation_detected.employee.resubmit_after_manager_rejection', 'Update: Travel Request Received', 'Update: Travel Request Received - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -175,7 +175,7 @@ FROM (VALUES
     </div>', 'POLICY_VIOLATION_DETECTED', 'employee', 'resubmit_after_manager_rejection', 'Not Started', 'Approval Pending', 'default', '12', 'FIXED: subject was the manager-facing ''Approval Required'' on an employee row. Copy now says ''still'' so it reads as a resubmission rather than a duplicate of row 2.'),
   ('policy_violation_detected.manager.resubmit_after_manager_rejection', 'Action Required: Resubmitted Travel Approval for (Manager)', 'Action Required: Resubmitted Travel Approval for {{requester_name}} - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Manager Action Required</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{manager_name}}</strong>,</p>
@@ -191,7 +191,7 @@ FROM (VALUES
     </div>', 'POLICY_VIOLATION_DETECTED', 'manager', 'resubmit_after_manager_rejection', 'Not Started', 'Approval Pending', 'default', '13', 'Says ''revised and resubmitted'' so the manager does not mistake it for the mail they already actioned.'),
   ('policy_evaluation_passed.employee.resubmit_after_manager_rejection', 'In Progress: Travel Request Sent for Booking', 'In Progress: Travel Request Sent for Booking - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -204,7 +204,7 @@ FROM (VALUES
     </div>', 'POLICY_EVALUATION_PASSED', 'employee', 'resubmit_after_manager_rejection', 'Not Started', 'Processing', 'default', '14', 'Confirms the edit fixed the problem, which is the reassurance the employee is waiting for.'),
   ('pnc_rejected.employee.default', 'Action Required: Update Needed for Travel Request', 'Action Required: Update Needed for Travel Request - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -219,7 +219,7 @@ FROM (VALUES
     </div>', 'PNC_REJECTED', 'employee', NULL, 'Processing', 'Rejected by PNC', 'default', '15', 'Typos in the original summary fixed. Tells the employee what happens after they resubmit.'),
   ('policy_violation_detected.employee.resubmit_after_pnc_rejection', 'Update: Travel Request Received', 'Update: Travel Request Received - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -235,7 +235,7 @@ FROM (VALUES
     </div>', 'POLICY_VIOLATION_DETECTED', 'employee', 'resubmit_after_pnc_rejection', 'Not Started', 'Approval Pending', 'default', '18a', 'FIXED: subject was the manager-facing ''Approval Required'' on an employee row. Copy now says ''still'' so it reads as a resubmission rather than a duplicate of row 2.'),
   ('policy_violation_detected.manager.resubmit_after_pnc_rejection', 'Action Required: Resubmitted Travel Approval for (Manager)', 'Action Required: Resubmitted Travel Approval for {{requester_name}} - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Manager Action Required</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{manager_name}}</strong>,</p>
@@ -251,7 +251,7 @@ FROM (VALUES
     </div>', 'POLICY_VIOLATION_DETECTED', 'manager', 'resubmit_after_pnc_rejection', 'Not Started', 'Approval Pending', 'default', '18b', 'Says ''revised and resubmitted'' so the manager does not mistake it for the mail they already actioned.'),
   ('policy_evaluation_passed.employee.resubmit_after_pnc_rejection', 'In Progress: Travel Request Returned for Booking', 'In Progress: Travel Request Returned for Booking - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -264,7 +264,7 @@ FROM (VALUES
     </div>', 'POLICY_EVALUATION_PASSED', 'employee', 'resubmit_after_pnc_rejection', 'Not Started', 'Processing', 'default', '19', 'FIXED: the summary here was the cancellation text copied from row 9.'),
   ('info_requested.employee.default', 'Action Required: Details Needed to Complete Booking', 'Action Required: Details Needed to Complete Booking - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -280,7 +280,7 @@ FROM (VALUES
     </div>', 'INFO_REQUESTED', 'employee', NULL, 'Processing', 'On Hold', 'default', '21', 'States exactly what is needed, gives the honest reason speed matters, and offers cancellation as the alternative to replying.'),
   ('booking_confirmed.employee.default', 'Booking Confirmation', 'Booking Confirmation: {{origin}} to {{destination}} (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -294,7 +294,7 @@ FROM (VALUES
     </div>', 'BOOKING_CONFIRMED', 'employee', NULL, 'Processing', 'Booked', 'default', '22', 'FIXED: the original promised an attached ticket. The sender builds a single-part HTML message and the queue has no attachments column, so that promise cannot be kept. This links instead and says so. Also warns against dealing with the vendor directly.'),
   ('cancellation_requested.pnc.default', 'Action Required: Cancellation Request (PNC)', 'Action Required: Cancellation Request - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Operations</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi Team,</p>
@@ -310,7 +310,7 @@ FROM (VALUES
     </div>', 'CANCELLATION_REQUESTED', 'pnc', NULL, 'Processing', 'Cancellation Requested', 'default', '23', 'MERGED: rows 23, 32, 35 and 36 all fired on entry to Cancellation Requested. This is now the single PNC-facing mail for all of them. Carries the current state so PNC knows whether a vendor cancellation is involved before opening the app.'),
   ('cancellation_requested.employee.default', 'Cancellation Request Received (ID', 'Cancellation Request Received (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -323,7 +323,7 @@ FROM (VALUES
     </div>', 'CANCELLATION_REQUESTED', 'employee', NULL, 'Processing', 'Cancellation Requested', 'default', '24', 'FIXED: subject was the PNC action subject on an employee row, and ''translation request'' was a typo for ''cancellation request''. MERGED with rows 32 and 35.'),
   ('cancellation_requested.employee.post_booking', 'Cancellation Request Received (ID', 'Cancellation Request Received (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -337,7 +337,7 @@ FROM (VALUES
     </div>', 'CANCELLATION_REQUESTED', 'employee', 'post_booking', 'Booked', 'Cancellation Requested', 'default', '35', 'MERGED into rows 23 and 24 for the PNC mail, but the employee copy differs here because a booked ticket may attract a charge. Row 23 handles PNC unchanged.'),
   ('info_provided.pnc.default', 'Response Received: Travel Request (PNC)', 'Response Received: Travel Request {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Operations</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi Team,</p>
@@ -351,7 +351,7 @@ FROM (VALUES
     </div>', 'INFO_PROVIDED', 'pnc', NULL, 'On Hold', 'Processing', 'default', '25', 'Quotes the response inline so PNC can often act without opening the app.'),
   ('info_request_reminder_24h.employee.default', 'Reminder: Information Needed for', 'Reminder: Information Needed for {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -365,7 +365,7 @@ FROM (VALUES
     </div>', 'INFO_REQUEST_REMINDER_24H', 'employee', NULL, 'On Hold', 'On Hold', 'default', '26', 'FIXED: the event was named D3 (3 days) while the condition said 24 hours. Renamed to match the 24-hour condition, and the 3-day step is now its own row (26b).'),
   ('info_request_reminder_72h.employee.default', 'Final Reminder: Information Needed for', 'Final Reminder: Information Needed for {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -381,7 +381,7 @@ FROM (VALUES
     </div>', 'INFO_REQUEST_REMINDER_72H', 'employee', NULL, 'On Hold', 'On Hold', 'default_manager', '26b', 'NEW ROW. Splits the single reminder into a 24-hour nudge and a 72-hour final notice, which is what the original D3-vs-24h contradiction implied was intended. Copies the manager because this is the last step before closure.'),
   ('info_request_escalated.escalation_owner.default', 'Action Required: Travel Request Stalled (Escalation)', 'Action Required: Travel Request Stalled - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Escalation Notice</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{manager_name}}</strong>,</p>
@@ -395,7 +395,7 @@ FROM (VALUES
     </div>', 'INFO_REQUEST_ESCALATED', 'escalation_owner', NULL, 'On Hold', 'On Hold / Escalated', 'manager', '27', 'Adds days on hold and the travel date so the escalation owner can judge urgency from the mail alone.'),
   ('info_request_expired.employee.default', 'Travel Request Closed', 'Travel Request Closed: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -410,7 +410,7 @@ FROM (VALUES
     </div>', 'INFO_REQUEST_EXPIRED', 'employee', NULL, 'On Hold', 'Cancelled by System', 'default_manager', '28', 'FIXED: the To stage was ''Cancelled by Employee'', but the employee did not cancel - the SLA did. Attributing it to the employee would distort cancellation reporting and the cancellation cost split. Subject says ''Closed'', not ''Cancelled'', for the same reason.'),
   ('booking_updated.employee.default', 'Booking Update', 'Booking Update: {{origin}} to {{destination}} (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -424,7 +424,7 @@ FROM (VALUES
     </div>', 'BOOKING_UPDATED', 'employee', NULL, 'Booked', 'Booked', 'default', '29', 'RESTORED. This row was dropped in the last revision, which left a reissued PNR or a shifted departure time reaching the traveller through no channel at all. Fires only on material change - cosmetic edits and document re-uploads stay silent (rows 30 and 31).'),
   ('cancellation_processed_employee.employee.default', 'Travel Request Cancelled', 'Travel Request Cancelled - {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -439,7 +439,7 @@ FROM (VALUES
     </div>', 'CANCELLATION_PROCESSED_EMPLOYEE', 'employee', NULL, 'Cancellation Requested', 'Cancelled by Employee', 'default', '33', 'States plainly that no money is owed, which is the single most common follow-up question on a cancellation mail.'),
   ('cancellation_processed_employee.employee.post_booking', 'Booking Cancelled', 'Booking Cancelled: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -454,7 +454,7 @@ FROM (VALUES
     </div>', 'CANCELLATION_PROCESSED_EMPLOYEE', 'employee', 'post_booking', 'Cancellation Requested', 'Cancelled by Employee', 'default', '37', 'Sets the expectation of a follow-up statement so the employee does not chase, and deliberately quotes no amount owed before the refund is known.'),
   ('no_refund_required.employee.default', 'Travel Settlement Closed', 'Travel Settlement Closed: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -466,7 +466,7 @@ FROM (VALUES
     </div>', 'NO_REFUND_REQUIRED', 'employee', NULL, 'Cancelled by Employee', 'Reconciled', 'default', '39', 'EMAIL ADDED. Row 37 promised a final statement; this row was the terminal state and sent nothing, so that promise was never kept.'),
   ('pnc_cancellation.employee.default', 'Booking Cancelled by Travel Desk', 'Booking Cancelled by Travel Desk: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -481,7 +481,7 @@ FROM (VALUES
     </div>', 'PNC_CANCELLATION', 'employee', NULL, 'Booked', 'Cancelled by PNC', 'default_manager_if_approved', '40', 'FIXED: the CC read ''Manager*'' with the asterisk never defined. Condition is now stated. Copy makes it unambiguous that the employee bears no cost.'),
   ('partial_cancellation.employee.default', 'Partial Trip Cancellation', 'Partial Trip Cancellation: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -495,7 +495,7 @@ FROM (VALUES
     </div>', 'PARTIAL_CANCELLATION', 'employee', NULL, 'Booked', 'Booked / Partially Cancelled', 'default', '43', 'Subject rewritten in plain language. Names both what is gone and what remains, which is the entire point of this mail.'),
   ('segment_refund_completed.employee.default', 'Refund Processed: Partial Cancellation (ID', 'Refund Processed: Partial Cancellation (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -509,7 +509,7 @@ FROM (VALUES
     </div>', 'SEGMENT_REFUND_COMPLETED', 'employee', NULL, 'Booked / Partially Cancelled', 'Booked / Partially Cancelled', 'default', '45', 'FIXED: the original email summary was just the subject line repeated.'),
   ('partial_refund_received.employee.default', 'Partial Refund Processed', 'Partial Refund Processed: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -523,7 +523,7 @@ FROM (VALUES
     </div>', 'PARTIAL_REFUND_RECEIVED', 'employee', NULL, 'Pending Refund', 'Partially Refunded', 'default_finance', '46', 'FIXED: summary repeated the subject. Now carries the numbers and says a final statement follows. Finance added to CC (they were absent from every row in a section that is entirely their work).'),
   ('refund_completed.employee.default', 'Full Refund Processed', 'Full Refund Processed: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -537,7 +537,7 @@ FROM (VALUES
     </div>', 'REFUND_COMPLETED', 'employee', NULL, 'Pending Refund', 'Fully Refunded', 'default_finance', '47', 'FIXED: summary repeated the subject. Finance added to CC.'),
   ('refund_completed.employee.after_partial_refund', 'Final Settlement: Full Refund Processed (ID', 'Final Settlement: Full Refund Processed (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -551,7 +551,7 @@ FROM (VALUES
     </div>', 'REFUND_COMPLETED', 'employee', 'after_partial_refund', 'Partially Refunded', 'Fully Refunded', 'default_finance', '49', 'Copy differs from row 47 so it acknowledges the earlier partial refund rather than reading as a duplicate.'),
   ('refund_written_off.employee.default', 'Cancellation Settlement Statement', 'Cancellation Settlement Statement: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -566,7 +566,7 @@ FROM (VALUES
     </div>', 'REFUND_WRITTEN_OFF', 'employee', NULL, 'Pending Refund', 'Written Off', 'default_finance', '48', 'This is the only mail in the set that can tell someone they owe money. It now states the full split rather than hiding behind ''settlement update'', and says explicitly that no action is needed yet.'),
   ('refund_written_off.employee.after_partial_refund', 'Cancellation Settlement Statement', 'Cancellation Settlement Statement: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -580,7 +580,7 @@ FROM (VALUES
     </div>', 'REFUND_WRITTEN_OFF', 'employee', 'after_partial_refund', 'Partially Refunded', 'Written Off', 'default_finance', '50', 'As row 48, but acknowledges the partial recovery that already happened.'),
   ('refund_reconciliation_completed.employee.default', 'Travel Settlement Closed', 'Travel Settlement Closed: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -594,7 +594,7 @@ FROM (VALUES
     </div>', 'REFUND_RECONCILIATION_COMPLETED', 'employee', NULL, 'Fully Refunded', 'Reconciled', 'default', '51', 'EMAIL ADDED. Every terminal reconciliation row previously sent nothing, so the statement promised at row 37 never arrived.'),
   ('refund_reconciliation_completed.employee.after_write_off', 'Travel Settlement Closed', 'Travel Settlement Closed: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>
@@ -608,7 +608,7 @@ FROM (VALUES
     </div>', 'REFUND_RECONCILIATION_COMPLETED', 'employee', 'after_write_off', 'Written Off', 'Reconciled', 'default', '52', 'EMAIL ADDED. Same template as row 51.'),
   ('refund_disputed.finance.default', 'Action Required: Refund Disputed (ID (Finance)', 'Action Required: Refund Disputed (ID: {{submissionId}})', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Finance Action Required</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">The refund for request {{submissionId}} has been disputed and requires review.</p>
@@ -621,7 +621,7 @@ FROM (VALUES
     </div>', 'REFUND_DISPUTED', 'finance', NULL, 'Partially Refunded', 'Disputed', 'default', '53', 'EMAIL ADDED. A dispute with no notification sits invisible until someone happens to look at the queue. Internal only - the employee is not told until it resolves.'),
   ('retroactive_booking_recorded.employee.default', 'Travel Booking Recorded', 'Travel Booking Recorded: {{submissionId}}', '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
-        <h1 style="color:#FF6B35;margin:0;font-size:26px;font-weight:800;">navgurukul</h1>
+        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Notification</p>
       </div>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Hi <strong>{{requester_name}}</strong>,</p>

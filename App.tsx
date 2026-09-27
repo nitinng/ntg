@@ -127,7 +127,7 @@ const App: React.FC = () => {
   const [isMeetupAvailabilityModalOpen, setIsMeetupAvailabilityModalOpen] = useState(false);
   const [isMeetupApprover, setIsMeetupApprover] = useState(false);
   const [isIgatpuriEnabled, setIsIgatpuriEnabled] = useState(true);
-  const [isChatEnabled, setIsChatEnabled] = useState(true);
+  const [isChatEnabled, setIsChatEnabled] = useState(false);
   const [isEmailLoginEnabled, setIsEmailLoginEnabled] = useState(false);
 
   const [isResettingPassword, setIsResettingPassword] = useState(false);
@@ -329,8 +329,12 @@ const App: React.FC = () => {
                 role: u.role,
                 department: u.department,
                 campus: u.campus,
+                team: u.team,
+                managerName: u.manager_name,
+                managerEmail: u.manager_email,
                 passportPhoto: u.passport_photo,
                 idProof: u.id_proof,
+                avatar: u.avatar,
                 phone: u.phone,
                 emergencyContactName: u.emergency_contact_name,
                 emergencyContactPhone: u.emergency_contact_phone,
@@ -479,8 +483,12 @@ const App: React.FC = () => {
             role: u.role,
             department: u.department,
             campus: u.campus,
+            team: u.team,
+            managerName: u.manager_name,
+            managerEmail: u.manager_email,
             passportPhoto: u.passport_photo,
             idProof: u.id_proof,
+            avatar: u.avatar,
             phone: u.phone,
             emergencyContactName: u.emergency_contact_name,
             emergencyContactPhone: u.emergency_contact_phone,
@@ -712,6 +720,7 @@ const App: React.FC = () => {
             meetupRequests={meetupAvailabilityRequests}
             onNavigateToMeetup={() => handleTabChange('igathpuri-meetup')}
             isIgatpuriEnabled={isIgatpuriEnabled}
+            isChatEnabled={isChatEnabled}
           />
         );
       }
@@ -737,16 +746,16 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <PastRequestsView requests={requests.filter(r => r.requesterId === currentUser.id)} onView={setSelectedRequest} />;
       case 'mail-templates':
-        return <EmailNotificationCenter currentUser={currentUser} initialTab="templates" onNavigateToRequest={setSelectedRequest} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="templates" onNavigateToRequest={(id: string) => { const req = requests.find(r => r.id === id || r.submissionId === id); if (req) setSelectedRequest(req); }} />;
       case 'sent-mails':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <EmailNotificationCenter currentUser={currentUser} initialTab="delivery" onNavigateToRequest={setSelectedRequest} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="delivery" onNavigateToRequest={(id: string) => { const req = requests.find(r => r.id === id || r.submissionId === id); if (req) setSelectedRequest(req); }} />;
       case 'email-routing':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <EmailNotificationCenter currentUser={currentUser} initialTab="routing" onNavigateToRequest={setSelectedRequest} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="routing" onNavigateToRequest={(id: string) => { const req = requests.find(r => r.id === id || r.submissionId === id); if (req) setSelectedRequest(req); }} />;
       case 'email-center':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <EmailNotificationCenter currentUser={currentUser} initialTab="templates" onNavigateToRequest={setSelectedRequest} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="templates" onNavigateToRequest={(id: string) => { const req = requests.find(r => r.id === id || r.submissionId === id); if (req) setSelectedRequest(req); }} />;
       case 'changelog':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;
@@ -812,14 +821,14 @@ const App: React.FC = () => {
         return <UserRoleManagement users={users} onUpdateRole={handleUpdateUserRole} currentUser={currentUser} />;
       case 'profile':
         return (
-          <div className="max-w-4xl mx-auto transition-all duration-300">
+          <div className="w-full transition-all duration-300">
             <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} departments={departments} />
           </div>
         );
       case 'settings':
         return <SettingsView isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />;
       case 'guide':
-        return <EmployeeGuideView onTabChange={handleTabChange} policies={travelModePolicies} />;
+        return <EmployeeGuideView onTabChange={handleTabChange} policies={travelModePolicies} isChatEnabled={isChatEnabled} />;
       case 'approvals':
         if (currentUser.role === UserRole.EMPLOYEE) {
           const pendingApprovals = requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING);
@@ -942,7 +951,11 @@ const App: React.FC = () => {
         <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
         <nav className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-8 flex items-center justify-between transition-colors duration-300">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-600/20">N</div>
+            <img
+              src="/ng-icon.png"
+              alt="NavGurukul Logo"
+              className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
+            />
             <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">NG Travel Desk</h1>
           </div>
           <div className="flex items-center gap-4">

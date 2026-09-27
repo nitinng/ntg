@@ -95,7 +95,7 @@ export const resolveTemplateVariables = (
     '{{booking_reference}}': bookingRef,
     '{{cancellation_reason}}': request.cancelledReason || request.statusChangeReason || 'Plans changed',
     '{{cancelledReason}}': request.cancelledReason || '',
-    '{{portal_url}}': 'https://travel.navgurukul.org',
+    '{{portal_url}}': 'https://ng-travel-desk.vercel.app',
     '{{support_email}}': 'travel.team@navgurukul.org',
 
     // Refund and reconciliation (sheet rows 37-53).
@@ -129,6 +129,12 @@ export const resolveTemplateVariables = (
     const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     rendered = rendered.replace(new RegExp(escaped, 'g'), String(value ?? ''));
   }
+
+  // Ensure any legacy text headers in older templates are seamlessly upgraded to the official brand logo
+  rendered = rendered.replace(
+    /<h1[^>]*>navgurukul(?: travel desk)?<\/h1>/gi,
+    '<img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />'
+  );
 
   return rendered;
 };

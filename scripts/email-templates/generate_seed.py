@@ -213,7 +213,7 @@ def shell(inner, strapline):
         'background:#ffffff;">\n'
         '      <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;'
         f'border-bottom:2px solid {BRAND_ORANGE};">\n'
-        f'        <h1 style="color:{BRAND_ORANGE};margin:0;font-size:26px;font-weight:800;">navgurukul</h1>\n'
+        '        <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />\n'
         f'        {strap}\n'
         '      </div>\n'
         f'      {inner}\n'

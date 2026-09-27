@@ -70,9 +70,9 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
   const [testSubject, setTestSubject] = useState(`Travel Desk Delivery Test - ${new Date().toLocaleTimeString()}`);
   const [testBody, setTestBody] = useState(`
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-  <div style="text-align: center; margin-bottom: 24px;">
-    <h1 style="color: #4f46e5; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">Navgurukul Travel Desk</h1>
-    <p style="color: #64748b; margin-top: 4px; font-size: 13px;">Automated Email Notification Test</p>
+  <div style="text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #FF6B35;">
+    <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height: 36px; width: auto; max-width: 200px; display: inline-block;" />
+    <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px; font-weight: 500;">Travel Desk Notification</p>
   </div>
   
   <div style="background-color: #f8fafc; border-left: 4px solid #4f46e5; padding: 16px; border-radius: 6px; margin: 20px 0;">
@@ -138,6 +138,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
       setTestSubject(`[TEST] ${t.subject || t.name}`);
       let sampleBody = t.body || '';
       sampleBody = sampleBody
+        .replace(/<h1[^>]*>navgurukul(?: travel desk)?<\/h1>/gi, '<img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />')
         .replace(/\{\{request_id\}\}/g, 'TRV-TEST-001')
         .replace(/\{\{submissionId\}\}/g, 'TRV-TEST-001')
         .replace(/\{\{requester_name\}\}/g, currentUser?.name || 'Test User')
@@ -148,7 +149,8 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
         .replace(/\{\{travel_mode\}\}/g, 'Flight')
         .replace(/\{\{purpose\}\}/g, 'Annual Team Review')
         .replace(/\{\{estimated_cost\}\}/g, '4500')
-        .replace(/\{\{portal_url\}\}/g, 'https://travel.navgurukul.org');
+        .replace(/\{\{portal_url\}\}/g, 'https://ng-travel-desk.vercel.app')
+        .replace(/https:\/\/ng-travel-desk\.vercel\.app\/navgurukul-brand-logo\.png/g, '/navgurukul-brand-logo.png');
       setTestBody(sampleBody);
       toast.info(`Loaded "${t.name}" template with sample data`);
     }
@@ -801,9 +803,12 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
       {selectedEmail && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setSelectedEmail(null)}></div>
-          <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 z-10 flex flex-col max-h-[85vh]">
+          <div
+            className="relative w-[90vw] h-[90vh] max-w-[90vw] max-h-[90vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 z-10 flex flex-col"
+            style={{ width: '90vw', height: '90vh' }}
+          >
             {/* Modal Header */}
-            <header className="px-8 py-5 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex justify-between items-center">
+            <header className="px-8 py-5 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex justify-between items-center flex-shrink-0">
               <div>
                 <div className="flex items-center gap-2.5">
                   <h3 className="text-lg font-black text-slate-900 dark:text-white truncate max-w-md">
@@ -910,7 +915,11 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
               {inspectorTab === 'preview' ? (
                 <div
                   className="p-6 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm prose dark:prose-invert max-w-none text-sm"
-                  dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
+                  dangerouslySetInnerHTML={{
+                    __html: (selectedEmail.body || '')
+                      .replace(/<h1[^>]*>navgurukul(?: travel desk)?<\/h1>/gi, '<img src="/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />')
+                      .replace(/https:\/\/ng-travel-desk\.vercel\.app\/navgurukul-brand-logo\.png/g, '/navgurukul-brand-logo.png')
+                  }}
                 />
               ) : inspectorTab === 'html' ? (
                 <pre className="p-4 bg-slate-900 text-slate-200 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">

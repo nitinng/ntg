@@ -77,7 +77,7 @@ Email generation and delivery are **strictly asynchronous side effects**. If tem
 | `{{employee_response}}` | Employee response to clarification | `Aadhaar card attached` |
 | `{{booking_reference}}` | PNR / Booking confirmation number | `IND-88219` |
 | `{{cancellation_reason}}` | Stated reason for cancellation | `Meeting rescheduled by client` |
-| `{{portal_url}}` | Portal link for user action | `https://travel.navgurukul.org` |
+| `{{portal_url}}` | Portal link for user action | `https://ng-travel-desk.vercel.app` |
 
 ---
 

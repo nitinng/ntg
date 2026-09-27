@@ -23,7 +23,7 @@ const validDraft = {
   finance_cc: ['finance@navgurukul.org'],
   escalation_owners: ['pnc@navgurukul.org'],
   support_email: 'travel.team@navgurukul.org',
-  portal_url: 'https://travel.navgurukul.org',
+  portal_url: 'https://ng-travel-desk.vercel.app',
   info_reminder_first_hours: 24,
   info_reminder_final_hours: 72,
   info_escalation_days: 5,

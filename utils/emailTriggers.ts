@@ -40,7 +40,7 @@ export const DEFAULT_ROUTING_CONFIG: EmailRoutingConfig = {
   escalationOwners: ['pnc@navgurukul.org'],
   pncQueueCc: [],
   supportEmail: 'travel.team@navgurukul.org',
-  portalUrl: 'https://travel.navgurukul.org',
+  portalUrl: 'https://ng-travel-desk.vercel.app',
   infoReminderFirstHours: 24,
   infoReminderFinalHours: 72,
   infoEscalationDays: 5,

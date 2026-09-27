@@ -134,7 +134,7 @@ CC, Finance on the settlement mails, and an "Escalation Owner". These are config
 | `escalation_owners` | `pnc@navgurukul.org` | row 27 |
 | `pnc_queue_cc` | *(empty)* | extra addresses on PNC mails |
 | `support_email` | `travel.team@navgurukul.org` | `{{support_email}}` |
-| `portal_url` | `https://travel.navgurukul.org` | every call-to-action button |
+| `portal_url` | `https://ng-travel-desk.vercel.app` | every call-to-action button |
 | `info_reminder_first_hours` | 24 | row 26 |
 | `info_reminder_final_hours` | 72 | row 26b |
 | `info_escalation_days` | 5 | row 27 |

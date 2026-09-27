@@ -247,9 +247,9 @@ export const dispatchLiveTestEmail = async (
 
     const body = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-  <div style="text-align: center; margin-bottom: 24px;">
-    <h1 style="color: #4f46e5; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Navgurukul Travel Desk</h1>
-    <p style="color: #64748b; margin-top: 4px; font-size: 13px;">Live Provider Verification Test</p>
+  <div style="text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #FF6B35;">
+    <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height: 36px; width: auto; max-width: 200px; display: inline-block;" />
+    <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px; font-weight: 500;">Travel Desk Notification</p>
   </div>
   
   <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 16px; border-radius: 6px; margin: 20px 0;">

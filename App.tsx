@@ -73,6 +73,7 @@ const AdminQueueView = React.lazy(() => import('./components/AdminQueueView'));
 const PastRequestsView = React.lazy(() => import('./components/PastRequestsView'));
 const SentMailsView = React.lazy(() => import('./components/SentMailsView'));
 const EmailSettingsView = React.lazy(() => import('./components/EmailSettingsView'));
+const EmailNotificationCenter = React.lazy(() => import('./components/EmailNotificationCenter').then(module => ({ default: module.EmailNotificationCenter })));
 const VersionChangelogView = React.lazy(() => import('./components/VersionChangelogView'));
 
 const App: React.FC = () => {
@@ -736,13 +737,14 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <PastRequestsView requests={requests.filter(r => r.requesterId === currentUser.id)} onView={setSelectedRequest} />;
       case 'mail-templates':
-        return <MailTemplatesView currentUserRole={currentUser.role} currentUser={currentUser} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="templates" onNavigateToRequest={setSelectedRequest} />;
       case 'sent-mails':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <SentMailsView currentUser={currentUser} onTabChange={handleTabChange} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="delivery" onNavigateToRequest={setSelectedRequest} />;
       case 'email-routing':
+      case 'email-center':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <EmailSettingsView currentUser={currentUser} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="setup" onNavigateToRequest={setSelectedRequest} />;
       case 'changelog':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;

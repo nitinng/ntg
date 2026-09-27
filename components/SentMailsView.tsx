@@ -314,8 +314,11 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
         toast.warning('Email was queued, but worker invocation returned: ' + workerErr.message);
       } else {
         const sentCount = workerData?.results?.sent || 0;
+        const firstError = workerData?.results?.errors?.[0]?.error?.message;
         if (sentCount > 0) {
           toast.success(`🎉 Test email delivered successfully to ${testRecipient}!`);
+        } else if (firstError) {
+          toast.error(`⚠️ Delivery failed: ${firstError}`);
         } else {
           toast.info('Test email queued for delivery.');
         }
@@ -331,7 +334,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
     }
   };
 
-  const getStatusBadge = (status: EmailQueueRecord['status']) => {
+  const getStatusBadge = (status: EmailQueueRecord['status'], lastError?: string | null, attempts?: number) => {
     switch (status) {
       case 'Sent':
         return (
@@ -340,6 +343,13 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
           </span>
         );
       case 'Pending':
+        if (lastError && (attempts || 0) > 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40" title={`Retrying: ${lastError}`}>
+              <i className="fa-solid fa-clock-rotate-left text-xs animate-pulse"></i> Retrying ({attempts}/5)
+            </span>
+          );
+        }
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40">
             <i className="fa-solid fa-clock text-xs animate-pulse"></i> Pending
@@ -572,7 +582,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
                         className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group cursor-pointer"
                         onClick={() => setSelectedEmail(item)}
                       >
-                        <td className="px-6 py-4">{getStatusBadge(item.status)}</td>
+                        <td className="px-6 py-4">{getStatusBadge(item.status, item.last_error, item.attempt_count)}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-xs">
@@ -799,7 +809,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
                   <h3 className="text-lg font-black text-slate-900 dark:text-white truncate max-w-md">
                     {selectedEmail.subject}
                   </h3>
-                  {getStatusBadge(selectedEmail.status)}
+                  {getStatusBadge(selectedEmail.status, selectedEmail.last_error, selectedEmail.attempt_count)}
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5 font-mono">
                   Queue ID: {selectedEmail.id}
@@ -813,17 +823,19 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
               </button>
             </header>
 
-            {/* Error Banner if Failed */}
-            {selectedEmail.status === 'Failed' && (
-              <div className="px-8 py-3 bg-rose-50 dark:bg-rose-950/30 border-b border-rose-100 dark:border-rose-900/40 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2.5 text-xs text-rose-700 dark:text-rose-400 font-medium">
-                  <i className="fa-solid fa-circle-exclamation text-rose-500"></i>
-                  <span><strong>Failure Error:</strong> {selectedEmail.last_error || 'Delivery rejected by provider'}</span>
+            {/* Error Banner if Failed or Retrying with Error */}
+            {selectedEmail.last_error && (
+              <div className={`px-8 py-3 ${selectedEmail.status === 'Failed' ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/40' : 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-900/40'} border-b flex items-center justify-between gap-4`}>
+                <div className={`flex items-center gap-2.5 text-xs ${selectedEmail.status === 'Failed' ? 'text-rose-700 dark:text-rose-400' : 'text-amber-700 dark:text-amber-400'} font-medium`}>
+                  <i className={`fa-solid ${selectedEmail.status === 'Failed' ? 'fa-circle-exclamation text-rose-500' : 'fa-triangle-exclamation text-amber-500'}`}></i>
+                  <span>
+                    <strong>{selectedEmail.status === 'Failed' ? 'Failure Error:' : 'Last Attempt Error (Retrying):'}</strong> {selectedEmail.last_error}
+                  </span>
                 </div>
                 <button
                   onClick={() => handleRetryEmail(selectedEmail.id)}
                   disabled={retryingId === selectedEmail.id}
-                  className="px-3 py-1 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-all flex-shrink-0 flex items-center gap-1.5"
+                  className={`px-3 py-1 ${selectedEmail.status === 'Failed' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'} text-white rounded text-xs font-bold transition-all flex-shrink-0 flex items-center gap-1.5`}
                 >
                   <i className={`fa-solid fa-rotate-right ${retryingId === selectedEmail.id ? 'fa-spin' : ''}`}></i>
                   Retry Now

@@ -7,8 +7,8 @@ describe('Version & Changelog Engine', () => {
     expect(RELEASES_DATA.length).toBeGreaterThan(0);
     const latestRelease = RELEASES_DATA[0];
 
-    expect(latestRelease.version).toBe('v2.4.0');
-    expect(latestRelease.date).toBe('2026-08-28');
+    expect(latestRelease.version).toBe('v2.5.0');
+    expect(latestRelease.date).toBe('2026-09-28');
     expect(latestRelease.badge).toBe('Latest Release');
     expect(latestRelease.commits.length).toBeGreaterThan(0);
     expect(latestRelease.highlights.length).toBeGreaterThan(0);

@@ -24,10 +24,52 @@ export interface ChangelogRelease {
 
 export const RELEASES_DATA: ChangelogRelease[] = [
   {
+    version: 'v2.5.0',
+    date: '2026-09-28',
+    title: 'Dark Mode Neutral Palette Alignment, Email Templates & Booking Urgency Settings',
+    badge: 'Latest Release',
+    summary: 'Aligned dark mode to PNC ELC pure neutral palette, fixed invalid Tailwind shade classes, added official NavGurukul brand logo in email templates, aligned navbar active role tab background with header, and added booking urgency and SLA settings.',
+    highlights: [
+      {
+        category: '🎨 Dark Mode Neutral Palette (PNC ELC)',
+        items: [
+          'Remapped slate color scale through CSS variables to resolve to shadcn neutral tones (#0a0a0a, #171717, #262626) in dark mode while keeping light mode pixel-identical.',
+          'Replaced ~240 invalid Tailwind shade classes (e.g. slate-655, slate-350, rose-455) with valid shades across 30+ components.',
+          'Synchronized Mermaid diagrams, custom scrollbars, and SVG tooltips to pure neutral dark mode styling.',
+          'Aligned navbar active role tab background directly to navbar header background (dark:bg-slate-900) and styled theme toggle with warm amber sun.'
+        ]
+      },
+      {
+        category: '✉️ Email Templates & Brand Identity',
+        items: [
+          'Embedded official NavGurukul brand logo header image centered above orange divider (#FF6B35) in all email templates.',
+          'Redirected email call-to-action buttons to https://ng-travel-desk.vercel.app/.',
+          'Added Edit HTML / Live Preview toggle in template editor modal and fixed modals to strict 90vw × 90vh dimensions.',
+          'Added local fallback template bundling and updated Supabase RLS policy for staff access (Admin, PNC, Finance).'
+        ]
+      },
+      {
+        category: '⚡ Booking Urgency & Priority Settings',
+        items: [
+          'Added Booking Urgency & Priority configuration in Settings and Policy Management.',
+          'Configurable default booking urgency (Low, Medium, High, Critical) and automatic escalation based on departure date.',
+          'Wired urgency selection into booking requests with dynamic SLA turnaround tracking.'
+        ]
+      }
+    ],
+    commits: [
+      { hash: '1e30236', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'feat(settings): add booking urgency configuration and wire into request flow and policies', type: 'feat' },
+      { hash: '36c5a64', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'docs(changelog): document v2.5.0 dark mode palette, navbar polish, and email template updates', type: 'docs' },
+      { hash: '13298f7', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'feat(email): embed official brand logo in email templates, redirect CTA to vercel, and add editor live preview', type: 'feat' },
+      { hash: '68bd947', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'fix(navbar): align active role tab background to header and polish dark mode theme toggle', type: 'fix' },
+      { hash: '8baf06b', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'style(theme): align dark mode to PNC ELC neutral palette and fix invalid Tailwind classes', type: 'style' }
+    ]
+  },
+  {
     version: 'v2.4.0',
     date: '2026-08-28',
     title: 'Production-Safe Transactional Email Engine & Template Authoring',
-    badge: 'Latest Release',
+    badge: 'Email Engine',
     summary: 'Full end-to-end transactional email integration connecting the travel lifecycle state machine to versioned mail templates, asynchronous queueing, Gmail API / Amazon SES dispatch, and operational delivery observability.',
     highlights: [
       {

@@ -20,15 +20,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [v2.5.0] - 2026-09-28
 
-### 🎨 Dark Mode Neutral Palette Alignment & Email Template Enhancements
+### 🎨 Dark Mode Neutral Palette Alignment, Email Templates & Booking Urgency Settings
 
-* Dark mode aligned to neutral palette (matches PNC ELC); fixed ~300 invalid Tailwind shade classes.
+#### 🎨 Dark Mode Neutral Palette Alignment (PNC ELC)
+* Dark mode aligned to neutral palette (matches PNC ELC); fixed ~300 invalid Tailwind shade classes across 30+ components.
 * Remapped `slate` palette through CSS variables (`--slate-50` to `--slate-950`) to resolve to shadcn pure neutral tones in `.dark` mode while keeping light mode pixel-identical.
-* Synchronized Mermaid diagrams and custom scrollbars to pure neutral dark styling on theme toggle.
-* Navbar active role tab background aligned directly to the navbar header background (`dark:bg-slate-900`), and dark mode theme toggle styled with clean neutral container and warm sun accent.
-* Email templates updated with official NavGurukul brand logo image header, orange divider rule, live preview toggle in template editor, and CTA links redirected to `https://ng-travel-desk.vercel.app/`.
+* Synchronized Mermaid diagrams, custom scrollbars, and SVG tooltips to pure neutral dark styling on theme toggle.
+* Navbar active role tab background aligned directly to the navbar header background (`dark:bg-slate-900`), and dark mode theme toggle styled with clean neutral container and warm amber sun.
+
+#### ✉️ Email Templates & Brand Identity
+* Email templates updated with official NavGurukul brand logo image header, orange divider rule (`#FF6B35`), live preview toggle in template editor, and CTA links redirected to `https://ng-travel-desk.vercel.app/`.
 * Mail template modals fixed with strict 90vw width and 90vh height dimensions.
 * Supabase RLS policy updated allowing all authenticated staff (Admin, PNC, Finance) to access mail templates and history.
+
+#### ⚡ Booking Urgency & Priority Settings
+* **Settings & Policy Management**:
+  * Added dedicated Booking Urgency & Priority configuration to both **Settings (`SettingsView.tsx`)** and **Policies (`PolicyManagement.tsx`)**.
+  * Configurable default booking urgency (`Low`, `Medium`, `High`, `Critical`) with instantaneous Supabase persistence to `meetup_settings.policy_config`.
+  * Toggle for requester urgency selection (`allowRequesterUrgency`).
+  * Auto-escalation threshold input (`autoEscalateUrgentDays`) automatically elevating imminent requests to High urgency based on departure date.
+  * Turnaround target configuration (`urgencySlaHours`) for Critical, High, Medium, and Low priorities.
+* **End-to-End Booking Wiring**:
+  * Wired interactive urgency selection pills into **Employee Booking Modal (`NewRequestModal.tsx`)** with automatic escalation indicator for imminent travel.
+  * Wired urgency selection pills into **PNC Direct Booking Modal (`PNCBookingModal.tsx`)**.
+  * Dynamic priority resolution in request submission handlers (`data.priority || policy.defaultBookingUrgency || Priority.MEDIUM`).
+
+#### 📝 Commits in this Release
+* `1e30236` — `feat(settings): add booking urgency configuration and wire into request flow and policies`
+* `36c5a64` — `docs(changelog): document v2.5.0 dark mode palette, navbar polish, and email template updates`
+* `13298f7` — `feat(email): embed official brand logo in email templates, redirect CTA to vercel, and add editor live preview`
+* `68bd947` — `fix(navbar): align active role tab background to header and polish dark mode theme toggle`
+* `8baf06b` — `style(theme): align dark mode to PNC ELC neutral palette and fix invalid Tailwind classes`
 
 ---
 

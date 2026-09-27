@@ -234,7 +234,7 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl" onClick={onClose}></div>
 
-            <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500 border border-slate-200 dark:border-slate-800">
+            <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 border border-slate-200 dark:border-slate-800">
 
                 {/* Progress bar */}
                 <div className="h-1 bg-slate-100 dark:bg-slate-800">

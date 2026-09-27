@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { Advance, AdvanceChangelogEntry, User, UserRole } from '../types';
 import Card from './Card';
 import Input from './Input';
+import PageBanner from './PageBanner';
 import TextArea from './TextArea';
 import { toast } from 'sonner';
 
@@ -280,26 +281,24 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Advances</h2>
-          <p className="text-slate-500 text-sm mt-1">Manage funds received from Finance.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsExportModalOpen(true)}
-            className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2"
-          >
-            <i className="fa-solid fa-file-csv"></i> Export Report
-          </button>
-          <button
-            onClick={() => handleOpenModal()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> Add Advance
-          </button>
-        </div>
-      </header>
+      <PageBanner
+        title="Travel Advance Management"
+        description="Monitor, allocate, reconcile, and settle cash advances received for travel bookings."
+        icon="fa-wallet"
+      >
+        <button
+          onClick={() => setIsExportModalOpen(true)}
+          className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center gap-2"
+        >
+          <i className="fa-solid fa-file-csv"></i> Export Report
+        </button>
+        <button
+          onClick={() => handleOpenModal()}
+          className="bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+        >
+          <i className="fa-solid fa-plus"></i> Add Advance
+        </button>
+      </PageBanner>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-5 flex items-center gap-4">
@@ -439,7 +438,7 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <Card className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                 {selectedAdvance ? 'Edit Advance' : 'Add New Advance'}
@@ -534,7 +533,7 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
       {/* History Modal */}
       {isHistoryModalOpen && selectedAdvance && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <Card className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
               <div>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
@@ -613,7 +612,7 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
       {/* Settle Confirmation Modal */}
       {advanceToSettle && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl p-6 text-center">
+          <Card className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl p-8 flex flex-col justify-center items-center text-center">
             <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/50 text-rose-600 mx-auto flex items-center justify-center mb-4">
               <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
             </div>
@@ -644,7 +643,7 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
       {/* Export Reconciliation Modal */}
       {isExportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
+          <Card className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
                 <i className="fa-solid fa-file-export text-indigo-600"></i> Export Report

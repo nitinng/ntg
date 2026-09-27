@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TravelRequest, PNCStatus } from '../types';
+import PageBanner from './PageBanner';
 
 interface ManagerApprovalsViewProps {
   requests: TravelRequest[];
@@ -10,7 +11,7 @@ interface ManagerApprovalsViewProps {
 const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={onClose}></div>
-    <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col max-h-[90vh]">
+    <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col">
 
       <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-start">
         <div>
@@ -93,10 +94,11 @@ export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsVie
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <header>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Pending Approvals</h2>
-        <p className="text-slate-500 text-sm mt-1">Review and action travel requests from your team.</p>
-      </header>
+      <PageBanner
+        title="Pending Manager Approvals"
+        description="Review, evaluate policy compliance, and action travel requests from your team."
+        icon="fa-file-signature"
+      />
 
       {requests.length === 0 ? (
         <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
@@ -107,7 +109,7 @@ export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsVie
           <p className="text-slate-500 text-sm mt-1">You have no pending approvals at the moment.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {requests.map((r: TravelRequest, idx: number) => {
             const themes = [
               {
@@ -153,7 +155,7 @@ export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsVie
                   </div>
                   
                   <div className="flex justify-between items-center mb-5 relative z-10">
-                    <span className={`text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Option { (idx % 4) + 1 }: {theme.name}</span>
+                    <span className={`text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>{r.mode ? `${r.mode} Request` : 'Travel Request'}</span>
                     <span className="font-mono text-xs font-bold text-slate-500 tracking-wider">{r.submissionId || r.id}</span>
                   </div>
 

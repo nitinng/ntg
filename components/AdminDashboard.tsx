@@ -3,6 +3,7 @@ import { TravelRequest, User, ApprovalStatus, Priority } from '../types';
 import StatusBadge from './StatusBadge';
 import Card from './Card';
 import StatCard from './StatCard';
+import { PageBanner } from './PageBanner';
 
 interface AdminDashboardProps {
   requests: TravelRequest[];
@@ -16,13 +17,19 @@ export const AdminDashboard = ({ requests, users, onTabChange }: AdminDashboardP
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Admin Overview</h2>
-          <p className="text-slate-500 text-sm mt-1">System-wide performance metrics and controls.</p>
-        </div>
-        <button onClick={() => onTabChange('requests')} className="bg-slate-900 dark:bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all active:scale-95">View Queue</button>
-      </header>
+      <PageBanner
+        title="Admin Overview"
+        description="System-wide performance metrics, user administration, and operational controls."
+        icon="fa-shield-halved"
+      >
+        <button
+          onClick={() => onTabChange('requests')}
+          className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-sm transition-all active:scale-95 shadow-sm flex items-center gap-2"
+        >
+          <i className="fa-solid fa-list-check"></i>
+          <span>View Queue</span>
+        </button>
+      </PageBanner>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard title="Total Users" value={users.length} icon={<i className="fa-solid fa-users"></i>} description="Active accounts" />

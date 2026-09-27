@@ -54,7 +54,7 @@ export const IgathpuriAvailabilityModal: React.FC<IgathpuriAvailabilityModalProp
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={onClose}></div>
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
+      <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col">
         <header className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
           <div>
             <h3 className="text-xl font-black text-slate-900 dark:text-white">Check Availability</h3>
@@ -65,7 +65,7 @@ export const IgathpuriAvailabilityModal: React.FC<IgathpuriAvailabilityModalProp
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
           <div className="grid grid-cols-1 gap-4">
             <Input
               label="Full Name"

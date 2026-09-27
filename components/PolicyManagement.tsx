@@ -5,6 +5,7 @@ import Input from './Input';
 import Toggle from './Toggle';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 interface PolicyManagementProps {
   policy: PolicyConfig;
@@ -407,64 +408,65 @@ export const PolicyManagement = ({
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      <header>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Policy & System Settings</h2>
-        <p className="text-slate-500 text-sm mt-1">Configure compliance rules, onboarding requirements, and global system toggles.</p>
-      </header>
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12">
+      <PageBanner
+        title="Policy & System Settings"
+        description="Configure compliance rules, minimum advance notice, TAT thresholds, and global system toggles."
+        icon="fa-shield-halved"
+      />
 
       {/* Global Module Controls */}
       {currentUser.role === UserRole.ADMIN && (
-        <section className="space-y-4">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Global Features & Access Control</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="p-6 space-y-6">
+        <section className="space-y-3">
+          <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Global Features & Access Control</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <Card className="p-4 space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center text-xs">
                     <i className="fa-solid fa-person-shelter"></i>
                   </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white">Igathpuri Meetup</h4>
+                  <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Igathpuri Meetup</h4>
                 </div>
                 <Toggle active={isIgatpuriEnabled} onChange={handleToggleIgatpuri} />
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium">Enable or disable the Igathpuri Meetup booking and approval system for all users.</p>
+              <p className="text-2xs text-slate-500 leading-relaxed font-medium">Enable or disable the Igathpuri Meetup booking and approval system for all users.</p>
             </Card>
 
-            <Card className="p-6 space-y-6">
+            <Card className="p-4 space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-lg flex items-center justify-center text-xs">
                     <i className="fa-solid fa-comments"></i>
                   </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white">Chat Support</h4>
+                  <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Chat Support</h4>
                 </div>
                 <Toggle active={isChatEnabled} onChange={handleToggleChat} />
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium">Enable or disable live chat support between Employees and PNC/Admin teams.</p>
+              <p className="text-2xs text-slate-500 leading-relaxed font-medium">Enable or disable live chat support between Employees and PNC/Admin teams.</p>
             </Card>
 
-            <Card className="p-6 space-y-6">
+            <Card className="p-4 space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center">
-                    <i className="fa-solid fa-[#envelope] fa-envelope"></i>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-xs">
+                    <i className="fa-solid fa-envelope"></i>
                   </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white">Email Password Login</h4>
+                  <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Email Password Login</h4>
                 </div>
                 <Toggle active={isEmailLoginEnabled} onChange={handleToggleEmailLogin} />
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium">Allow traditional email/password login alongside Google OAuth on the sign in page.</p>
+              <p className="text-2xs text-slate-500 leading-relaxed font-medium">Allow traditional email/password login alongside Google OAuth on the sign in page.</p>
             </Card>
           </div>
         </section>
       )}
 
       {/* Travel Notice Policies */}
-      <section className="space-y-4">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Advance Booking Deadlines</h3>
-        <Card className="p-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="space-y-3">
+        <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Advance Booking Deadlines</h3>
+        <Card className="p-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             {travelModePolicies.map(p => (
               <Input
                 key={p.id}
@@ -480,10 +482,10 @@ export const PolicyManagement = ({
 
       {/* Admin Policy Settings */}
       {currentUser.role === UserRole.ADMIN && (
-        <section className="space-y-4">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Approval & Verification Settings</h3>
-          <Card className="p-8 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section className="space-y-3">
+          <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Approval & Verification Settings</h3>
+          <Card className="p-5 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
               <Input
                 label="Auto-approval Limit (₹)"
                 type="number"
@@ -492,20 +494,18 @@ export const PolicyManagement = ({
                 onBlur={() => handleUpdatePolicy({ autoApproveBelowAmount: policy.autoApproveBelowAmount })}
               />
 
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-slate-800 dark:text-white text-sm">Enforce Profile Lock</h5>
-                    <p className="text-xs text-slate-500 mt-0.5">Restrict unverified users from placing travel requests.</p>
-                  </div>
-                  <Toggle active={policy.isEnforcementEnabled} onChange={() => handleUpdatePolicy({ isEnforcementEnabled: !policy.isEnforcementEnabled })} />
+              <div className="flex items-center justify-between p-3.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <div>
+                  <h5 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Enforce Profile Lock</h5>
+                  <p className="text-2xs text-slate-500 mt-0.5">Restrict unverified users from placing travel requests.</p>
                 </div>
+                <Toggle active={policy.isEnforcementEnabled} onChange={() => handleUpdatePolicy({ isEnforcementEnabled: !policy.isEnforcementEnabled })} />
               </div>
             </div>
 
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-8">
-              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Turnaround Time (SLA) Targets</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+              <h4 className="text-2xs font-bold text-slate-400 uppercase tracking-widest mb-3">Turnaround Time (SLA) Targets</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 <Input
                   label="Manager Approval TAT (Hours)"
                   type="number"
@@ -535,27 +535,27 @@ export const PolicyManagement = ({
 
       {/* Global Email CC Configuration (Admin only) */}
       {currentUser.role === UserRole.ADMIN && (
-        <section className="space-y-4">
+        <section className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <i className="fa-solid fa-at text-indigo-500"></i>
               Global Transactional Email CC
             </h3>
-            <span className="text-xs text-slate-400 font-mono">
+            <span className="text-2xs text-slate-400 font-mono">
               {globalCcList.length} configured
             </span>
           </div>
 
-          <Card className="p-8 space-y-6">
+          <Card className="p-5 space-y-4">
             <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Centrally Configured CC Recipients</h4>
-              <p className="text-xs text-slate-500 mt-1">
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Centrally Configured CC Recipients</h4>
+              <p className="text-2xs text-slate-500 mt-0.5">
                 All automated transactional lifecycle emails (approvals, booking confirmations, cancellations) copy these addresses automatically.
               </p>
             </div>
 
             {/* Add New CC Email */}
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-end">
               <div className="flex-1">
                 <Input
                   label="Add CC Email Address"
@@ -575,31 +575,31 @@ export const PolicyManagement = ({
                 type="button"
                 onClick={handleAddCc}
                 disabled={isSavingCc || !newCcInput.trim()}
-                className="bg-indigo-600 text-white px-6 py-3 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 h-[46px]"
+                className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 h-[40px] whitespace-nowrap"
               >
-                <i className="fa-solid fa-plus"></i> Add Address
+                <i className="fa-solid fa-plus text-2xs"></i> Add Address
               </button>
             </div>
 
             {/* CC List */}
-            <div className="space-y-2.5 pt-2">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active CC List</p>
+            <div className="space-y-2 pt-1">
+              <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Active CC List</p>
               {globalCcList.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-4 text-center border border-dashed rounded-lg">
+                <p className="text-2xs text-slate-400 italic py-3 text-center border border-dashed rounded-lg">
                   No global CC addresses configured.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {globalCcList.map(email => (
                     <div
                       key={email}
-                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs group"
+                      className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-xs group"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-[10px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-[9px]">
                           @
                         </div>
-                        <span className="font-medium text-slate-800 dark:text-slate-200 truncate">{email}</span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200 truncate text-2xs">{email}</span>
                       </div>
                       <button
                         type="button"
@@ -608,7 +608,7 @@ export const PolicyManagement = ({
                         className="text-slate-400 hover:text-rose-500 p-1 rounded transition-colors opacity-80 group-hover:opacity-100"
                         title="Remove CC address"
                       >
-                        <i className="fa-solid fa-trash-can text-xs"></i>
+                        <i className="fa-solid fa-trash-can text-2xs"></i>
                       </button>
                     </div>
                   ))}
@@ -621,12 +621,12 @@ export const PolicyManagement = ({
 
       {/* Cancellation Policy (Admin & PNC) */}
       {(currentUser.role === UserRole.ADMIN || currentUser.role === 'PNC') && (
-        <section className="space-y-4">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Cancellation Policy Splits</h3>
-          <Card className="p-8 space-y-8">
+        <section className="space-y-3">
+          <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Cancellation Policy Splits</h3>
+          <Card className="p-5 space-y-5">
             <div>
-              <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-4">When Cancelled by PNC</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+              <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white mb-3">When Cancelled by PNC</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                 <Input
                   label="NavGurukul Coverage (%)"
                   type="number"
@@ -652,9 +652,9 @@ export const PolicyManagement = ({
               </div>
             </div>
 
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-8">
-              <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-4">When Cancelled by Employee</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+              <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white mb-3">When Cancelled by Employee</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                 <Input
                   label="NavGurukul Coverage (%)"
                   type="number"
@@ -685,17 +685,17 @@ export const PolicyManagement = ({
 
       {/* Igathpuri Meetup Configuration */}
       {isIgatpuriEnabled && (
-        <section className="space-y-4">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Igathpuri Location Settings</h3>
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="p-6 space-y-6">
+        <section className="space-y-3">
+          <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Igathpuri Location Settings</h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-xs">
                       <i className="fa-solid fa-users"></i>
                     </div>
-                    <h4 className="font-bold text-slate-800 dark:text-white">Capacity Limit</h4>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Capacity Limit</h4>
                   </div>
                   <Toggle active={isCapacityEnabled} onChange={handleToggleCapacity} />
                 </div>
@@ -709,66 +709,66 @@ export const PolicyManagement = ({
                 )}
               </Card>
 
-              <Card className="p-6 space-y-6">
+              <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center text-xs">
                       <i className="fa-solid fa-calendar-days"></i>
                     </div>
-                    <h4 className="font-bold text-slate-800 dark:text-white">Availability Calendar</h4>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Availability Calendar</h4>
                   </div>
                   <Toggle active={isCalendarEnabled} onChange={handleToggleCalendar} />
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed font-medium">Toggle visibility of the interactive booking calendar for employees.</p>
+                <p className="text-2xs text-slate-500 leading-relaxed font-medium">Toggle visibility of the interactive booking calendar for employees.</p>
               </Card>
             </div>
 
             {/* Approvers List */}
-            <Card className="p-8 space-y-8">
-              <div className="flex items-start gap-4 pb-6 border-b dark:border-slate-800">
-                <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center text-xl shadow-sm">
+            <Card className="p-5 space-y-5">
+              <div className="flex items-start gap-3 pb-4 border-b dark:border-slate-800">
+                <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center text-base shadow-2xs shrink-0">
                   <i className="fa-solid fa-user-check"></i>
                 </div>
                 <div>
-                  <h4 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">Meetup Approvers</h4>
-                  <p className="text-sm text-slate-500 mt-1 font-medium">Individuals authorized to confirm location availability for groups.</p>
+                  <h4 className="font-black text-slate-800 dark:text-white text-sm sm:text-base tracking-tight">Meetup Approvers</h4>
+                  <p className="text-2xs text-slate-500 mt-0.5 font-medium">Individuals authorized to confirm location availability for groups.</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Left: Add New */}
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Add Authorized Person</h5>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h5 className="text-2xs font-bold text-slate-400 uppercase tracking-widest">Add Authorized Person</h5>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i className="fa-solid fa-magnifying-glass text-slate-400"></i>
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
                       </div>
                       <input
                         type="text"
                         placeholder="Search PNC/Admin users by name or email..."
-                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-11 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-xs font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
                         value={pncSearch}
                         onChange={e => setPncSearch(e.target.value)}
                       />
 
                       {pncSearch.trim() !== '' && filteredPncUsers.length > 0 && (
-                        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+                        <div className="absolute z-50 w-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
                           {filteredPncUsers.map(user => (
                             <button
                               key={user.id}
                               onClick={() => handleAddApprover(user)}
-                              className="w-full flex items-center gap-4 p-4 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all border-b last:border-0 border-slate-100 dark:border-slate-800 group text-left"
+                              className="w-full flex items-center gap-3 p-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all border-b last:border-0 border-slate-100 dark:border-slate-800 group text-left"
                             >
-                              <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-black flex-shrink-0">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-black flex-shrink-0">
                                 {user.name ? user.name.charAt(0).toUpperCase() : <i className="fa-solid fa-user"></i>}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{user.name || 'Unnamed User'}</p>
-                                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                                <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{user.name || 'Unnamed User'}</p>
+                                <p className="text-2xs text-slate-500 truncate">{user.email}</p>
                               </div>
                               <div className="flex-shrink-0">
-                                <span className={`text-xs font-black px-2 py-0.5 rounded-full ${user.role === UserRole.ADMIN
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${user.role === UserRole.ADMIN
                                   ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
                                   : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
                                   }`}>{user.role}</span>
@@ -779,60 +779,60 @@ export const PolicyManagement = ({
                       )}
 
                       {pncSearch.trim() !== '' && filteredPncUsers.length === 0 && (
-                        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl p-4 text-center">
-                          <p className="text-sm text-slate-500 font-medium">No users found for "{pncSearch}"</p>
-                          <p className="text-xs text-slate-400 mt-1">Try a different name or email. Only PNC and Admin users can be added.</p>
+                        <div className="absolute z-50 w-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl p-3 text-center">
+                          <p className="text-xs text-slate-500 font-medium">No users found for "{pncSearch}"</p>
+                          <p className="text-2xs text-slate-400 mt-0.5">Try a different name or email. Only PNC and Admin users can be added.</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-5 bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-800/20 rounded-lg flex gap-4">
-                    <i className="fa-solid fa-circle-info text-emerald-500 mt-1"></i>
-                    <p className="text-xs text-emerald-700 dark:text-emerald-400/80 leading-relaxed font-medium">
+                  <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-800/20 rounded-lg flex gap-3">
+                    <i className="fa-solid fa-circle-info text-emerald-500 mt-0.5 text-xs shrink-0"></i>
+                    <p className="text-2xs text-emerald-700 dark:text-emerald-400/80 leading-relaxed font-medium">
                       Approvers will receive notifications for location availability checks and can approve or deny requests directly from their workspace.
                     </p>
                   </div>
                 </div>
 
                 {/* Right: Current List */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Active Approvers</h5>
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-black">{meetupApprovers.filter(a => a.is_active).length} PERSONS</span>
+                    <h5 className="text-2xs font-bold text-slate-400 uppercase tracking-widest">Active Approvers</h5>
+                    <span className="text-2xs bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded font-bold">{meetupApprovers.filter(a => a.is_active).length} persons</span>
                   </div>
 
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1.5 custom-scrollbar">
                     {approversLoading ? (
-                      <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-4">
-                        <i className="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i>
-                        <span className="text-xs font-black uppercase tracking-widest">Loading List...</span>
+                      <div className="py-8 flex flex-col items-center justify-center text-slate-400 gap-2">
+                        <i className="fa-solid fa-spinner fa-spin text-lg text-emerald-500"></i>
+                        <span className="text-2xs font-bold uppercase tracking-widest">Loading List...</span>
                       </div>
                     ) : meetupApprovers.length === 0 ? (
-                      <div className="py-16 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-900/50">
-                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">No approvers configured</p>
+                      <div className="py-10 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-900/50">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">No approvers configured</p>
                       </div>
                     ) : (
                       meetupApprovers.map((a) => (
-                        <div key={a.id} className={`flex items-center justify-between p-4 rounded-lg border transition-all duration-300 group ${a.is_active ? 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-800 opacity-60'}`}>
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-black transition-all ${a.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
-                              {a.name?.charAt(0) || <i className="fa-solid fa-user"></i>}
+                        <div key={a.id} className={`flex items-center justify-between p-2.5 rounded-lg border transition-all duration-200 group ${a.is_active ? 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 shadow-2xs' : 'bg-slate-50/50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-800 opacity-60'}`}>
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black transition-all ${a.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+                              {a.name?.charAt(0) || <i className="fa-solid fa-user text-3xs"></i>}
                             </div>
                             <div>
-                              <p className="text-sm font-black text-slate-800 dark:text-white leading-none">{a.name || 'Staff'}</p>
-                              <p className="text-xs text-slate-400 font-medium mt-1.5">{a.email}</p>
+                              <p className="text-xs font-bold text-slate-800 dark:text-white leading-tight">{a.name || 'Staff'}</p>
+                              <p className="text-2xs text-slate-400 font-medium">{a.email}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => handleToggleApprover(a.id, a.is_active)}
-                              className={`p-2 rounded-lg transition-colors ${a.is_active ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                              className={`p-1.5 rounded transition-colors ${a.is_active ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
                             >
-                              <i className={`fa-solid ${a.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-lg`}></i>
+                              <i className={`fa-solid ${a.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-base`}></i>
                             </button>
-                            <button onClick={() => handleDeleteApprover(a.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
-                              <i className="fa-solid fa-trash-can"></i>
+                            <button onClick={() => handleDeleteApprover(a.id)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded">
+                              <i className="fa-solid fa-trash-can text-2xs"></i>
                             </button>
                           </div>
                         </div>

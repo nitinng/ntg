@@ -4,6 +4,7 @@ import Card from './Card';
 import Toggle from './Toggle';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 interface TestingSettingsViewProps {
   settings: TestingSettings;
@@ -38,13 +39,12 @@ export const TestingSettingsView = ({ settings, onUpdateSettings }: TestingSetti
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Testing Settings</h2>
-          <p className="text-sm font-medium text-slate-500 mt-1">Configure global testing settings to relax form validation rules during local verification.</p>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <PageBanner
+        title="Testing Settings"
+        description="Configure development testing options, form validation bypass rules, and QA sandbox flags."
+        icon="fa-sliders"
+      />
 
       <Card className="p-8 space-y-8 max-w-2xl border border-slate-200 dark:border-slate-800">
         <div className="space-y-2 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -81,7 +81,7 @@ export const TestingSettingsView = ({ settings, onUpdateSettings }: TestingSetti
           </div>
         </div>
 
-        <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl flex gap-3 text-sm text-amber-800 dark:text-amber-450 leading-relaxed font-medium">
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl flex gap-3 text-sm text-amber-800 dark:text-amber-400 leading-relaxed font-medium">
           <i className="fa-solid fa-circle-info mt-0.5 text-amber-500"></i>
           <div>
             These toggles apply globally to the active user role filling out a booking request or recording tickets.

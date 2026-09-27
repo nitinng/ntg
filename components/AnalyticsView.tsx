@@ -5,6 +5,7 @@ import StatCard from './StatCard';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 // --- Chart Components (CSS/SVG based) ---
 export const DonutChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
@@ -93,10 +94,10 @@ export const PieChartInteractive = ({ data, isFinancial }: { data: { label: stri
           );
         })}
         {/* Center label */}
-        <text x={cx} y={cy - 10} textAnchor="middle" fill="currentColor" fontSize="22" fontWeight="800" className="text-slate-900 dark:text-white" style={{ fill: hoveredIdx !== null ? slices[hoveredIdx].color : '#1e293b' }}>
+        <text x={cx} y={cy - 10} textAnchor="middle" fill="currentColor" fontSize="22" fontWeight="800" className="text-slate-900 dark:text-white" style={hoveredIdx !== null ? { fill: slices[hoveredIdx].color } : undefined}>
           {hoveredIdx !== null ? fmtVal(slices[hoveredIdx].value) : fmtVal(total)}
         </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="700">
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="rgb(var(--slate-400))" fontSize="10" fontWeight="700">
           {hoveredIdx !== null ? `${slices[hoveredIdx].pct}%` : 'Total'}
         </text>
         {/* Inline SVG tooltip */}
@@ -105,7 +106,7 @@ export const PieChartInteractive = ({ data, isFinancial }: { data: { label: stri
           const ty = tooltipPos.y > cy ? tooltipPos.y - 44 : tooltipPos.y + 10;
           return (
             <g>
-              <rect x={tx - 58} y={ty} width={116} height={36} rx="8" fill="#1e293b" fillOpacity="0.93" />
+              <rect x={tx - 58} y={ty} width={116} height={36} rx="8" fill="rgb(var(--slate-800))" fillOpacity="0.93" />
               <text x={tx} y={ty + 14} textAnchor="middle" fill="white" fontSize="9" fontWeight="700">{hovered.label}</text>
               <text x={tx} y={ty + 28} textAnchor="middle" fill={hovered.color} fontSize="11" fontWeight="800">{fmtVal(hovered.value)} ({hovered.pct}%)</text>
             </g>
@@ -567,31 +568,31 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const paginatedCancellationsData = useMemo(() => sortedCancellations.slice((cancellationsPage - 1) * itemsPerPage, cancellationsPage * itemsPerPage), [sortedCancellations, cancellationsPage]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">
-            {currentUser.role === UserRole.EMPLOYEE ? 'My Travel Insights' : 'Analytics & Reporting'}
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">
-            {currentUser.role === UserRole.EMPLOYEE ? 'Track your personal travel history and spend.' : 'Data-driven insights for strategic decision making.'}
-          </p>
-        </div>
-        <button onClick={() => {
-          let csv = '';
-          if (activeSubTab === 'travel') {
-            csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
-          } else if (activeSubTab === 'advances') {
-            csv = [['Advance ID', 'Received On', 'Received From', 'Amount Received', 'Amount Left', 'Settled Status', 'Comments'], ...filteredAdvances.map(a => [a.receipt_id || a.id, a.received_on, a.received_from, a.amount_received, a.amount_left, a.is_settled ? 'Settled' : 'Unsettled', a.comments || ''])].map(e => e.join(',')).join('\n');
-          } else {
-            csv = [['Cancellation ID', 'Request ID', 'Traveler', 'Cancellation Date', 'Original Fare', 'Net Loss', 'Status', 'Owed By Employee', 'Absorbed By Org'], ...filteredCancellations.map(c => [c.id, c.travel_requests?.submission_id || c.travel_request_id, c.travel_requests?.requester_name || '', new Date(c.cancellation_date).toLocaleDateString(), c.original_fare || c.originalFare, c.net_unrecovered_amount || c.netUnrecoveredAmount, c.status, c.employee_owed_amount || c.employeeOwedAmount, c.org_absorbed_amount || c.orgAbsorbedAmount])].map(e => e.join(',')).join('\n');
-          }
-          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${activeSubTab}_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          toast.success('CSV exported!');
-        }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
-          <i className="fa-solid fa-download mr-2"></i>Export Report
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      <PageBanner
+        title={currentUser.role === UserRole.EMPLOYEE ? 'My Travel Insights' : 'Analytics & Reporting'}
+        description={currentUser.role === UserRole.EMPLOYEE ? 'Track your personal travel history, frequency, and spend.' : 'Data-driven insights for strategic decision making, budget forecasting, and route tracking.'}
+        icon="fa-chart-simple"
+      >
+        <button
+          onClick={() => {
+            let csv = '';
+            if (activeSubTab === 'travel') {
+              csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
+            } else if (activeSubTab === 'advances') {
+              csv = [['Advance ID', 'Received On', 'Received From', 'Amount Received', 'Amount Left', 'Settled Status', 'Comments'], ...filteredAdvances.map(a => [a.receipt_id || a.id, a.received_on, a.received_from, a.amount_received, a.amount_left, a.is_settled ? 'Settled' : 'Unsettled', a.comments || ''])].map(e => e.join(',')).join('\n');
+            } else {
+              csv = [['Cancellation ID', 'Request ID', 'Traveler', 'Cancellation Date', 'Original Fare', 'Net Loss', 'Status', 'Owed By Employee', 'Absorbed By Org'], ...filteredCancellations.map(c => [c.id, c.travel_requests?.submission_id || c.travel_request_id, c.travel_requests?.requester_name || '', new Date(c.cancellation_date).toLocaleDateString(), c.original_fare || c.originalFare, c.net_unrecovered_amount || c.netUnrecoveredAmount, c.status, c.employee_owed_amount || c.employeeOwedAmount, c.org_absorbed_amount || c.orgAbsorbedAmount])].map(e => e.join(',')).join('\n');
+            }
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${activeSubTab}_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            toast.success('CSV exported!');
+          }}
+          className="flex items-center gap-2 px-5 py-3 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg text-sm font-black shadow-lg transition-all"
+        >
+          <i className="fa-solid fa-download"></i>
+          Export Report
         </button>
-      </header>
+      </PageBanner>
 
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-slate-200 dark:border-slate-800">

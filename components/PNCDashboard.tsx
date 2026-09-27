@@ -5,6 +5,7 @@ import Card from './Card';
 import { supabase } from '../supabaseClient';
 import { checkPolicyViolation } from '../utils/policyUtils';
 import { MermaidDiagram } from './MermaidDiagram';
+import { PageBanner } from './PageBanner';
 
 interface PNCDashboardProps {
   requests: TravelRequest[];
@@ -789,62 +790,61 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
   const modalTotalPages = selectedStage ? totalPages : funnelTotalPages;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">PNC Operations</h2>
-          <p className="text-slate-500 text-sm mt-1">Manage transport bookings and fulfillment steps.</p>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <PageBanner
+        title="PNC Operations"
+        description="Manage transport bookings, fulfillment stages, SLA tracking, and pipeline flow."
+        icon="fa-sliders"
+      >
+        {/* Toggle Switch show cards / funnel / flowchart */}
+        <div className="flex items-center gap-1 bg-black/20 backdrop-blur-md p-1 rounded-lg border border-white/10">
+          <button
+            onClick={() => setViewType('cards')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 ${viewType === 'cards'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-white/80 hover:text-white'
+              }`}
+          >
+            <i className="fa-solid fa-border-all mr-1.5"></i> Cards
+          </button>
+          <button
+            onClick={() => setViewType('funnel')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 ${viewType === 'funnel'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-white/80 hover:text-white'
+              }`}
+          >
+            <i className="fa-solid fa-filter mr-1.5"></i> Funnel
+          </button>
+          <button
+            onClick={() => setViewType('flowchart')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 ${viewType === 'flowchart'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-white/80 hover:text-white'
+              }`}
+          >
+            <i className="fa-solid fa-diagram-project mr-1.5"></i> Flowchart
+          </button>
         </div>
+      </PageBanner>
 
-        <div className="flex flex-col items-start xl:items-end gap-3">
-          {/* Toggle Switch show cards / funnel / sankey */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg border border-slate-200/30 dark:border-slate-700/30 shadow-2sm">
+      {/* Time Filter Buttons Bar */}
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <div className="flex flex-wrap gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+          {timeFilterOptions.map(option => (
             <button
-              onClick={() => setViewType('cards')}
-              className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-all duration-200 ${viewType === 'cards'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600/50'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              key={option.value}
+              onClick={() => setTimeFilter(option.value as any)}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${timeFilter === option.value
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
             >
-              <i className="fa-solid fa-border-all mr-1"></i> Cards
+              {option.label}
             </button>
-            <button
-              onClick={() => setViewType('funnel')}
-              className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-all duration-200 ${viewType === 'funnel'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600/50'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
-            >
-              Funnel <i className="fa-solid fa-filter ml-1 text-2xs"></i>
-            </button>
-            <button
-              onClick={() => setViewType('flowchart')}
-              className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-all duration-200 ${viewType === 'flowchart'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-slate-600/50'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
-            >
-              Flowchart <i className="fa-solid fa-diagram-project ml-1 text-2xs"></i>
-            </button>
-          </div>
-
-          {/* Time Filter Buttons */}
-          <div className="flex flex-wrap gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg">
-            {timeFilterOptions.map(option => (
-              <button
-                key={option.value}
-                onClick={() => setTimeFilter(option.value as any)}
-                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${timeFilter === option.value
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
-                  }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
-      </header>
+      </div>
 
       {viewType === 'funnel' ? (
         /* Mockup-styled Narrowing Funnel View */
@@ -887,7 +887,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   </span>
                 </div>
                 <div className="w-1/2 flex flex-col items-start pl-4">
-                  <span className="text-3xs font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-150 dark:border-indigo-900/30">
+                  <span className="text-3xs font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900/30">
                     ↘ {percentBypass}% clean bypass
                   </span>
                 </div>
@@ -915,7 +915,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
 
               {/* Merge / Advance Arrow to Processing */}
               <div className="flex flex-col items-center my-1 text-slate-400 dark:text-slate-600">
-                <span className="text-3xs font-extrabold uppercase tracking-widest text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-150 dark:border-indigo-900/30">
+                <span className="text-3xs font-extrabold uppercase tracking-widest text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900/30">
                   ↓ Merge into Processing
                 </span>
               </div>
@@ -1042,7 +1042,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
           </div>
 
           {/* STAGE METRICS Table */}
-          <div className="border-t border-slate-150 dark:border-slate-800 pt-6">
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
             <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4 ml-1">SLA & TAT Monitoring</h4>
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 shadow-2sm">
               <table className="w-full text-left border-collapse text-xs">
@@ -1067,30 +1067,30 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   ].map((row) => {
                     const stats = getStageStats(row.stageKey);
                     return (
-                      <tr key={row.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-850/10 transition-colors">
+                      <tr key={row.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
                         <td className="px-6 py-4 font-bold flex items-center gap-2 text-slate-800 dark:text-slate-200">
                           <i className={`fa-solid ${row.icon} ${row.color} text-xs`}></i>
                           {row.name}
                         </td>
-                        <td className="px-6 py-4 font-semibold text-slate-650 dark:text-slate-400">
+                        <td className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">
                           {row.isSla ? stats.owner : 'System'}
                         </td>
-                        <td className="px-6 py-4 font-semibold text-slate-650 dark:text-slate-400">
+                        <td className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">
                           {row.isSla ? stats.target : '—'}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-850 dark:text-slate-100">{stats.median}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100">{stats.median}</span>
                             <span className="text-3xs text-slate-400 dark:text-slate-500">Avg: {stats.avg}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           {stats.currentlyBreached > 0 ? (
-                            <span className="bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-455 px-2.5 py-0.5 rounded text-2xs font-extrabold border border-rose-150 dark:border-rose-900/40 animate-pulse">
+                            <span className="bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 px-2.5 py-0.5 rounded text-2xs font-extrabold border border-rose-100 dark:border-rose-900/40 animate-pulse">
                               🚨 {stats.currentlyBreached} Breached
                             </span>
                           ) : (
-                            <span className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 px-2.5 py-0.5 rounded text-2xs font-bold border border-emerald-150 dark:border-emerald-900/30">
+                            <span className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded text-2xs font-bold border border-emerald-100 dark:border-emerald-900/30">
                               On Track
                             </span>
                           )}
@@ -1107,11 +1107,11 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                           <div className="flex flex-col items-end">
                             <span className="text-3xs text-slate-400 dark:text-slate-500">{row.isSla ? stats.escalationText : 'Auto-advance'}</span>
                             {row.isSla && stats.isEscalated ? (
-                              <span className="text-3xs font-extrabold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded border border-rose-150 dark:border-rose-900/40 mt-1 animate-pulse">
+                              <span className="text-3xs font-extrabold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded border border-rose-100 dark:border-rose-900/40 mt-1 animate-pulse">
                                 🚨 {stats.escalatedCount} Escalated
                               </span>
                             ) : row.isSla ? (
-                              <span className="text-3xs font-medium text-emerald-600 dark:text-emerald-450 mt-1">No Escalations</span>
+                              <span className="text-3xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">No Escalations</span>
                             ) : (
                               <span className="text-3xs font-medium text-slate-400 mt-1">N/A</span>
                             )}
@@ -1152,7 +1152,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                 <i className="fa-solid fa-inbox text-xl"></i>
               </div>
               <p className="text-slate-500 font-black text-sm uppercase tracking-wider">No status transitions recorded for this period</p>
-              <p className="text-xs text-slate-450 dark:text-slate-500 mt-1 font-medium">Try broadening your date filter option.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">Try broadening your date filter option.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1215,9 +1215,9 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       {modalActive && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40" onClick={handleCloseModal}></div>
-          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50">
+          <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 z-50 flex flex-col">
             {/* Modal Header */}
-            <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+            <div className="px-8 py-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
               <div className="flex justify-between items-start gap-4 mb-4">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{modalTitle}</h3>
@@ -1262,7 +1262,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
             </div>
 
             {/* Modal Content */}
-            <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
               {modalPaginatedRequests.length === 0 ? (
                 <div className="py-16 text-center">
                   <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">

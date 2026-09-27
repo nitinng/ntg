@@ -15,6 +15,7 @@ import { User, UserRole } from '../types';
 import { MailTemplatesView } from './MailTemplatesView';
 import { SentMailsView } from './SentMailsView';
 import { EmailSettingsView } from './EmailSettingsView';
+import { PageBanner } from './PageBanner';
 import {
   pingProviderConnection,
   dispatchLiveTestEmail,
@@ -132,8 +133,9 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   const initializeSettings = async () => {
     const data = await loadEmailNotificationSettings();
     if (data.activeProvider) {
-      setActiveProvider(data.activeProvider);
-      setSelectedProviderCard(data.activeProvider);
+      const sanitized = ['smtp', 'ses'].includes(data.activeProvider) ? data.activeProvider : 'smtp';
+      setActiveProvider(sanitized);
+      setSelectedProviderCard(sanitized);
     }
     if (data.providerConfig) {
       setProviderConfig((prev: any) => ({ ...prev, ...data.providerConfig }));
@@ -296,53 +298,40 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
       {/* 1. Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 md:p-8 shadow-xl text-white">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shadow-inner flex-shrink-0 text-xl">
-              <i className="fa-solid fa-envelope-open-text" />
-            </div>
-            <div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-                  Email & Notification Center
-                </h1>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 ${
-                  providerHealth?.ok !== false
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${providerHealth?.ok !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-                  {activeProvider.toUpperCase()} • {providerHealth?.latencyMs ? `${providerHealth.latencyMs}ms` : 'Active'}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-slate-400 max-w-2xl leading-relaxed">
-                Centralized dispatch hub for Navgurukul Travel Desk lifecycle notifications, reminder cadence, multi-provider transport, and real-time delivery monitoring.
-              </p>
-            </div>
-          </div>
+      <PageBanner
+        title="Email & Notification Center"
+        description="Centralized dispatch hub for Navgurukul Travel Desk lifecycle notifications, reminder cadence, multi-provider transport, and real-time delivery monitoring."
+        icon="fa-envelope-open-text"
+      >
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-sm ${
+            providerHealth?.ok !== false
+              ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30'
+              : 'bg-rose-500/20 text-rose-200 border border-rose-400/30'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${providerHealth?.ok !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+            {activeProvider.toUpperCase()} • {providerHealth?.latencyMs ? `${providerHealth.latencyMs}ms` : 'Active'}
+          </span>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => handlePingProvider()}
-              disabled={pingLoading}
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50"
-            >
-              <i className={`fa-solid fa-signal ${pingLoading ? 'fa-spin' : ''}`} />
-              {pingLoading ? 'Testing...' : `Ping ${activeProvider.toUpperCase()} API`}
-            </button>
+          <button
+            onClick={() => handlePingProvider()}
+            disabled={pingLoading}
+            className="px-3.5 py-2 rounded-lg bg-white text-indigo-700 hover:bg-indigo-50 font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
+          >
+            <i className={`fa-solid fa-signal ${pingLoading ? 'fa-spin' : ''}`} />
+            {pingLoading ? 'Testing...' : `Ping ${activeProvider.toUpperCase()}`}
+          </button>
 
-            <button
-              onClick={openAuditLogs}
-              className="px-3 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-slate-700 transition-all"
-              title="View Audit Trail"
-            >
-              <i className="fa-solid fa-clock-rotate-left" />
-              <span>Audit Trail</span>
-            </button>
-          </div>
+          <button
+            onClick={openAuditLogs}
+            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-black flex items-center gap-1.5 border border-white/20 backdrop-blur-sm transition-all shadow-sm active:scale-95"
+            title="View Audit Trail"
+          >
+            <i className="fa-solid fa-clock-rotate-left" />
+            <span>Audit Trail</span>
+          </button>
         </div>
-      </div>
+      </PageBanner>
 
       {/* 2. Top-Level Section Navigation Tabs */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1 flex-wrap gap-2">
@@ -357,7 +346,11 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
           >
             <i className="fa-solid fa-file-lines" />
             <span>Templates & Cadence</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-900/30 text-indigo-200 border border-indigo-500/20">
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition-all ${
+              activeTab === 'templates'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+            }`}>
               {stats.totalTemplates}
             </span>
           </button>
@@ -531,12 +524,12 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* 1. Google Workspace */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+              {/* 1. Google Workspace / SMTP Relay (Primary) */}
               <div
-                onClick={() => setSelectedProviderCard('gmail')}
+                onClick={() => setSelectedProviderCard('smtp')}
                 className={`relative p-5 rounded-xl border cursor-pointer transition-all ${
-                  selectedProviderCard === 'gmail'
+                  selectedProviderCard === 'smtp'
                     ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20 shadow-md'
                     : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
@@ -547,23 +540,23 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                       G
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Google Workspace</h4>
-                      <p className="text-[11px] text-slate-500">OAuth2 REST API</p>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Google Workspace / SMTP</h4>
+                      <p className="text-[11px] text-slate-500">TLS Port 587 (App Password)</p>
                     </div>
                   </div>
-                  {activeProvider === 'gmail' && (
+                  {activeProvider === 'smtp' && (
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]" title="Currently Active Provider">
                       <i className="fa-solid fa-check" />
                     </span>
                   )}
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 line-clamp-2">
-                  Googleapis OAuth 2.0 client with automated token renewal for workspace sender accounts.
+                  Direct authenticated relay via smtp.gmail.com using your workspace email and App Password.
                 </p>
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-500">
                   <span>Quota: 2,000 / day</span>
-                  <span className={activeProvider === 'gmail' ? 'text-indigo-600 font-bold' : ''}>
-                    {activeProvider === 'gmail' ? '● Active' : 'Standby'}
+                  <span className={activeProvider === 'smtp' ? 'text-indigo-600 font-bold' : ''}>
+                    {activeProvider === 'smtp' ? '● Active' : 'Standby'}
                   </span>
                 </div>
               </div>
@@ -600,78 +593,6 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                   <span>Quota: 50,000 / day</span>
                   <span className={activeProvider === 'ses' ? 'text-indigo-600 font-bold' : ''}>
                     {activeProvider === 'ses' ? '● Active' : 'Standby Tier 1'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 3. Resend */}
-              <div
-                onClick={() => setSelectedProviderCard('resend')}
-                className={`relative p-5 rounded-xl border cursor-pointer transition-all ${
-                  selectedProviderCard === 'resend'
-                    ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20 shadow-md'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white font-bold flex items-center justify-center text-xs">
-                      R
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Resend</h4>
-                      <p className="text-[11px] text-slate-500">Cloud Email API</p>
-                    </div>
-                  </div>
-                  {activeProvider === 'resend' && (
-                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]" title="Currently Active Provider">
-                      <i className="fa-solid fa-check" />
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 line-clamp-2">
-                  Developer transactional API with open/click webhooks and edge delivery.
-                </p>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-500">
-                  <span>Quota: 50,000 / mo</span>
-                  <span className={activeProvider === 'resend' ? 'text-indigo-600 font-bold' : ''}>
-                    {activeProvider === 'resend' ? '● Active' : 'Standby Tier 2'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 4. Custom SMTP */}
-              <div
-                onClick={() => setSelectedProviderCard('smtp')}
-                className={`relative p-5 rounded-xl border cursor-pointer transition-all ${
-                  selectedProviderCard === 'smtp'
-                    ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20 shadow-md'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-xs">
-                      SMTP
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Custom SMTP</h4>
-                      <p className="text-[11px] text-slate-500">TLS Port 587 / 465</p>
-                    </div>
-                  </div>
-                  {activeProvider === 'smtp' && (
-                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]" title="Currently Active Provider">
-                      <i className="fa-solid fa-check" />
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 line-clamp-2">
-                  AWS Mail Manager, Google Workspace SMTP relay, or corporate mail server transport.
-                </p>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-500">
-                  <span>Quota: 2,000 / day</span>
-                  <span className={activeProvider === 'smtp' ? 'text-indigo-600 font-bold' : ''}>
-                    {activeProvider === 'smtp' ? '● Active' : 'Standby'}
                   </span>
                 </div>
               </div>
@@ -716,65 +637,6 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
               {/* A. Custom SMTP Form */}
               {selectedProviderCard === 'smtp' && (
                 <div className="space-y-4">
-                  {/* Presets selector */}
-                  <div className="flex items-center gap-2 flex-wrap pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold text-slate-500 uppercase mr-1">Quick Presets:</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setProviderConfig({
-                          ...providerConfig,
-                          smtp: {
-                            ...providerConfig.smtp,
-                            host: 'smtp.gmail.com',
-                            port: 587,
-                            senderEmail: currentUser?.email || 'travel@navgurukul.org',
-                            senderName: 'Navgurukul Travel Desk',
-                            replyTo: currentUser?.email || 'travel@navgurukul.org'
-                          }
-                        })
-                      }
-                      className="px-2.5 py-1 rounded-md text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/50 hover:bg-red-100 transition-all"
-                    >
-                      <i className="fa-brands fa-google mr-1" /> Gmail SMTP Relay
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setProviderConfig({
-                          ...providerConfig,
-                          smtp: {
-                            ...providerConfig.smtp,
-                            host: 'email-smtp.ap-south-1.amazonaws.com',
-                            port: 587,
-                            senderEmail: 'travel@navgurukul.org',
-                            senderName: 'Navgurukul Travel Desk',
-                            replyTo: 'travel@navgurukul.org'
-                          }
-                        })
-                      }
-                      className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 hover:bg-amber-100 transition-all"
-                    >
-                      <i className="fa-brands fa-aws mr-1" /> Amazon SES Outbound
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setProviderConfig({
-                          ...providerConfig,
-                          smtp: {
-                            ...providerConfig.smtp,
-                            host: 'smtp-relay.brevo.com',
-                            port: 587
-                          }
-                        })
-                      }
-                      className="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50 hover:bg-blue-100 transition-all"
-                    >
-                      Brevo / Sendinblue
-                    </button>
-                  </div>
-
                   {providerConfig.smtp?.host?.includes('mail-manager-smtp') && (
                     <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1">
                       <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
@@ -782,10 +644,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                         <span>Ingress Endpoint Detected (Non-Relay)</span>
                       </div>
                       <p>
-                        <code>{providerConfig.smtp.host}</code> is an AWS Mail Manager <strong>Ingress Endpoint</strong>. It accepts incoming emails for archiving/filtering, but <strong>does NOT relay outbound emails to external inboxes</strong>. Emails routed here will show successful SMTP acceptance (250 OK) but will never reach the recipient.
-                      </p>
-                      <p className="font-semibold text-amber-700 dark:text-amber-300 pt-1">
-                        👉 Click a preset above (e.g. <strong>Gmail SMTP Relay</strong> or <strong>Amazon SES Outbound</strong>) and enter real credentials to ensure emails reach their targets.
+                        <code>{providerConfig.smtp.host}</code> is an AWS Mail Manager <strong>Ingress Endpoint</strong>. It accepts incoming emails for archiving/filtering, but <strong>does NOT relay outbound emails to external inboxes</strong>. Please use <code>smtp.gmail.com</code> with your App Password, or Amazon SES Outbound.
                       </p>
                     </div>
                   )}
@@ -1388,7 +1247,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                       </span>
                     </td>
                     <td className="py-3 px-3">50,000 / day</td>
-                    <td className="py-3 px-3 text-emerald-600 font-bold">Operational</td>
+                    <td className="py-3 px-3 text-amber-600 dark:text-amber-400 font-bold">Not Operational</td>
                     <td className="py-3 px-3">Priority 2 (Failover)</td>
                   </tr>
                   <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1429,8 +1288,8 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
       {/* Audit Trail Modal */}
       {isAuditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 <i className="fa-solid fa-clock-rotate-left text-indigo-600" />
                 <h3 className="font-bold text-slate-900 dark:text-white text-base">

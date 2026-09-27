@@ -5,6 +5,34 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+    --slate-50: 248 250 252;
+    --slate-100: 241 245 249;
+    --slate-200: 226 232 240;
+    --slate-300: 203 213 225;
+    --slate-400: 148 163 184;
+    --slate-500: 100 116 139;
+    --slate-600: 71 85 105;
+    --slate-700: 51 65 85;
+    --slate-800: 30 41 59;
+    --slate-900: 15 23 42;
+    --slate-950: 2 6 23;
+}
+
+.dark {
+    --slate-50: 250 250 250;
+    --slate-100: 245 245 245;
+    --slate-200: 229 229 229;
+    --slate-300: 212 212 212;
+    --slate-400: 163 163 163;
+    --slate-500: 115 115 115;
+    --slate-600: 82 82 82;
+    --slate-700: 64 64 64;
+    --slate-800: 38 38 38;
+    --slate-900: 23 23 23;
+    --slate-950: 10 10 10;
+}
+
 /* Root CSS Variables for Text Sizes */
 :root {
     /* Font Family */
@@ -162,11 +190,11 @@ small,
 
 /* Dark mode scrollbar */
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(71, 85, 105, 0.5);
+    background: rgba(82, 82, 82, 0.5);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(71, 85, 105, 0.7);
+    background: rgba(82, 82, 82, 0.7);
 }
 
 /* Animation utilities */
@@ -357,11 +385,11 @@ small,
 
 /* Dark mode scrollbar */
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(71, 85, 105, 0.5);
+    background: rgba(82, 82, 82, 0.5);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(71, 85, 105, 0.7);
+    background: rgba(82, 82, 82, 0.7);
 }
 
 /* Animation utilities */

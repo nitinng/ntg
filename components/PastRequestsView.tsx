@@ -1,5 +1,6 @@
 import React from 'react';
 import { TravelRequest, PNCStatus } from '../types';
+import PageBanner from './PageBanner';
 
 interface PastRequestsViewProps {
   requests: TravelRequest[];
@@ -16,7 +17,11 @@ export const PastRequestsView: React.FC<PastRequestsViewProps> = ({ requests, on
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
-      <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Past Requests</h2>
+      <PageBanner
+        title="Past Travel Requests"
+        description="Historical archive of your completed, closed, or cancelled travel bookings."
+        icon="fa-clock-rotate-left"
+      />
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm transition-colors duration-300">
         <table className="w-full text-left">
           <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-700 transition-colors duration-300">

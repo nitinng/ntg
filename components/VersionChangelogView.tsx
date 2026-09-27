@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { User, UserRole } from '../types';
 import Card from './Card';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 export interface ChangelogCommit {
   hash: string;
@@ -238,48 +239,40 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20 max-w-6xl mx-auto">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-              <i className="fa-solid fa-code-branch text-indigo-600"></i>
-              Version & Changelog
-            </h2>
-            <span className="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-mono text-xs font-bold px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-800">
-              v2.4.0 Production
-            </span>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20 max-w-6xl mx-auto">
+      <PageBanner
+        title="Version & Changelog"
+        description="System release history, architectural milestones, and commit tracking for Navgurukul Travel Desk."
+        icon="fa-code-branch"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="bg-white/20 text-white font-mono text-xs font-bold px-3 py-1.5 rounded-full border border-white/30 backdrop-blur-sm">
+            v2.4.0 Production
+          </span>
+          <div className="flex bg-white/10 backdrop-blur-sm p-1 rounded-lg border border-white/20">
+            <button
+              onClick={() => setViewMode('interactive')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
+                viewMode === 'interactive'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-white/80 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-layer-group"></i> Release View
+            </button>
+            <button
+              onClick={() => setViewMode('markdown')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
+                viewMode === 'markdown'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-white/80 hover:text-white'
+              }`}
+            >
+              <i className="fa-brands fa-markdown"></i> Markdown Source
+            </button>
           </div>
-          <p className="text-slate-500 text-sm mt-1">
-            System release history, architectural milestones, and commit tracking for Navgurukul Travel Desk.
-          </p>
         </div>
-
-        {/* View mode toggle */}
-        <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200 dark:border-slate-700 self-start md:self-auto">
-          <button
-            onClick={() => setViewMode('interactive')}
-            className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
-              viewMode === 'interactive'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-            }`}
-          >
-            <i className="fa-solid fa-layer-group"></i> Release View
-          </button>
-          <button
-            onClick={() => setViewMode('markdown')}
-            className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
-              viewMode === 'markdown'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-            }`}
-          >
-            <i className="fa-brands fa-markdown"></i> Markdown Source
-          </button>
-        </div>
-      </header>
+      </PageBanner>
 
       {/* KPI Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">

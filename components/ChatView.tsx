@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, TravelRequest, ChatThread, ChatMessage, ChatThreadType, UserRole } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 interface ChatViewProps {
   currentUser: User;
@@ -507,7 +508,22 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
   const displayedThreads = threads.filter(t => t.status === viewMode);
 
   return (
-    <div className="h-[calc(100vh-6rem)] animate-in fade-in duration-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden flex transition-all">
+    <div className="space-y-6 animate-in fade-in duration-500 flex flex-col h-[calc(100vh-6rem)]">
+      <PageBanner
+        title="Direct Travel Desk Support"
+        description="Connect directly with travel desk coordinators regarding upcoming trips, questions, and booking support."
+        icon="fa-comments"
+      >
+        <button
+          onClick={() => setIsNewChatModalOpen(true)}
+          className="flex items-center gap-2 px-5 py-3 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg text-sm font-black shadow-lg transition-all"
+        >
+          <i className="fa-solid fa-plus"></i>
+          New Chat
+        </button>
+      </PageBanner>
+
+      <div className="flex-1 min-h-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden flex transition-all">
       {/* Sidebar - Chat List */}
       <div className={`${activeThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50`}>
         <div className="p-4 border-b border-slate-200 dark:border-slate-800">
@@ -879,13 +895,14 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
           <p className="text-slate-500 max-w-sm">Select a conversation from the list or start a new one to get help with your travel requests.</p>
         </div>
       )}
+      </div>
 
       {/* New Chat Modal */}
       {isNewChatModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsNewChatModalOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <header className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            <header className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-800/30 flex-shrink-0">
               {modalStep === 2 && currentUser.role !== UserRole.EMPLOYEE && (
                 <button onClick={() => setModalStep(1)} className="text-slate-400 hover:text-indigo-600 transition-colors">
                   <i className="fa-solid fa-arrow-left"></i>
@@ -898,7 +915,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
             </header>
             
             {modalStep === 1 ? (
-              <div className="p-6 space-y-4">
+              <div className="p-6 md:p-8 space-y-4 flex-1 overflow-y-auto max-w-2xl mx-auto w-full">
                 <p className="text-sm text-slate-500 font-bold uppercase tracking-widest mb-2">Select Employee</p>
                 <div className="relative">
                   <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
@@ -947,7 +964,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                 </button>
               </div>
             ) : (
-              <div className="p-6 space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
+              <div className="p-6 md:p-8 space-y-6 animate-in slide-in-from-right-4 fade-in duration-300 flex-1 overflow-y-auto max-w-2xl mx-auto w-full">
                 <div className="space-y-3">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-500">What do you need help with?</label>
                   <div className="grid grid-cols-1 gap-3">

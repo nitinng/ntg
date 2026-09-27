@@ -343,7 +343,7 @@ export const RequestDetailOverlay = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-all duration-300">
       <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-all duration-300" onClick={onClose}></div>
-      <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 max-h-[95vh] rounded-2xl flex flex-col animate-in zoom-in-95 transition-all duration-300 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col animate-in zoom-in-95 transition-all duration-300 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
 
         {/* Header */}
         <header className="px-6 py-4 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
@@ -428,7 +428,7 @@ export const RequestDetailOverlay = ({
                 {(request.infoRequested || request.employeeResponse) && (
                   <>
                     <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
-                    <div className="col-span-2 space-y-3 bg-amber-500/5 border border-amber-250 dark:border-amber-900/20 p-4 rounded-xl">
+                    <div className="col-span-2 space-y-3 bg-amber-500/5 border border-amber-200 dark:border-amber-900/20 p-4 rounded-xl">
                       <p className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-2">
                         <i className="fa-solid fa-clipboard-question"></i>
                         Clarification History
@@ -436,13 +436,13 @@ export const RequestDetailOverlay = ({
                       {request.infoRequested && (
                         <div>
                           <p className="text-2xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-widest">Requested by PNC</p>
-                          <p className="text-sm font-bold text-slate-755 dark:text-slate-300 mt-0.5">{request.infoRequested}</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-300 mt-0.5">{request.infoRequested}</p>
                         </div>
                       )}
                       {request.employeeResponse && (
                         <div className="pt-2 border-t border-dashed border-amber-200/35 dark:border-amber-900/20">
                           <p className="text-2xs font-black text-emerald-700 dark:text-emerald-500 uppercase tracking-widest">Employee Response</p>
-                          <p className="text-sm font-bold text-slate-755 dark:text-slate-300 mt-0.5">{request.employeeResponse}</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-300 mt-0.5">{request.employeeResponse}</p>
                         </div>
                       )}
                     </div>
@@ -930,7 +930,7 @@ export const RequestDetailOverlay = ({
                   </button>
                 </div>
               ) : (
-                <div className="p-4 bg-rose-50 dark:bg-rose-955/20 border border-rose-250 dark:border-rose-900/30 rounded-xl space-y-4">
+                <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 rounded-xl space-y-4">
                   <p className="text-sm font-bold text-rose-800 dark:text-rose-400">
                     Are you sure you want to cancel this ticket?
                   </p>

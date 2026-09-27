@@ -25,6 +25,7 @@ interface EmployeeDashboardProps {
   meetupRequests?: MeetupAvailabilityRequest[];
   onNavigateToMeetup: () => void;
   isIgatpuriEnabled?: boolean;
+  isChatEnabled?: boolean;
 }
 
 export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
@@ -37,7 +38,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   user,
   meetupRequests = [],
   onNavigateToMeetup: _onNavigateToMeetup,
-  isIgatpuriEnabled = false
+  isIgatpuriEnabled = false,
+  isChatEnabled = false
 }) => {
   const [_cancellationOwed, setCancellationOwed] = useState(0);
 
@@ -153,21 +155,23 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
       </header>
 
       {/* Chat Beta Banner */}
-      <div className="bg-gradient-to-r from-indigo-500/10 to-fuchsia-500/10 border border-indigo-200/50 dark:border-indigo-500/20 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden group">
-        <div className="absolute inset-0 w-full h-full bg-white/10 dark:bg-white/5 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner">
-            <i className="fa-solid fa-flask text-xl group-hover:rotate-12 transition-transform"></i>
-          </div>
-          <div>
-            <h4 className="font-black text-slate-800 dark:text-white text-md tracking-tight flex items-center gap-2">
-              Chat Feature is in Beta
-              <span className="bg-indigo-600 text-white text-2xs px-2 py-0.5 rounded-lg font-bold uppercase tracking-wider shadow-sm">Beta</span>
-            </h4>
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium mt-0.5">We are currently testing the new chat functionality. You might experience occasional bugs or delays.</p>
+      {isChatEnabled && (
+        <div className="bg-gradient-to-r from-indigo-500/10 to-fuchsia-500/10 border border-indigo-200/50 dark:border-indigo-500/20 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden group">
+          <div className="absolute inset-0 w-full h-full bg-white/10 dark:bg-white/5 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner">
+              <i className="fa-solid fa-flask text-xl group-hover:rotate-12 transition-transform"></i>
+            </div>
+            <div>
+              <h4 className="font-black text-slate-800 dark:text-white text-md tracking-tight flex items-center gap-2">
+                Chat Feature is in Beta
+                <span className="bg-indigo-600 text-white text-2xs px-2 py-0.5 rounded-lg font-bold uppercase tracking-wider shadow-sm">Beta</span>
+              </h4>
+              <p className="text-sm text-slate-600 dark:text-slate-400 font-medium mt-0.5">We are currently testing the new chat functionality. You might experience occasional bugs or delays.</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Quick Insights Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -209,19 +213,21 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
           <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-125 group-hover:rotate-12 transition-all duration-700 pointer-events-none">
             <i className="fa-solid fa-triangle-exclamation text-9xl"></i>
           </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-black uppercase tracking-[0.2em] text-white">Action Required</span>
-              <div className="h-1.5 w-32 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white transition-all duration-1000" style={{ width: `${completeness}%` }}></div>
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-black uppercase tracking-[0.2em] text-white">Action Required</span>
+                <div className="h-1.5 w-32 bg-white/20 rounded-full overflow-hidden">
+                  <div className="h-full bg-white transition-all duration-1000" style={{ width: `${completeness}%` }}></div>
+                </div>
+                <span className="text-white/90 text-xs font-bold">{completeness}% Complete</span>
               </div>
-              <span className="text-white/90 text-xs font-bold">{completeness}% Complete</span>
+              <h3 className="text-xl font-black text-white mb-3 tracking-tight">Profile Setup Pending</h3>
+              <p className="text-rose-100 text-base max-w-xl leading-relaxed font-medium">Your identity verification and background details are pending. Complete these now to avoid any delays in your upcoming travel approvals.</p>
             </div>
-            <h3 className="text-xl font-black text-white mb-3 tracking-tight">Profile Setup Pending</h3>
-            <p className="text-rose-100 text-base mb-8 max-w-lg leading-relaxed font-medium">Your identity verification and background details are pending. Complete these now to avoid any delays in your upcoming travel approvals.</p>
             <button
               onClick={onViewProfile}
-              className="bg-white text-rose-600 px-8 py-3.5 rounded-lg text-sm font-black uppercase tracking-widest hover:bg-rose-50 hover:-translate-y-1 transition-all shadow-xl active:scale-95 flex items-center gap-2 w-fit"
+              className="bg-white text-rose-600 px-8 py-3.5 rounded-lg text-sm font-black uppercase tracking-widest hover:bg-rose-50 hover:-translate-y-1 transition-all shadow-xl active:scale-95 flex items-center gap-2 w-fit shrink-0"
             >
               Finish Setup <i className="fa-solid fa-arrow-right"></i>
             </button>
@@ -411,7 +417,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
         </div>
 
         {availableStatuses.length > 0 && (
-          <div className="flex overflow-x-auto whitespace-nowrap flex-nowrap gap-2 bg-slate-150/40 dark:bg-slate-800/40 p-1.5 rounded-lg max-w-full border border-slate-200/50 dark:border-slate-800/50 custom-scrollbar">
+          <div className="flex overflow-x-auto whitespace-nowrap flex-nowrap gap-2 bg-slate-100/40 dark:bg-slate-800/40 p-1.5 rounded-lg max-w-full border border-slate-200/50 dark:border-slate-800/50 custom-scrollbar">
             <button
               onClick={() => setPastRequestsTab('All')}
               className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${pastRequestsTab === 'All'

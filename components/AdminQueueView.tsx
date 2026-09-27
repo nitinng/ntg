@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TravelRequest, PNCStatus, TravelModePolicy } from '../types';
 import StatusBadge from './StatusBadge';
 import { checkPolicyViolation } from '../utils/policyUtils';
+import PageBanner from './PageBanner';
 
 interface AdminQueueViewProps {
   requests: TravelRequest[];
@@ -66,8 +67,14 @@ export const AdminQueueView: React.FC<AdminQueueViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
+      <PageBanner
+        title={showAll ? 'All Travel Requests' : 'Active Booking Queue'}
+        description={showAll ? 'Comprehensive cross-team registry of all historical and active bookings.' : 'Real-time fulfillment pipeline for pending tickets, processing, and bookings.'}
+        icon={showAll ? 'fa-table-list' : 'fa-list-check'}
+      />
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">{showAll ? 'All Requests' : 'Booking Queue'}</h2>
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white">{showAll ? 'Filter Requests' : 'Queue Pipeline'}</h2>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Stage Filter - Dropdown for All Requests, Buttons for Queue */}

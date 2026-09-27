@@ -1,5 +1,6 @@
 import React from 'react';
 import Toggle from './Toggle';
+import { PageBanner } from './PageBanner';
 
 interface SettingsViewProps {
   isDarkMode: boolean;
@@ -7,8 +8,12 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ isDarkMode, onToggleTheme }) => (
-  <div className="max-w-xl space-y-8 animate-in fade-in duration-500 transition-all duration-300">
-    <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Settings</h2>
+  <div className="max-w-2xl space-y-6 animate-in fade-in duration-500 transition-all duration-300">
+    <PageBanner
+      title="Application Settings"
+      description="Configure your workspace visual theme, display options, and personal preferences."
+      icon="fa-gear"
+    />
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-lg space-y-8 shadow-sm transition-colors duration-300">
       <div className="flex items-center justify-between transition-colors duration-300">
         <div>

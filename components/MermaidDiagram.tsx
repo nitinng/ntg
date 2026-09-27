@@ -13,6 +13,21 @@ export const MermaidDiagram = ({ chart, config }: MermaidDiagramProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState<boolean>(() =>
+    typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : false
+  );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!chart) return;
@@ -20,19 +35,37 @@ export const MermaidDiagram = ({ chart, config }: MermaidDiagramProps) => {
     setError(null);
     setSvgHtml('');
 
-    // Initialize once with merged config
+    const defaultThemeVariables = isDark
+      ? {
+          background: '#171717',
+          mainBkg: '#171717',
+          primaryColor: '#262626',
+          primaryTextColor: '#e5e5e5',
+          textColor: '#e5e5e5',
+          primaryBorderColor: '#404040',
+          lineColor: '#737373',
+          secondaryColor: '#262626',
+          secondaryTextColor: '#e5e5e5',
+          tertiaryColor: '#171717',
+          edgeLabelBackground: '#00000000',
+        }
+      : {
+          primaryColor: '#6366f1',
+          primaryTextColor: '#1e293b',
+          primaryBorderColor: '#e2e8f0',
+          lineColor: '#94a3b8',
+          secondaryColor: '#f59e0b',
+          tertiaryColor: '#10b981',
+          edgeLabelBackground: '#00000000',
+        };
+
+    // Initialize with merged config
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'loose',
       theme: 'base',
       themeVariables: {
-        primaryColor: '#6366f1',
-        primaryTextColor: '#1e293b',
-        primaryBorderColor: '#e2e8f0',
-        lineColor: '#94a3b8',
-        secondaryColor: '#f59e0b',
-        tertiaryColor: '#10b981',
-        edgeLabelBackground: '#00000000',
+        ...defaultThemeVariables,
         ...config?.themeVariables,
       },
       ...config,
@@ -61,7 +94,7 @@ export const MermaidDiagram = ({ chart, config }: MermaidDiagramProps) => {
             : 'Failed to render diagram.'
         );
       });
-  }, [chart]);
+  }, [chart, isDark, config]);
 
   if (error) {
     return (

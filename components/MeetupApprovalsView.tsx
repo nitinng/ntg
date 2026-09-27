@@ -1,6 +1,7 @@
 import React from 'react';
 import { MeetupAvailabilityRequest } from '../types';
 import Card from './Card';
+import { PageBanner } from './PageBanner';
 
 interface MeetupApprovalsViewProps {
   requests: MeetupAvailabilityRequest[];
@@ -12,11 +13,12 @@ export const MeetupApprovalsView: React.FC<MeetupApprovalsViewProps> = ({ reques
   const history = requests.filter(r => r.status !== 'Pending');
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <header>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Meetup Approvals</h2>
-        <p className="text-slate-500 text-sm mt-1">Review and action Igathpuri location availability requests.</p>
-      </header>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <PageBanner
+        title="Meetup Approvals"
+        description="Review, evaluate and action team availability and campus reservation requests for the Igathpuri facility."
+        icon="fa-calendar-check"
+      />
 
       <div className="space-y-6">
         <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">

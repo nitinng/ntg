@@ -6,6 +6,7 @@ import Input from './Input';
 import LocationCalendar from './LocationCalendar';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 interface IgathpuriMeetupViewProps {
   onNewRequest: (context?: any) => void;
@@ -141,7 +142,7 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
           {/* Details Modal */}
           {selectedRequest && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-              <Card className="w-full max-w-2xl bg-white dark:bg-slate-900 p-8 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+              <Card className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 p-8 shadow-2xl relative overflow-hidden flex flex-col">
                 <button
                   onClick={() => setSelectedRequest(null)}
                   className="absolute top-6 right-6 w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors z-50"
@@ -149,14 +150,14 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
                   <i className="fa-solid fa-times"></i>
                 </button>
 
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-6 flex items-center gap-3">
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-6 flex items-center gap-3 flex-shrink-0">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${selectedRequest.status === 'Approved' ? 'bg-emerald-500' : selectedRequest.status === 'Rejected' ? 'bg-rose-500' : 'bg-amber-500'}`}>
                     <i className="fa-solid fa-map-location-dot"></i>
                   </div>
                   Request Details
                 </h3>
 
-                <div className="overflow-y-auto custom-scrollbar pr-2 space-y-6">
+                <div className="overflow-y-auto custom-scrollbar pr-2 space-y-6 flex-1">
                   {/* Grid of details */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
@@ -244,11 +245,12 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
     };
 
     return (
-      <div className="space-y-8 animate-in fade-in duration-500">
-        <header>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Igatpuri Meetup Dashboard</h2>
-          <p className="text-slate-500 text-sm mt-1">Monitoring pending constraints and historical location reservations for the Igatpuri campus.</p>
-        </header>
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <PageBanner
+          title="Igatpuri Meetup Dashboard"
+          description="Monitoring pending constraints and historical location reservations for the Igatpuri campus."
+          icon="fa-person-shelter"
+        />
 
         {/* Separated Analytics Elements */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -484,16 +486,12 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
   };
 
   return (
-    <div className="max-w-4xl space-y-8 animate-in fade-in duration-500">
-      <header className="flex items-center gap-4">
-        <div className="w-16 h-16 bg-violet-600 rounded-lg flex items-center justify-center text-white text-3xl shadow-xl shadow-violet-600/20">
-          <i className="fa-solid fa-person-shelter"></i>
-        </div>
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 dark:text-white transition-all tracking-tight uppercase">Igathpuri Meetup</h2>
-          <p className="text-slate-500 font-medium tracking-tight">Navgurukul Team Hub & Meetup Location</p>
-        </div>
-      </header>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <PageBanner
+        title="Igathpuri Meetup"
+        description="Navgurukul Team Hub & Meetup Location for organizational gatherings, campus visits, and group travel."
+        icon="fa-person-shelter"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-8">
@@ -549,16 +547,16 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
           {/* Stat Detail Modals */}
           {activeStatModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-              <Card className="w-full max-w-lg bg-white dark:bg-slate-900 p-8 shadow-2xl relative overflow-visible">
+              <Card className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 p-8 shadow-2xl relative overflow-hidden flex flex-col">
                 <button
                   onClick={() => setActiveStatModal(null)}
-                  className="absolute -top-3 -right-3 w-10 h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 shadow-lg transition-all z-50"
+                  className="absolute top-6 right-6 w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 shadow-md transition-all z-50"
                 >
                   <i className="fa-solid fa-times"></i>
                 </button>
 
-                <div className="space-y-6">
-                  <header>
+                <div className="space-y-6 flex-1 flex flex-col min-h-0">
+                  <header className="flex-shrink-0">
                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activeStatModal === 'completion' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
                         <i className={`fa-solid ${activeStatModal === 'completion' ? 'fa-file-invoice' : 'fa-ticket'}`}></i>
@@ -570,7 +568,7 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
                     </p>
                   </header>
 
-                  <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                     {attendeeDetails.map((attendee, idx) => (
                       <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 group hover:border-slate-300 dark:hover:border-slate-600 transition-all">
                         <div className="flex items-center gap-4">

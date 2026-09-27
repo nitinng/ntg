@@ -20,8 +20,8 @@ export const LoadingView: React.FC = () => {
         );
       case 1:
         return (
-          <div className="w-full h-full flex items-center justify-center bg-indigo-600 text-white animate-in slide-in-from-right duration-500">
-            <span className="font-black text-2xl">N</span>
+          <div className="w-full h-full flex items-center justify-center bg-white dark:bg-slate-900 p-2 animate-in slide-in-from-right duration-500">
+            <img src="/ng-icon.png" alt="NavGurukul" className="w-7 h-7 object-contain" />
           </div>
         );
       case 2:
@@ -73,9 +73,9 @@ export const LoadingView: React.FC = () => {
           </div>
         </div>
 
-        <div className="text-center space-y-2">
-          <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">NG Travel Desk</h3>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading...</p>
+        <div className="text-center space-y-1">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">NG Travel Desk</h3>
+          <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest animate-pulse pt-1">Loading...</p>
         </div>
       </div>
     </div>

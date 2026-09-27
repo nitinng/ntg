@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { CancellationRecord, User, UserRole, RefundEntry } from '../types';
 import Card from './Card';
+import PageBanner from './PageBanner';
 import { toast } from 'sonner';
 import { calculateCancellationSplit, applyRefundToAdvance } from '../utils/cancellation';
 
@@ -162,18 +163,17 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Cancellations</h2>
-          <p className="text-sm font-medium text-slate-500 mt-1">Track cancellation refunds and reconciliation.</p>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <PageBanner
+        title="Ticket Cancellations & Refunds"
+        description="Track cancellation refunds, organization-absorbed costs, and employee recovery balances."
+        icon="fa-money-bill-transfer"
+      />
 
       <div className="space-y-8">
         {Object.entries(groupedCancellations).map(([employeeName, tickets]) => (
-          <div key={employeeName} className="space-y-4 bg-slate-50/50 dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-250 dark:border-slate-800">
+          <div key={employeeName} className="space-y-4 bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-lg font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
                 <i className="fa-solid fa-user text-indigo-500"></i> {employeeName}
               </h3>
@@ -191,7 +191,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {records.map(cancel => (
                       <Card key={cancel.id} className="p-5 flex flex-col h-full border border-slate-200 dark:border-slate-800/80 hover:shadow-md transition-all">
                         <div className="flex justify-between items-start mb-4">
@@ -216,7 +216,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
                             const legDetails = getLegDetails(cancel);
                             if (legDetails) {
                               return (
-                                <p className="text-sm font-bold text-slate-700 dark:text-slate-350">
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                                   {legDetails.fromLocation} → {legDetails.toLocation} ({legDetails.travelMode})
                                 </p>
                               );
@@ -274,8 +274,8 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
 
       {settlingRecord && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800">
-            <div className="p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-[90vw] h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="p-6 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
               <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight mb-4">Settle Cancellation</h3>
               <p className="text-sm text-slate-500 mb-6">Record refund amounts and settle ticket cancellation for {settlingRecord.travel_requests?.submission_id}.</p>
               <form onSubmit={handleSettle} className="space-y-4">

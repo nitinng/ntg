@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, VerificationStatus } from '../types';
 import { toast } from 'sonner';
+import { PageBanner } from './PageBanner';
 
 interface VerificationQueueProps {
   users: User[];
@@ -57,7 +58,11 @@ export const VerificationQueue: React.FC<VerificationQueueProps> = ({ users, onU
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 transition-all duration-300">
-      <h2 className="text-3xl font-bold text-slate-900 dark:text-white transition-all">Verification Queue</h2>
+      <PageBanner
+        title="Verification Queue"
+        description="Review and verify employee identity credentials, passport documents, and compliance records."
+        icon="fa-id-card-clip"
+      />
       {pending.length === 0 ? (
         <div className="py-24 text-center text-slate-400 font-medium bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-800 shadow-sm transition-colors duration-300 italic">All caught up! No pending verifications.</div>
       ) : (
@@ -86,10 +91,10 @@ export const VerificationQueue: React.FC<VerificationQueueProps> = ({ users, onU
       {selectedUser && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 transition-all duration-500 animate-in fade-in">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setSelectedUser(null)}></div>
-          <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
-            <header className="px-10 py-8 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-200 dark:border-slate-800 flex flex-col">
+            <header className="px-6 py-5 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30 flex-shrink-0">
               <div>
-                <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Review Submissions</h3>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">Review Submissions</h3>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">{selectedUser.name}</span>
                   <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
@@ -99,7 +104,7 @@ export const VerificationQueue: React.FC<VerificationQueueProps> = ({ users, onU
               <button onClick={() => setSelectedUser(null)} className="p-3 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all text-slate-400 border border-transparent hover:border-slate-100 dark:hover:border-slate-700"><i className="fa-solid fa-xmark text-xl"></i></button>
             </header>
 
-            <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-10 max-h-[65vh] overflow-y-auto custom-scrollbar">
+            <div className="p-6 md:p-10 grid grid-cols-1 md:grid-cols-2 gap-8 flex-1 overflow-y-auto custom-scrollbar">
               {/* Passport Section */}
               <div className="space-y-6">
                 <div className="flex items-center justify-between">

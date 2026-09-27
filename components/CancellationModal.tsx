@@ -283,7 +283,7 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-[90vw] h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
         {/* Fixed header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Process Cancellation</h3>

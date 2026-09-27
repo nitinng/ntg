@@ -30,7 +30,21 @@ export const ALLOWED_TRANSITIONS: Record<PNCStatus, PNCStatus[]> = {
   [PNCStatus.ON_HOLD]: [
     PNCStatus.PROCESSING, // Employee responds
     PNCStatus.CANCELLED_BY_EMPLOYEE,
+    PNCStatus.CANCELLATION_REQUESTED,
+    PNCStatus.ON_HOLD_ESCALATED, // SLA breached, escalation owner takes it (sheet row 27)
+    PNCStatus.CANCELLED_BY_SYSTEM // No reply within the SLA (sheet row 28)
+  ],
+  [PNCStatus.ON_HOLD_ESCALATED]: [
+    PNCStatus.PROCESSING,
+    PNCStatus.CANCELLED_BY_SYSTEM,
+    PNCStatus.CANCELLED_BY_EMPLOYEE,
     PNCStatus.CANCELLATION_REQUESTED
+  ],
+  // The SLA closed this request, not the employee. Kept distinct from
+  // CANCELLED_BY_EMPLOYEE so cancellation reporting and the cost split stay honest
+  // (sheet row 28 calls this fix out explicitly).
+  [PNCStatus.CANCELLED_BY_SYSTEM]: [
+    PNCStatus.CLOSED
   ],
   [PNCStatus.REJECTED_BY_PNC]: [
     PNCStatus.NOT_STARTED // Resubmission
@@ -39,6 +53,13 @@ export const ALLOWED_TRANSITIONS: Record<PNCStatus, PNCStatus[]> = {
     PNCStatus.CANCELLED_BY_EMPLOYEE,
     PNCStatus.CANCELLED_BY_PNC,
     PNCStatus.CANCELLATION_REQUESTED,
+    PNCStatus.PARTIALLY_CANCELLED,
+    PNCStatus.CLOSED
+  ],
+  [PNCStatus.PARTIALLY_CANCELLED]: [
+    PNCStatus.PENDING_REFUND,
+    PNCStatus.CANCELLATION_REQUESTED,
+    PNCStatus.CANCELLED_BY_PNC,
     PNCStatus.CLOSED
   ],
   [PNCStatus.CANCELLATION_REQUESTED]: [
@@ -48,11 +69,46 @@ export const ALLOWED_TRANSITIONS: Record<PNCStatus, PNCStatus[]> = {
     PNCStatus.BOOKED
   ],
   [PNCStatus.CANCELLED_BY_EMPLOYEE]: [
+    PNCStatus.PENDING_REFUND, // Money to recover (sheet row 38)
+    PNCStatus.RECONCILED,     // Nothing recoverable (sheet row 39)
     PNCStatus.CLOSED
   ],
   [PNCStatus.CANCELLED_BY_PNC]: [
+    PNCStatus.PENDING_REFUND, // Sheet row 41
+    PNCStatus.RECONCILED,     // Sheet row 42
     PNCStatus.CLOSED
   ],
+
+  // Refund and reconciliation tail (sheet rows 46-53).
+  [PNCStatus.PENDING_REFUND]: [
+    PNCStatus.PARTIALLY_REFUNDED,
+    PNCStatus.FULLY_REFUNDED,
+    PNCStatus.WRITTEN_OFF,
+    PNCStatus.DISPUTED
+  ],
+  [PNCStatus.PARTIALLY_REFUNDED]: [
+    PNCStatus.FULLY_REFUNDED,
+    PNCStatus.WRITTEN_OFF,
+    PNCStatus.DISPUTED
+  ],
+  [PNCStatus.FULLY_REFUNDED]: [
+    PNCStatus.RECONCILED
+  ],
+  [PNCStatus.WRITTEN_OFF]: [
+    PNCStatus.RECONCILED
+  ],
+  [PNCStatus.DISPUTED]: [
+    PNCStatus.PARTIALLY_REFUNDED,
+    PNCStatus.FULLY_REFUNDED,
+    PNCStatus.WRITTEN_OFF
+  ],
+  [PNCStatus.RECONCILED]: [
+    PNCStatus.CLOSED
+  ],
+
+  // Travel booked outside the system and recorded afterwards (sheet rows 57, 58).
+  [PNCStatus.CLOSED_RECORDED]: [],
+
   [PNCStatus.CLOSED]: [] // Terminal state
 };
 

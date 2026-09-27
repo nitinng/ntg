@@ -81,8 +81,142 @@ export enum PNCStatus {
   CANCELLED_BY_EMPLOYEE = 'Cancelled by Employee',
   CANCELLED_BY_PNC = 'Cancelled by PNC',
   CANCELLATION_REQUESTED = 'Cancellation Requested',
-  CLOSED = 'Closed'
+  CLOSED = 'Closed',
+
+  // Stages added for the Travel Desk triggers sheet. All sit in the cancellation,
+  // refund and reconciliation tail, which previously ended at "Cancelled by *".
+  CANCELLED_BY_SYSTEM = 'Cancelled by System',
+  ON_HOLD_ESCALATED = 'On Hold / Escalated',
+  PARTIALLY_CANCELLED = 'Booked / Partially Cancelled',
+  PENDING_REFUND = 'Pending Refund',
+  PARTIALLY_REFUNDED = 'Partially Refunded',
+  FULLY_REFUNDED = 'Fully Refunded',
+  WRITTEN_OFF = 'Written Off',
+  DISPUTED = 'Disputed',
+  RECONCILED = 'Reconciled',
+  CLOSED_RECORDED = 'Closed / Recorded'
 }
+
+/**
+ * Lifecycle stages that existed before the triggers-sheet migration. Kept so that
+ * reporting and funnel views can stay on the original twelve without silently
+ * gaining the refund tail.
+ */
+export const CORE_PNC_STATUSES: PNCStatus[] = [
+  PNCStatus.NOT_STARTED,
+  PNCStatus.APPROVAL_PENDING,
+  PNCStatus.REJECTED_BY_MANAGER,
+  PNCStatus.APPROVED,
+  PNCStatus.PROCESSING,
+  PNCStatus.ON_HOLD,
+  PNCStatus.REJECTED_BY_PNC,
+  PNCStatus.BOOKED,
+  PNCStatus.CANCELLED_BY_EMPLOYEE,
+  PNCStatus.CANCELLED_BY_PNC,
+  PNCStatus.CANCELLATION_REQUESTED,
+  PNCStatus.CLOSED
+];
+
+/** Stages that close a request with no further workflow. */
+export const TERMINAL_PNC_STATUSES: PNCStatus[] = [
+  PNCStatus.CLOSED,
+  PNCStatus.CLOSED_RECORDED,
+  PNCStatus.RECONCILED,
+  PNCStatus.CANCELLED_BY_SYSTEM
+];
+
+/**
+ * Trigger events from the "Travel Desk Stages- mails - Triggers.xlsx" Final tab.
+ *
+ * Emails are keyed on the event rather than the destination stage, because several
+ * sheet rows land on the same stage and must say different things - rows 2, 12 and 18
+ * all reach "Approval Pending"; rows 33 and 37 both reach "Cancelled by Employee" but
+ * differ on whether money is owed.
+ */
+export enum TravelEvent {
+  // Request creation and policy evaluation
+  REQUEST_SUBMITTED = 'REQUEST_SUBMITTED',
+  POLICY_VIOLATION_DETECTED = 'POLICY_VIOLATION_DETECTED',
+  POLICY_EVALUATION_PASSED = 'POLICY_EVALUATION_PASSED',
+
+  // Manager approval
+  MANAGER_APPROVED = 'MANAGER_APPROVED',
+  APPROVAL_COMPLETED = 'APPROVAL_COMPLETED',
+  MANAGER_REJECTED = 'MANAGER_REJECTED',
+  EMPLOYEE_CANCELLED_PRE_APPROVAL = 'EMPLOYEE_CANCELLED_PRE_APPROVAL',
+
+  // Edit and resubmission
+  REQUEST_EDIT_STARTED = 'REQUEST_EDIT_STARTED',
+  REQUEST_RESUBMITTED = 'REQUEST_RESUBMITTED',
+
+  // PNC processing
+  PNC_REJECTED = 'PNC_REJECTED',
+  PNC_STARTED_PROCESSING = 'PNC_STARTED_PROCESSING',
+  INFO_REQUESTED = 'INFO_REQUESTED',
+  INFO_PROVIDED = 'INFO_PROVIDED',
+  BOOKING_CONFIRMED = 'BOOKING_CONFIRMED',
+
+  // Time-driven, raised by the reminder scan rather than by a user action
+  INFO_REQUEST_REMINDER_24H = 'INFO_REQUEST_REMINDER_24H',
+  INFO_REQUEST_REMINDER_72H = 'INFO_REQUEST_REMINDER_72H',
+  INFO_REQUEST_ESCALATED = 'INFO_REQUEST_ESCALATED',
+  INFO_REQUEST_EXPIRED = 'INFO_REQUEST_EXPIRED',
+
+  // Booking maintenance
+  BOOKING_UPDATED = 'BOOKING_UPDATED',
+  TICKET_DOCUMENT_REPLACED = 'TICKET_DOCUMENT_REPLACED',
+  BOOKING_DETAIL_EDITED = 'BOOKING_DETAIL_EDITED',
+
+  // Cancellation
+  CANCELLATION_REQUESTED = 'CANCELLATION_REQUESTED',
+  CANCELLATION_REQUEST_ASSIGNED = 'CANCELLATION_REQUEST_ASSIGNED',
+  CANCELLATION_PROCESSED_EMPLOYEE = 'CANCELLATION_PROCESSED_EMPLOYEE',
+  CANCELLATION_CLOSED_PRE_BOOKING = 'CANCELLATION_CLOSED_PRE_BOOKING',
+  PNC_CANCELLATION = 'PNC_CANCELLATION',
+  PARTIAL_CANCELLATION = 'PARTIAL_CANCELLATION',
+
+  // Refund and reconciliation
+  REFUND_PROCESS_STARTED = 'REFUND_PROCESS_STARTED',
+  NO_REFUND_REQUIRED = 'NO_REFUND_REQUIRED',
+  SEGMENT_REFUND_PENDING = 'SEGMENT_REFUND_PENDING',
+  SEGMENT_REFUND_COMPLETED = 'SEGMENT_REFUND_COMPLETED',
+  PARTIAL_REFUND_RECEIVED = 'PARTIAL_REFUND_RECEIVED',
+  REFUND_COMPLETED = 'REFUND_COMPLETED',
+  REFUND_WRITTEN_OFF = 'REFUND_WRITTEN_OFF',
+  REFUND_DISPUTED = 'REFUND_DISPUTED',
+  REFUND_RECONCILIATION_COMPLETED = 'REFUND_RECONCILIATION_COMPLETED',
+
+  // Completion
+  TRAVEL_DATE_REACHED = 'TRAVEL_DATE_REACHED',
+  TRIP_COMPLETED = 'TRIP_COMPLETED',
+
+  // Retroactive / self-booked
+  RETROACTIVE_BOOKING_RECORDED = 'RETROACTIVE_BOOKING_RECORDED',
+  BOOKING_DOCUMENT_UPDATED = 'BOOKING_DOCUMENT_UPDATED'
+}
+
+/** Who a lifecycle mail is addressed to. */
+export type EmailAudience = 'employee' | 'manager' | 'pnc' | 'finance' | 'escalation_owner';
+
+/**
+ * Discriminator for sheet rows that share an (event, audience) pair but carry
+ * different copy. `undefined` selects the fallback template for that pair.
+ */
+export type EmailContextKey =
+  | 'post_booking'
+  | 'resubmit_after_manager_rejection'
+  | 'resubmit_after_pnc_rejection'
+  | 'after_partial_refund'
+  | 'after_write_off';
+
+/** How a template's CC list is assembled from the routing settings. */
+export type EmailCcRule =
+  | 'default'
+  | 'default_finance'
+  | 'default_manager'
+  | 'default_manager_if_approved'
+  | 'manager'
+  | 'none';
 
 export enum Priority {
   CRITICAL = 'Critical',
@@ -126,6 +260,11 @@ export interface TravelRequest {
   purpose: string;
   approvingManagerName?: string;
   approvingManagerEmail?: string;
+  /** Fallbacks used when a request predates the approvingManager* fields. */
+  managerName?: string;
+  managerEmail?: string;
+  /** Set when a manager records an approval. Gates the manager CC on sheet row 40. */
+  managerApprovalDate?: string;
   tripType: TripType;
   mode: TravelMode;
   from: string;
@@ -163,9 +302,29 @@ export interface TravelRequest {
   invoiceNumber?: string;
   paymentStatus?: PaymentStatus;
 
+  // Cancellation, refund and reconciliation. Added for the triggers sheet - the
+  // settlement mails (rows 46-53) interpolate these directly.
+  originalFare?: number;
+  refundAmount?: number;
+  expectedRefund?: number;
+  writtenOffAmount?: number;
+  employeeOwedAmount?: number;
+  orgAbsorbedAmount?: number;
+  cancellationCharge?: number;
+  /** Human-readable segment lists for the partial-cancellation mails (rows 43, 45). */
+  cancelledSegments?: string;
+  activeSegments?: string;
+  /** What changed on a material booking update (row 29). */
+  changeSummary?: string;
+  /** When the request went on hold awaiting information. Drives the reminder scan. */
+  infoRequestedAt?: string;
+  escalatedAt?: string;
+
   // System
   timeline: TimelineEvent[];
   pnr?: string;
+  /** Vendor booking reference / PNR shown to the traveller. */
+  bookingReference?: string;
   travelLegs?: TravelLeg[];
   invoiceUrl?: string;
   bookedBy?: string; // 'PNC' or 'SELF'
@@ -181,6 +340,8 @@ export interface TravelLeg {
   travelMode: TravelMode;
   vendorName: string;
   ticketCost: number;
+  /** Per-segment vendor booking reference. */
+  pnr?: string;
   invoiceUrl?: string;
   status: 'Active' | 'Cancelled';
   cancelledBy?: 'Employee' | 'Org' | 'Vendor';
@@ -256,13 +417,58 @@ export interface MailTemplate {
   name: string;
   subject: string;
   body: string; // HTML supported
-  statusTrigger: string; // e.g., 'Approved', 'Rejected'
+  /** @deprecated Superseded by `event`. Retained so pre-migration templates still render. */
+  statusTrigger: string;
   isDraft: boolean;
   status: MailTemplateStatus;
   version: number;
-  audience: 'employee' | 'manager' | 'pnc';
+  audience: EmailAudience;
   createdAt: string;
   updatedAt: string;
+
+  /** Stable identifier, e.g. `booking_confirmed.employee.default`. */
+  templateKey: string;
+  /** The trigger this template answers. Null only on legacy, pre-migration rows. */
+  event: TravelEvent | null;
+  /** Discriminator when several templates share an (event, audience) pair. */
+  contextKey: EmailContextKey | null;
+  /** Documentation and UI display only - resolution uses contextKey, not these. */
+  fromStatus: string | null;
+  toStatus: string | null;
+  ccRule: EmailCcRule;
+  isActive: boolean;
+  /** Row number in the source triggers sheet; null for hand-authored templates. */
+  sheetRow: string | null;
+  /** The sheet's own note on why this mail exists and what it must say. */
+  sheetSummary: string | null;
+}
+
+/** A configurable routing default (default CC, Finance CC, escalation owners, SLA windows). */
+export interface EmailRoutingSetting {
+  key: string;
+  value: string[] | string | number | boolean;
+  label: string;
+  description: string | null;
+  valueType: 'email_list' | 'number' | 'text' | 'boolean';
+  group: 'routing' | 'reminders';
+  sortOrder: number;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+/** Resolved, typed view of the routing settings used when queueing a mail. */
+export interface EmailRoutingConfig {
+  defaultCc: string[];
+  financeCc: string[];
+  escalationOwners: string[];
+  pncQueueCc: string[];
+  supportEmail: string;
+  portalUrl: string;
+  infoReminderFirstHours: number;
+  infoReminderFinalHours: number;
+  infoEscalationDays: number;
+  infoExpiryDays: number;
+  remindersEnabled: boolean;
 }
 
 export interface MailTemplateHistory {

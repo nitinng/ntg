@@ -310,14 +310,23 @@ export const dispatchLiveTestEmail = async (
       const errDetail = workerRes.results.errors[0]?.error?.message || 'Worker send failure';
       return {
         success: false,
-        message: `Email queued but worker returned error: ${errDetail}`,
+        message: `Delivery failed: ${errDetail}`,
         error: errDetail
       };
     }
 
+    if (workerRes.error || !workerRes.success) {
+      return {
+        success: false,
+        message: `Worker execution error: ${workerRes.error || 'Unknown failure'}`,
+        error: workerRes.error
+      };
+    }
+
     return {
-      success: true,
-      message: `Test email queued and sent to delivery worker for ${recipient}`
+      success: false,
+      message: `Email was queued but not delivered: Please verify provider credentials in Email Setup.`,
+      error: 'Delivery not completed'
     };
   } catch (err: any) {
     return {
@@ -413,7 +422,7 @@ export const loadEmailNotificationSettings = async (): Promise<{
     if (data && data.length > 0) {
       for (const row of data) {
         if (row.key === 'active_email_provider' && row.value) {
-          defaults.activeProvider = typeof row.value === 'string' ? row.value : String(row.value);
+          defaults.activeProvider = String(row.value).replace(/['"]/g, '').trim().toLowerCase();
         } else if (row.key === 'provider_config' && row.value) {
           defaults.providerConfig = { ...defaults.providerConfig, ...row.value };
         } else if (row.key === 'quota_settings' && row.value) {
@@ -453,7 +462,7 @@ export const saveEmailNotificationSettings = async (
       group: 'provider',
       updated_at: new Date().toISOString(),
       updated_by: actorEmail
-    });
+    }, { onConflict: 'key' });
 
     await logEmailAuditAction(
       'Active Email Provider Changed',
@@ -472,7 +481,7 @@ export const saveEmailNotificationSettings = async (
       group: 'provider',
       updated_at: new Date().toISOString(),
       updated_by: actorEmail
-    });
+    }, { onConflict: 'key' });
 
     await logEmailAuditAction(
       'Email Provider Configuration Updated',
@@ -491,7 +500,7 @@ export const saveEmailNotificationSettings = async (
       group: 'quota',
       updated_at: new Date().toISOString(),
       updated_by: actorEmail
-    });
+    }, { onConflict: 'key' });
 
     await logEmailAuditAction(
       'Quota Settings Updated',

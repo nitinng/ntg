@@ -127,7 +127,11 @@ export const EmailSettingsView: React.FC<EmailSettingsViewProps> = ({ currentUse
 
   const grouped = useMemo(() => {
     const out: Record<string, EmailRoutingSetting[]> = {};
-    for (const s of settings) (out[s.group] ||= []).push(s);
+    for (const s of settings) {
+      if (s.group === 'routing' || s.group === 'reminders') {
+        (out[s.group] ||= []).push(s);
+      }
+    }
     return out;
   }, [settings]);
 

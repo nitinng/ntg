@@ -28,16 +28,16 @@ import { toast } from 'sonner';
 
 interface EmailNotificationCenterProps {
   currentUser?: User | null;
-  initialTab?: 'templates' | 'delivery' | 'setup' | 'quota';
+  initialTab?: 'templates' | 'delivery' | 'routing' | 'setup' | 'quota';
   onNavigateToRequest?: (ticketId: string) => void;
 }
 
 export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = ({
   currentUser,
-  initialTab = 'setup',
+  initialTab = 'templates',
   onNavigateToRequest
 }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'delivery' | 'setup' | 'quota'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'templates' | 'delivery' | 'routing' | 'setup' | 'quota'>(initialTab);
   const [templateSubTab, setTemplateSubTab] = useState<'templates' | 'cadence'>('templates');
 
   // Provider Settings State
@@ -45,10 +45,10 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   const [selectedProviderCard, setSelectedProviderCard] = useState<string>('smtp');
   const [providerConfig, setProviderConfig] = useState<any>({
     smtp: {
-      host: 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com',
+      host: 'smtp.gmail.com',
       port: 587,
-      username: 'inp-xjixoqpi7g5fjchj7lbwkpmy',
-      password: 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U',
+      username: 'travel@navgurukul.org',
+      password: '',
       senderEmail: 'travel@navgurukul.org',
       senderName: 'Navgurukul Travel Desk',
       replyTo: 'travel@navgurukul.org'
@@ -380,6 +380,18 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
           </button>
 
           <button
+            onClick={() => setActiveTab('routing')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider flex items-center gap-2 transition-all whitespace-nowrap ${
+              activeTab === 'routing'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <i className="fa-solid fa-route" />
+            <span>Email Routing & SLA</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('setup')}
             className={`px-4 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider flex items-center gap-2 transition-all whitespace-nowrap ${
               activeTab === 'setup'
@@ -491,6 +503,15 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
               }
             }}
           />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECTION: EMAIL ROUTING & SLA */}
+      {/* ========================================================================= */}
+      {activeTab === 'routing' && (
+        <div className="space-y-6">
+          <EmailSettingsView currentUser={currentUser} />
         </div>
       )}
 
@@ -695,8 +716,82 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
               {/* A. Custom SMTP Form */}
               {selectedProviderCard === 'smtp' && (
                 <div className="space-y-4">
+                  {/* Presets selector */}
+                  <div className="flex items-center gap-2 flex-wrap pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold text-slate-500 uppercase mr-1">Quick Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProviderConfig({
+                          ...providerConfig,
+                          smtp: {
+                            ...providerConfig.smtp,
+                            host: 'smtp.gmail.com',
+                            port: 587,
+                            senderEmail: currentUser?.email || 'travel@navgurukul.org',
+                            senderName: 'Navgurukul Travel Desk',
+                            replyTo: currentUser?.email || 'travel@navgurukul.org'
+                          }
+                        })
+                      }
+                      className="px-2.5 py-1 rounded-md text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/50 hover:bg-red-100 transition-all"
+                    >
+                      <i className="fa-brands fa-google mr-1" /> Gmail SMTP Relay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProviderConfig({
+                          ...providerConfig,
+                          smtp: {
+                            ...providerConfig.smtp,
+                            host: 'email-smtp.ap-south-1.amazonaws.com',
+                            port: 587,
+                            senderEmail: 'travel@navgurukul.org',
+                            senderName: 'Navgurukul Travel Desk',
+                            replyTo: 'travel@navgurukul.org'
+                          }
+                        })
+                      }
+                      className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 hover:bg-amber-100 transition-all"
+                    >
+                      <i className="fa-brands fa-aws mr-1" /> Amazon SES Outbound
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProviderConfig({
+                          ...providerConfig,
+                          smtp: {
+                            ...providerConfig.smtp,
+                            host: 'smtp-relay.brevo.com',
+                            port: 587
+                          }
+                        })
+                      }
+                      className="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50 hover:bg-blue-100 transition-all"
+                    >
+                      Brevo / Sendinblue
+                    </button>
+                  </div>
+
+                  {providerConfig.smtp?.host?.includes('mail-manager-smtp') && (
+                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                      <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                        <i className="fa-solid fa-triangle-exclamation text-amber-500 text-sm" />
+                        <span>Ingress Endpoint Detected (Non-Relay)</span>
+                      </div>
+                      <p>
+                        <code>{providerConfig.smtp.host}</code> is an AWS Mail Manager <strong>Ingress Endpoint</strong>. It accepts incoming emails for archiving/filtering, but <strong>does NOT relay outbound emails to external inboxes</strong>. Emails routed here will show successful SMTP acceptance (250 OK) but will never reach the recipient.
+                      </p>
+                      <p className="font-semibold text-amber-700 dark:text-amber-300 pt-1">
+                        👉 Click a preset above (e.g. <strong>Gmail SMTP Relay</strong> or <strong>Amazon SES Outbound</strong>) and enter real credentials to ensure emails reach their targets.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="p-3.5 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-300 leading-relaxed">
-                    <strong>Direct TLS/STARTTLS Transport:</strong> Supports AWS Mail Manager SMTP endpoint, Google Workspace Relay (smtp.gmail.com), or any corporate MTA.
+                    <strong>Direct TLS/STARTTLS Transport:</strong> Use Google Workspace Relay (<code>smtp.gmail.com</code> with an App Password), Amazon SES Outbound (<code>email-smtp.ap-south-1.amazonaws.com</code>), or any corporate MTA.
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

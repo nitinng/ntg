@@ -742,9 +742,11 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <EmailNotificationCenter currentUser={currentUser} initialTab="delivery" onNavigateToRequest={setSelectedRequest} />;
       case 'email-routing':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="routing" onNavigateToRequest={setSelectedRequest} />;
       case 'email-center':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <EmailNotificationCenter currentUser={currentUser} initialTab="setup" onNavigateToRequest={setSelectedRequest} />;
+        return <EmailNotificationCenter currentUser={currentUser} initialTab="templates" onNavigateToRequest={setSelectedRequest} />;
       case 'changelog':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;
@@ -1060,9 +1062,7 @@ const App: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
-                <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
-                <SidebarLink icon="fa-paper-plane" label="Sent Mails" active={activeTab === 'sent-mails'} onClick={() => handleTabChange('sent-mails')} />
-                <SidebarLink icon="fa-route" label="Email Routing" active={activeTab === 'email-routing'} onClick={() => handleTabChange('email-routing')} />
+                <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
@@ -1095,9 +1095,7 @@ const App: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
-                <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
-                <SidebarLink icon="fa-paper-plane" label="Sent Mails" active={activeTab === 'sent-mails'} onClick={() => handleTabChange('sent-mails')} />
-                <SidebarLink icon="fa-route" label="Email Routing" active={activeTab === 'email-routing'} onClick={() => handleTabChange('email-routing')} />
+                <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />

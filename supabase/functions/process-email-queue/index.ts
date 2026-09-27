@@ -243,6 +243,21 @@ class EdgeSmtpProvider implements EmailProvider {
   }
 
   async testConnection(): Promise<{ ok: boolean; latencyMs: number; message: string }> {
+    if (this.host.includes('mail-manager-smtp')) {
+      return {
+        ok: false,
+        latencyMs: 0,
+        message: 'Ingress endpoint warning: AWS Mail Manager (*.mail-manager-smtp.amazonaws.com) does not relay outbound email to external inboxes. Use email-smtp.ap-south-1.amazonaws.com or smtp.gmail.com.'
+      };
+    }
+    if (!this.password && this.host !== 'localhost') {
+      return {
+        ok: false,
+        latencyMs: 0,
+        message: `SMTP password / app password is required for ${this.host}. Please enter it in Provider Setup.`
+      };
+    }
+
     try {
       const res = await this.executeSmtpSession(async () => undefined);
       return {
@@ -260,6 +275,29 @@ class EdgeSmtpProvider implements EmailProvider {
   }
 
   async send(message: EmailMessage): Promise<EmailSendResult> {
+    if (this.host.includes('mail-manager-smtp')) {
+      return {
+        success: false,
+        provider: 'smtp',
+        error: {
+          code: 'INGRESS_NON_RELAY',
+          message: 'AWS Mail Manager ingress endpoints (*.mail-manager-smtp.amazonaws.com) do not deliver outbound email to external recipients. Please configure Amazon SES Outbound (email-smtp.ap-south-1.amazonaws.com), Gmail SMTP (smtp.gmail.com), or Resend.',
+          isTransient: false
+        }
+      };
+    }
+    if (!this.password && this.host !== 'localhost') {
+      return {
+        success: false,
+        provider: 'smtp',
+        error: {
+          code: 'SMTP_AUTH_MISSING',
+          message: `SMTP authentication credentials missing for host ${this.host}. Please configure credentials in Provider Setup.`,
+          isTransient: false
+        }
+      };
+    }
+
     try {
       const mime = buildRfc2822MimeMessage(message, {
         email: this.senderEmail,
@@ -537,6 +575,99 @@ class EdgeGmailProvider implements EmailProvider {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 4. Google Apps Script Web App Provider (100% Reliable Workspace Sender)
+// ---------------------------------------------------------------------------
+class EdgeAppsScriptProvider implements EmailProvider {
+  readonly name = 'apps_script' as const;
+  private url: string;
+
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  async testConnection(): Promise<{ ok: boolean; latencyMs: number; message: string }> {
+    const start = Date.now();
+    try {
+      if (!this.url) {
+        return { ok: false, latencyMs: 0, message: 'APPS_SCRIPT_URL not configured in Supabase secrets' };
+      }
+      const parsed = new URL(this.url);
+      const res = await fetch(this.url, { method: 'GET', redirect: 'follow' });
+      const latencyMs = Date.now() - start;
+      const text = await res.text();
+      const isGoogleLogin = text.includes('accounts.google.com') || text.includes('ServiceLogin');
+      return {
+        ok: res.ok && !isGoogleLogin,
+        latencyMs,
+        message: isGoogleLogin 
+          ? `Apps Script URL (${parsed.hostname}${parsed.pathname}) requires authentication (Web App permission must be set to 'Anyone')`
+          : `Google Apps Script web service online (${latencyMs}ms): ${text.substring(0, 100)}`
+      };
+    } catch (e: any) {
+      return { ok: false, latencyMs: 0, message: e.message || 'Google Apps Script ping failed' };
+    }
+  }
+
+  async send(message: EmailMessage): Promise<EmailSendResult> {
+    try {
+      if (!this.url) {
+        return {
+          success: false,
+          provider: 'apps_script',
+          error: {
+            code: 'CONFIG_MISSING',
+            message: 'APPS_SCRIPT_URL not configured',
+            isTransient: false
+          }
+        };
+      }
+      const response = await fetch(this.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        redirect: 'follow',
+        body: JSON.stringify({
+          to: Array.isArray(message.to) ? message.to.join(', ') : message.to,
+          cc: message.cc?.join(', '),
+          bcc: message.bcc?.join(', '),
+          subject: message.subject,
+          htmlBody: message.html || message.text,
+          body: message.text || message.html
+        })
+      });
+      const resText = await response.text();
+      let resJson: any = {};
+      try { resJson = JSON.parse(resText); } catch {}
+      if (!response.ok || resJson.status === 'error' || resJson.success === false) {
+        return {
+          success: false,
+          provider: 'apps_script',
+          error: {
+            code: 'APPS_SCRIPT_ERROR',
+            message: resJson.error || resJson.message || `HTTP ${response.status}: ${resText.substring(0, 100)}`,
+            isTransient: false
+          }
+        };
+      }
+      return {
+        success: true,
+        messageId: resJson.messageId || `apps-script-${Date.now()}`,
+        provider: 'apps_script'
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        provider: 'apps_script',
+        error: {
+          code: 'APPS_SCRIPT_EXCEPTION',
+          message: err.message,
+          isTransient: true
+        }
+      };
+    }
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -544,7 +675,7 @@ const corsHeaders = {
 };
 
 // ---------------------------------------------------------------------------
-// 4. Central Edge Function Handler
+// 5. Central Edge Function Handler
 // ---------------------------------------------------------------------------
 // @ts-ignore: Deno global
 Deno.serve(async (req: Request) => {
@@ -583,7 +714,8 @@ Deno.serve(async (req: Request) => {
       if (routingRows) {
         for (const row of routingRows) {
           if (row.key === 'active_email_provider' && row.value) {
-            activeProviderType = typeof row.value === 'string' ? row.value : String(row.value);
+            const rawVal = typeof row.value === 'string' ? row.value.replace(/"/g, '') : String(row.value);
+            activeProviderType = rawVal.trim().toLowerCase();
           } else if (row.key === 'provider_config' && row.value) {
             providerConfig = row.value;
           } else if (row.key === 'quota_settings' && row.value) {
@@ -596,22 +728,37 @@ Deno.serve(async (req: Request) => {
     }
 
     // Override from request if explicitly testing a specific provider
-    const requestedProvider = reqBody?.provider || url.searchParams.get('provider') || activeProviderType;
+    const rawReqProvider = reqBody?.provider || url.searchParams.get('provider') || activeProviderType;
+    const requestedProvider = String(rawReqProvider).replace(/['"]/g, '').trim().toLowerCase();
 
     // Build Provider Instance
     const buildProvider = (type: string, customConfig?: any): EmailProvider => {
-      const cfg = customConfig || providerConfig[type] || {};
+      const cleanType = String(type || '').replace(/['"]/g, '').trim().toLowerCase();
+      const cfg = customConfig?.[cleanType] || customConfig || providerConfig?.[cleanType] || {};
 
-      if (type === 'smtp' || type === 'ses' || type === 'gmail_smtp') {
-        const isGmailSmtp = type === 'gmail_smtp' || cfg.host === 'smtp.gmail.com';
-        // Use SMTP credentials (AWS Mail Manager or SES SMTP or Google Workspace SMTP Relay)
+      // 1. Google Apps Script Web App Provider
+      if (cleanType === 'apps_script') {
+        // @ts-ignore: Deno.env
+        const scriptUrl = cfg.url || Deno.env.get('APPS_SCRIPT_URL') || '';
+        return new EdgeAppsScriptProvider(scriptUrl);
+      }
+
+      // 2. SMTP Providers (Custom SMTP, AWS SES SMTP, Gmail SMTP)
+      if (cleanType === 'smtp' || cleanType === 'ses' || cleanType === 'gmail_smtp') {
+        const isGmailSmtp = cleanType === 'gmail_smtp' || cfg.host === 'smtp.gmail.com';
         // @ts-ignore: Deno.env
         const gmailUser = Deno.env.get('GMAIL_USER') || '';
         // @ts-ignore: Deno.env
         const gmailAppPass = Deno.env.get('GMAIL_APP_PASSWORD') || '';
 
-        const host = isGmailSmtp ? 'smtp.gmail.com' : (cfg.host || cfg.smtpEndpoint || 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com');
-        const port = Number(cfg.port) || 587;
+        let host = isGmailSmtp ? 'smtp.gmail.com' : (cfg.host || cfg.smtpEndpoint || 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com');
+        let port = Number(cfg.port) || 587;
+        if (typeof host === 'string' && host.includes(':')) {
+          const [h, p] = host.split(':');
+          host = h;
+          if (p && !cfg.port) port = Number(p);
+        }
+
         const username = isGmailSmtp ? (cfg.username || gmailUser) : (cfg.username || cfg.accessKeyId || 'inp-xjixoqpi7g5fjchj7lbwkpmy');
         const password = isGmailSmtp ? (cfg.password || gmailAppPass) : (cfg.password || cfg.secretAccessKey || 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U');
         const senderEmail = cfg.senderEmail || (isGmailSmtp ? gmailUser : 'travel@navgurukul.org');
@@ -629,7 +776,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      if (type === 'resend') {
+      if (cleanType === 'resend') {
         // @ts-ignore: Deno.env
         const apiKey = cfg.apiKey || Deno.env.get('RESEND_API_KEY') || '';
         const senderEmail = cfg.senderEmail || 'travel@navgurukul.org';
@@ -637,7 +784,7 @@ Deno.serve(async (req: Request) => {
         return new EdgeResendProvider({ apiKey, senderEmail, senderName });
       }
 
-      if (type === 'gmail') {
+      if (cleanType === 'gmail') {
         // @ts-ignore: Deno.env
         const clientId = cfg.clientId || Deno.env.get('GMAIL_CLIENT_ID') || '';
         // @ts-ignore: Deno.env
@@ -658,13 +805,28 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Default fallback: SMTP
-      return new EdgeSmtpProvider({
-        host: 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com',
-        port: 587,
-        username: 'inp-xjixoqpi7g5fjchj7lbwkpmy',
-        password: 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U'
-      });
+      // Default fallback: No dummy silent black hole!
+      return {
+        name: 'mock',
+        async testConnection() {
+          return {
+            ok: false,
+            latencyMs: 0,
+            message: `Outbound email provider '${cleanType || 'none'}' is not configured. Please select and configure a provider in Email Center -> Provider Setup.`
+          };
+        },
+        async send() {
+          return {
+            success: false,
+            provider: 'mock',
+            error: {
+              code: 'PROVIDER_CONFIG_REQUIRED',
+              message: `Outbound email transport '${cleanType || 'none'}' has no valid credentials configured. Please configure your email provider in Email Center -> Provider Setup.`,
+              isTransient: false
+            }
+          };
+        }
+      };
     };
 
     let provider = buildProvider(requestedProvider, reqBody?.providerConfig);

@@ -1,5 +1,14 @@
 # Navgurukul Travel Desk — Transactional Mail Sender Routine
 
+> **Superseded.** This describes the stage-keyed model used before the triggers-sheet
+> migration, in which a template was selected by the stage a request landed in. Templates
+> are now keyed on `(event, audience, context_key)`, and the copy comes from
+> "Travel Desk Stages- mails - Triggers.xlsx". See
+> **[docs/email-triggers.md](docs/email-triggers.md)**.
+>
+> The architecture below — queue, worker, provider abstraction, idempotency — is still
+> accurate. Only template selection and the template inventory have changed.
+
 This document is the authoritative specification for all transactional email notifications sent by the Navgurukul Travel Desk application.
 
 ---

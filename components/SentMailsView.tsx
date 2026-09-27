@@ -25,6 +25,13 @@ export interface EmailQueueRecord {
   provider_message_id?: string;
   to_status?: string;
   idempotency_key?: string;
+  template_name?: string;
+
+  // Trigger provenance, so a delivery can be traced back to a sheet row.
+  event?: string;
+  audience?: string;
+  context_key?: string;
+  template_key?: string;
 }
 
 interface SentMailsViewProps {

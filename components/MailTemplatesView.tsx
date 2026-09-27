@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, MailTemplate, MailTemplateStatus, MailTemplateHistory, UserRole, PNCStatus, TravelRequest, Priority, TravelMode, TripType, ApprovalStatus } from '../types';
+import { User, MailTemplate, MailTemplateStatus, MailTemplateHistory, UserRole, PNCStatus, TravelRequest, Priority, TravelMode, TripType, ApprovalStatus, TravelEvent, EmailAudience } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import Input from './Input';
@@ -59,6 +59,66 @@ const DYNAMIC_VARIABLES = [
 
 const DRAFT_KEY = 'mail_template_draft';
 
+const AUDIENCE_LABELS: Record<string, string> = {
+  employee: 'Employee',
+  manager: 'Manager',
+  pnc: 'PNC',
+  finance: 'Finance',
+  escalation_owner: 'Escalation'
+};
+
+/**
+ * Trigger events that carry a mail, grouped the way the triggers sheet groups them.
+ * Events the sheet deliberately keeps silent are omitted - offering them in the
+ * editor would invite someone to author copy that never sends.
+ */
+const MAILABLE_EVENT_OPTIONS: { value: string; label: string }[] = [
+  { value: TravelEvent.POLICY_VIOLATION_DETECTED, label: 'Policy violated - approval needed' },
+  { value: TravelEvent.POLICY_EVALUATION_PASSED, label: 'Policy passed - straight to booking' },
+  { value: TravelEvent.MANAGER_APPROVED, label: 'Manager approved' },
+  { value: TravelEvent.MANAGER_REJECTED, label: 'Manager rejected' },
+  { value: TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, label: 'Employee withdrew before approval' },
+  { value: TravelEvent.PNC_REJECTED, label: 'Travel desk cannot fulfil the request' },
+  { value: TravelEvent.INFO_REQUESTED, label: 'Information requested - on hold' },
+  { value: TravelEvent.INFO_PROVIDED, label: 'Employee responded - back in the queue' },
+  { value: TravelEvent.INFO_REQUEST_REMINDER_24H, label: 'Reminder: information still needed' },
+  { value: TravelEvent.INFO_REQUEST_REMINDER_72H, label: 'Final reminder before closure' },
+  { value: TravelEvent.INFO_REQUEST_ESCALATED, label: 'Escalated - SLA breached' },
+  { value: TravelEvent.INFO_REQUEST_EXPIRED, label: 'Closed - no response within SLA' },
+  { value: TravelEvent.BOOKING_CONFIRMED, label: 'Booking confirmed' },
+  { value: TravelEvent.BOOKING_UPDATED, label: 'Booking materially changed' },
+  { value: TravelEvent.CANCELLATION_REQUESTED, label: 'Cancellation requested' },
+  { value: TravelEvent.CANCELLATION_PROCESSED_EMPLOYEE, label: 'Cancellation completed' },
+  { value: TravelEvent.PNC_CANCELLATION, label: 'Travel desk cancelled the booking' },
+  { value: TravelEvent.PARTIAL_CANCELLATION, label: 'Part of the trip cancelled' },
+  { value: TravelEvent.SEGMENT_REFUND_COMPLETED, label: 'Refund for a cancelled leg' },
+  { value: TravelEvent.PARTIAL_REFUND_RECEIVED, label: 'Partial refund received' },
+  { value: TravelEvent.REFUND_COMPLETED, label: 'Full refund received' },
+  { value: TravelEvent.REFUND_WRITTEN_OFF, label: 'Amount written off' },
+  { value: TravelEvent.REFUND_DISPUTED, label: 'Refund disputed - needs review' },
+  { value: TravelEvent.REFUND_RECONCILIATION_COMPLETED, label: 'Settlement closed' },
+  { value: TravelEvent.NO_REFUND_REQUIRED, label: 'Settled - nothing recoverable' },
+  { value: TravelEvent.RETROACTIVE_BOOKING_RECORDED, label: 'Self-booked travel recorded' }
+];
+
+const CONTEXT_KEY_OPTIONS = [
+  { value: '', label: 'Default - use whenever no variant matches' },
+  { value: 'post_booking', label: 'Only after a ticket was issued' },
+  { value: 'resubmit_after_manager_rejection', label: 'Only on resubmission after a manager rejection' },
+  { value: 'resubmit_after_pnc_rejection', label: 'Only on resubmission after a travel desk rejection' },
+  { value: 'after_partial_refund', label: 'Only when a partial refund already happened' },
+  { value: 'after_write_off', label: 'Only when an amount was written off' }
+];
+
+const CC_RULE_OPTIONS = [
+  { value: 'default', label: 'Default CC' },
+  { value: 'default_finance', label: 'Default CC + Finance' },
+  { value: 'default_manager', label: 'Default CC + Manager' },
+  { value: 'default_manager_if_approved', label: 'Default CC + Manager, only if they approved it' },
+  { value: 'manager', label: 'Manager only' },
+  { value: 'none', label: 'No CC' }
+];
+
 type Tab = 'published' | 'drafts' | 'archived';
 
 interface MailTemplatesViewProps {
@@ -117,6 +177,18 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
           audience: t.audience || 'employee',
           createdAt: t.created_at,
           updatedAt: t.updated_at,
+
+          // Trigger model from the Travel Desk triggers sheet. Templates created
+          // before that migration have no event and fall back to status_trigger.
+          templateKey: t.template_key || t.id,
+          event: t.event || null,
+          contextKey: t.context_key || null,
+          fromStatus: t.from_status || null,
+          toStatus: t.to_status || t.status_trigger || null,
+          ccRule: t.cc_rule || 'default',
+          isActive: t.is_active !== false,
+          sheetRow: t.sheet_row || null,
+          sheetSummary: t.sheet_summary || null,
         };
       });
       setTemplates(formatted);
@@ -190,6 +262,10 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
     status: 'Published',
     version: 1,
     audience: 'employee',
+    event: TravelEvent.POLICY_EVALUATION_PASSED,
+    contextKey: null,
+    ccRule: 'default',
+    isActive: true,
   });
 
   const clearLocalDraft = () => localStorage.removeItem(DRAFT_KEY);
@@ -200,8 +276,8 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
       toast.error('Template name is required');
       return;
     }
-    if (!saveAsDraft && (!currentTemplate.subject || !currentTemplate.body || !currentTemplate.statusTrigger)) {
-      toast.error('Please fill all fields before publishing');
+    if (!saveAsDraft && (!currentTemplate.subject || !currentTemplate.body || !currentTemplate.event)) {
+      toast.error('Subject, body and trigger event are required before publishing');
       return;
     }
 
@@ -220,6 +296,15 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
         status: targetStatus,
         version: newVersion,
         audience: currentTemplate.audience || 'employee',
+        event: currentTemplate.event || null,
+        context_key: currentTemplate.contextKey || null,
+        cc_rule: currentTemplate.ccRule || 'default',
+        is_active: currentTemplate.isActive !== false,
+        // Stable key for the (event, audience, context) trigger. Templates seeded
+        // from the sheet keep theirs; hand-authored ones get one on first save.
+        template_key:
+          currentTemplate.templateKey ||
+          `${(currentTemplate.event || 'custom').toLowerCase()}.${currentTemplate.audience || 'employee'}.${currentTemplate.contextKey || 'default'}`,
         updated_at: new Date().toISOString(),
       };
 
@@ -474,15 +559,33 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 hover:shadow-lg transition-all group flex flex-col h-full">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider font-mono">
-            {template.statusTrigger || 'No trigger'}
+          <span
+            className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider font-mono"
+            title={template.event ? 'Trigger event' : 'Legacy stage trigger - not yet migrated to an event'}
+          >
+            {template.event || template.statusTrigger || 'No trigger'}
           </span>
           <span className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">
-            {template.audience || 'employee'}
+            {AUDIENCE_LABELS[template.audience] || template.audience || 'employee'}
           </span>
+          {template.contextKey && (
+            // Without this the list shows two apparently identical templates: the
+            // context is the only thing that tells them apart.
+            <span
+              className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-2.5 py-1 rounded-md text-xs font-bold tracking-wider"
+              title="Variant - used only in this situation, otherwise the default for this trigger is sent"
+            >
+              {template.contextKey.replace(/_/g, ' ')}
+            </span>
+          )}
           <span className="text-[11px] font-mono text-slate-400">
             v{template.version || 1}
           </span>
+          {template.sheetRow && (
+            <span className="text-[11px] font-mono text-slate-300 dark:text-slate-600" title="Row in the Travel Desk triggers sheet">
+              sheet #{template.sheetRow}
+            </span>
+          )}
         </div>
         <div className="flex gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
           <button
@@ -707,30 +810,57 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
                       { value: 'employee', label: 'Employee' },
                       { value: 'manager', label: 'Manager' },
                       { value: 'pnc', label: 'PNC Team' },
+                      { value: 'finance', label: 'Finance' },
+                      { value: 'escalation_owner', label: 'Escalation Owner' },
                     ]}
                   />
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Select
+                    label="Trigger Event"
+                    value={currentTemplate.event || ''}
+                    onChange={e => setCurrentTemplate({ ...currentTemplate, event: e.target.value as TravelEvent })}
+                    options={MAILABLE_EVENT_OPTIONS}
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                    What happened, not where the request landed. Several stages are reached
+                    by more than one event and need different wording.
+                  </p>
+                </div>
+
+                <div>
+                  <Select
+                    label="Variant (optional)"
+                    value={currentTemplate.contextKey || ''}
+                    onChange={e =>
+                      setCurrentTemplate({
+                        ...currentTemplate,
+                        contextKey: (e.target.value || null) as any
+                      })
+                    }
+                    options={CONTEXT_KEY_OPTIONS}
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                    Leave as default unless this wording is only correct in one situation.
+                    The default is sent whenever no variant matches.
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <Select
-                  label="Lifecycle Status Trigger"
-                  value={currentTemplate.statusTrigger || PNCStatus.NOT_STARTED}
-                  onChange={e => setCurrentTemplate({ ...currentTemplate, statusTrigger: e.target.value })}
-                  options={[
-                    { value: PNCStatus.NOT_STARTED, label: 'Not Started (Request Received / Resubmitted)' },
-                    { value: PNCStatus.APPROVAL_PENDING, label: 'Approval Pending (Violation detected)' },
-                    { value: PNCStatus.APPROVED, label: 'Approved (Manager approved)' },
-                    { value: PNCStatus.REJECTED_BY_MANAGER, label: 'Rejected by Manager' },
-                    { value: PNCStatus.PROCESSING, label: 'Processing (In PNC Queue)' },
-                    { value: PNCStatus.ON_HOLD, label: 'On Hold (Clarification requested)' },
-                    { value: PNCStatus.REJECTED_BY_PNC, label: 'Rejected by PNC' },
-                    { value: PNCStatus.BOOKED, label: 'Booked (Ticket issued)' },
-                    { value: PNCStatus.CANCELLED_BY_EMPLOYEE, label: 'Cancelled by Employee' },
-                    { value: PNCStatus.CANCELLED_BY_PNC, label: 'Cancelled by PNC' },
-                    { value: PNCStatus.CLOSED, label: 'Closed (Trip completed / Refund done)' },
-                  ]}
+                  label="Who is copied"
+                  value={currentTemplate.ccRule || 'default'}
+                  onChange={e => setCurrentTemplate({ ...currentTemplate, ccRule: e.target.value as any })}
+                  options={CC_RULE_OPTIONS}
                 />
+                <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                  Actual addresses are configured under Email Routing, so they can be changed
+                  without editing every template.
+                </p>
               </div>
 
               <div>

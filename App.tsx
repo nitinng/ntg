@@ -72,6 +72,7 @@ const SettingsView = React.lazy(() => import('./components/SettingsView'));
 const AdminQueueView = React.lazy(() => import('./components/AdminQueueView'));
 const PastRequestsView = React.lazy(() => import('./components/PastRequestsView'));
 const SentMailsView = React.lazy(() => import('./components/SentMailsView'));
+const EmailSettingsView = React.lazy(() => import('./components/EmailSettingsView'));
 const VersionChangelogView = React.lazy(() => import('./components/VersionChangelogView'));
 
 const App: React.FC = () => {
@@ -739,6 +740,9 @@ const App: React.FC = () => {
       case 'sent-mails':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <SentMailsView currentUser={currentUser} onTabChange={handleTabChange} />;
+      case 'email-routing':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <EmailSettingsView currentUser={currentUser} />;
       case 'changelog':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;
@@ -1056,6 +1060,7 @@ const App: React.FC = () => {
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
                 <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
                 <SidebarLink icon="fa-paper-plane" label="Sent Mails" active={activeTab === 'sent-mails'} onClick={() => handleTabChange('sent-mails')} />
+                <SidebarLink icon="fa-route" label="Email Routing" active={activeTab === 'email-routing'} onClick={() => handleTabChange('email-routing')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
@@ -1090,6 +1095,7 @@ const App: React.FC = () => {
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
                 <SidebarLink icon="fa-envelope-open-text" label="Mail Templates" active={activeTab === 'mail-templates'} onClick={() => handleTabChange('mail-templates')} />
                 <SidebarLink icon="fa-paper-plane" label="Sent Mails" active={activeTab === 'sent-mails'} onClick={() => handleTabChange('sent-mails')} />
+                <SidebarLink icon="fa-route" label="Email Routing" active={activeTab === 'email-routing'} onClick={() => handleTabChange('email-routing')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />

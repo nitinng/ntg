@@ -11,10 +11,10 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
   const getStyles = () => {
     if (type === 'priority') {
       switch (value) {
-        case Priority.CRITICAL: return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50';
-        case Priority.HIGH: return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50';
-        case Priority.MEDIUM: return 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/50';
-        case Priority.LOW: return 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/50';
+        case Priority.CRITICAL: return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20';
+        case Priority.HIGH: return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20';
+        case Priority.MEDIUM: return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20';
+        case Priority.LOW: return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20';
         default: return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
       }
     }
@@ -54,6 +54,15 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
   };
 
   const getIcon = () => {
+    if (type === 'priority') {
+      switch (value) {
+        case Priority.CRITICAL: return <i className="fa-solid fa-triangle-exclamation mr-1 text-[10px]"></i>;
+        case Priority.HIGH: return <i className="fa-solid fa-bolt mr-1 text-[10px]"></i>;
+        case Priority.MEDIUM: return <i className="fa-solid fa-clock mr-1 text-[10px]"></i>;
+        case Priority.LOW: return <i className="fa-solid fa-calendar-check mr-1 text-[10px]"></i>;
+        default: return null;
+      }
+    }
     if (type === 'status') {
       switch (value) {
         case VerificationStatus.APPROVED: return <i className="fa-solid fa-circle-check mr-1"></i>;

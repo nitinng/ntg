@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { checkPolicyViolation } from '../utils/policyUtils';
-import { TravelRequest, TravelModePolicy, TravelMode, TripType, Priority, ApprovalStatus, PNCStatus } from '../types';
+import { checkPolicyViolation, calculateDynamicUrgency, getEffectiveBookingSlaHours, isRequestBookingSlaBreached } from '../utils/policyUtils';
+import { TravelRequest, TravelModePolicy, TravelMode, TripType, Priority, ApprovalStatus, PNCStatus, PolicyConfig } from '../types';
 
 const createMockRequest = (overrides?: Partial<TravelRequest>): TravelRequest => ({
   id: 'req-1',
@@ -129,5 +129,65 @@ describe('Policy Utility: checkPolicyViolation', () => {
       dateOfTravel: '2026-09-05' // Travel date before request date
     });
     expect(checkPolicyViolation(pastReq, defaultPolicies)).toBe(true);
+  });
+});
+
+describe('Dynamic Urgency & SLA Utilities', () => {
+  const policy: Partial<PolicyConfig> = {
+    tatBookingHours: 72,
+    enableUrgencySla: true,
+    urgencyThresholds: {
+      criticalDays: 2,
+      highDays: 10,
+      mediumDays: 20
+    },
+    urgencySlaHours: {
+      critical: 4,
+      high: 12,
+      medium: 24,
+      low: 48
+    }
+  };
+
+  it('calculates dynamic urgency according to thresholds', () => {
+    // Reference date: 2026-09-28
+    const ref = new Date('2026-09-28T12:00:00.000Z');
+
+    // < 2 days: Critical
+    expect(calculateDynamicUrgency('2026-09-29', policy, ref)).toBe(Priority.CRITICAL);
+
+    // 2 - 10 days: High
+    expect(calculateDynamicUrgency('2026-10-05', policy, ref)).toBe(Priority.HIGH);
+
+    // 10 - 20 days: Medium
+    expect(calculateDynamicUrgency('2026-10-15', policy, ref)).toBe(Priority.MEDIUM);
+
+    // > 20 days: Low
+    expect(calculateDynamicUrgency('2026-10-25', policy, ref)).toBe(Priority.LOW);
+  });
+
+  it('provides effective SLA hours based on enableUrgencySla toggle', () => {
+    // When enabled, uses tier hours
+    expect(getEffectiveBookingSlaHours(Priority.CRITICAL, policy)).toBe(4);
+    expect(getEffectiveBookingSlaHours(Priority.HIGH, policy)).toBe(12);
+    expect(getEffectiveBookingSlaHours(Priority.MEDIUM, policy)).toBe(24);
+    expect(getEffectiveBookingSlaHours(Priority.LOW, policy)).toBe(48);
+
+    // When disabled, falls back to tatBookingHours
+    const disabledPolicy = { ...policy, enableUrgencySla: false };
+    expect(getEffectiveBookingSlaHours(Priority.CRITICAL, disabledPolicy)).toBe(72);
+    expect(getEffectiveBookingSlaHours(Priority.HIGH, disabledPolicy)).toBe(72);
+  });
+
+  it('accurately evaluates SLA breaches', () => {
+    const now = new Date('2026-09-28T12:00:00.000Z');
+    
+    // Critical request created 5 hours ago (Target = 4h) -> Breached
+    const breachedElapsedMs = 5 * 3600 * 1000;
+    expect(isRequestBookingSlaBreached(breachedElapsedMs, Priority.CRITICAL, policy)).toBe(true);
+
+    // Low urgency request created 5 hours ago (Target = 48h) -> Not Breached
+    const safeElapsedMs = 5 * 3600 * 1000;
+    expect(isRequestBookingSlaBreached(safeElapsedMs, Priority.LOW, policy)).toBe(false);
   });
 });

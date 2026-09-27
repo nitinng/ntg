@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus, Department, TestingSettings, PolicyConfig } from '../types';
 import Input from './Input';
 import Select from './Select';
 import { toast } from 'sonner';
+import { calculateDynamicUrgency, getDaysRemaining } from '../utils/policyUtils';
 
 interface PNCBookingModalProps {
     onClose: () => void;
@@ -51,7 +52,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
         returnFrom: '',
         returnTo: '',
 
-        priority: policy?.defaultBookingUrgency || Priority.MEDIUM,
+        priority: calculateDynamicUrgency(null, policy),
 
         // Booking Details (Step 3)
         ticketCost: '',
@@ -62,6 +63,23 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
         numberOfTravelers: 1,
         travellerNames: '', // Will default to requester name if empty
     });
+
+    const [hasManualUrgencyOverride, setHasManualUrgencyOverride] = useState(false);
+
+    const daysRemaining = useMemo(() => {
+        return getDaysRemaining(data.dateOfTravel);
+    }, [data.dateOfTravel]);
+
+    const dynamicUrgency = useMemo(() => {
+        return calculateDynamicUrgency(data.dateOfTravel, policy);
+    }, [data.dateOfTravel, policy]);
+
+    // Keep data.priority in sync with dynamic urgency unless PNC explicitly overrode
+    useEffect(() => {
+        if (!hasManualUrgencyOverride && data.dateOfTravel) {
+            setData(prev => ({ ...prev, priority: dynamicUrgency }));
+        }
+    }, [dynamicUrgency, hasManualUrgencyOverride, data.dateOfTravel]);
 
     const handleInputChange = (field: string, value: any) => {
         setData(prev => ({ ...prev, [field]: value }));
@@ -331,39 +349,6 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
                                             ))}
                                         </div>
                                     </div>
-
-                                    {/* Booking Urgency / Priority */}
-                                    <div className="space-y-2.5 md:col-span-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Booking Urgency / Priority
-                                        </label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                            {[
-                                                { key: Priority.LOW, label: 'Low', icon: 'fa-gauge-simple', activeClass: 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-700 dark:text-emerald-400' },
-                                                { key: Priority.MEDIUM, label: 'Medium', icon: 'fa-clock', activeClass: 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-700 dark:text-amber-400' },
-                                                { key: Priority.HIGH, label: 'High', icon: 'fa-bolt', activeClass: 'ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-700 dark:text-orange-400' },
-                                                { key: Priority.CRITICAL, label: 'Critical', icon: 'fa-triangle-exclamation', activeClass: 'ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-950/50 border-rose-500 text-rose-700 dark:text-rose-400' },
-                                            ].map(opt => {
-                                                const isSelected = data.priority === opt.key;
-                                                return (
-                                                    <button
-                                                        key={opt.key}
-                                                        type="button"
-                                                        onClick={() => handleInputChange('priority', opt.key)}
-                                                        className={`p-2.5 rounded-md border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                                                            isSelected
-                                                                ? opt.activeClass
-                                                                : 'border-slate-200 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                                        }`}
-                                                    >
-                                                        <i className={`fa-solid ${opt.icon} text-[11px]`}></i>
-                                                        <span>{opt.label}</span>
-                                                        {isSelected && <i className="fa-solid fa-check text-2xs ml-0.5"></i>}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         )}
@@ -400,6 +385,64 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
                                             value={data.dateOfTravel}
                                             onChange={(e: any) => handleInputChange('dateOfTravel', e.target.value)}
                                         />
+
+                                        {/* Dynamic Urgency Indicator for PNC */}
+                                        {data.dateOfTravel && (
+                                            <div className="md:col-span-2 p-3.5 rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/80 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${
+                                                        data.priority === Priority.CRITICAL ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
+                                                        data.priority === Priority.HIGH ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                                                        data.priority === Priority.MEDIUM ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' :
+                                                        'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                                    }`}>
+                                                        <i className={`fa-solid ${
+                                                            data.priority === Priority.CRITICAL ? 'fa-triangle-exclamation' :
+                                                            data.priority === Priority.HIGH ? 'fa-bolt' :
+                                                            data.priority === Priority.MEDIUM ? 'fa-clock' :
+                                                            'fa-calendar-check'
+                                                        }`}></i>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-bold text-slate-800 dark:text-neutral-100">
+                                                                Calculated Urgency:
+                                                            </span>
+                                                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider border ${
+                                                                data.priority === Priority.CRITICAL ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' :
+                                                                data.priority === Priority.HIGH ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                                                                data.priority === Priority.MEDIUM ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' :
+                                                                'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                                            }`}>
+                                                                {data.priority}
+                                                            </span>
+                                                            {daysRemaining !== null && (
+                                                                <span className="text-2xs text-slate-500 dark:text-neutral-400">
+                                                                    ({daysRemaining > 0 ? `${daysRemaining} days to travel` : 'Immediate/past departure'})
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-500 dark:text-neutral-400 mt-0.5">
+                                                            PNC staff can manually adjust the urgency tier if necessary.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <select
+                                                    value={data.priority}
+                                                    onChange={e => {
+                                                        setHasManualUrgencyOverride(true);
+                                                        handleInputChange('priority', e.target.value as Priority);
+                                                    }}
+                                                    className="px-2.5 py-1 text-xs font-semibold rounded border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-850 text-slate-800 dark:text-neutral-200"
+                                                >
+                                                    <option value={Priority.LOW}>Low</option>
+                                                    <option value={Priority.MEDIUM}>Medium</option>
+                                                    <option value={Priority.HIGH}>High</option>
+                                                    <option value={Priority.CRITICAL}>Critical</option>
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

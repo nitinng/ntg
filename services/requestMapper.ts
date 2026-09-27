@@ -1,4 +1,5 @@
 import { TravelRequest, TripType, TravelMode, Priority, ApprovalStatus, PNCStatus } from '../types';
+import { calculateDynamicUrgency } from '../utils/policyUtils';
 
 /**
  * Maps Supabase snake_case travel_requests row to camelCase TravelRequest domain object.
@@ -26,7 +27,9 @@ export const mapDbRequest = (r: any): TravelRequest => ({
   returnPreferredDepartureWindow: r.return_preferred_departure_window || r.returnPreferredDepartureWindow || '',
   numberOfTravelers: r.number_of_travelers || r.numberOfTravelers || 1,
   travellerNames: r.traveller_names || r.travellerNames || '',
-  priority: r.priority || Priority.MEDIUM,
+  priority: (r.date_of_travel || r.dateOfTravel)
+    ? calculateDynamicUrgency(r.date_of_travel || r.dateOfTravel)
+    : (r.priority || Priority.MEDIUM),
   specialRequirements: r.special_requirements || r.specialRequirements || '',
   approvalStatus: r.approval_status || r.approvalStatus || ApprovalStatus.PENDING,
   pncStatus: r.pnc_status || r.pncStatus || PNCStatus.NOT_STARTED,

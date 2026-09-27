@@ -400,9 +400,14 @@ export interface PolicyConfig {
   cancellationEmpNgCover: number;
   cancellationEmpEmpCover: number;
   // Booking Urgency & Priority Configuration
-  defaultBookingUrgency?: Priority;
+  urgencyThresholds?: {
+    criticalDays: number; // Critical if < criticalDays (default 2)
+    highDays: number;     // High if between criticalDays and highDays (default 10)
+    mediumDays: number;   // Medium if between highDays and mediumDays (default 20)
+  };
   allowRequesterUrgency?: boolean;
   autoEscalateUrgentDays?: number;
+  enableUrgencySla?: boolean; // When true, ticketing SLA targets are driven by urgency tiers instead of generic TAT
   urgencySlaHours?: {
     critical: number;
     high: number;

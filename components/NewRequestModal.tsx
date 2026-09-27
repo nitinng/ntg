@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TripType, TravelMode, Priority, User, TravelModePolicy, Department, TestingSettings, PolicyConfig } from '../types';
 import Input from './Input';
 import Select from './Select';
 import { toast } from 'sonner';
+import { calculateDynamicUrgency, getDaysRemaining } from '../utils/policyUtils';
 
 interface NewRequestModalProps {
     onClose: () => void;
@@ -41,6 +42,13 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
 
     const departmentOptions = (departments || []).map(d => ({ label: d.name, value: d.name }));
 
+    const [hasManualUrgencyOverride, setHasManualUrgencyOverride] = useState(false);
+
+    const initialDate = isEditMode && initialData ? (initialData.dateOfTravel ? initialData.dateOfTravel.substring(0, 10) : '') : '';
+    const initialPriority = isEditMode && initialData
+        ? (initialData.priority || calculateDynamicUrgency(initialDate, policy))
+        : calculateDynamicUrgency(initialDate, policy);
+
     const [data, setData] = useState({
         requesterName: isEditMode && initialData ? (initialData.requesterName || '') : currentUser.name,
         requesterEmail: isEditMode && initialData ? (initialData.requesterEmail || '') : currentUser.email,
@@ -54,14 +62,14 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
         mode: isEditMode && initialData ? (initialData.mode || TravelMode.FLIGHT) : TravelMode.FLIGHT,
         from: isEditMode && initialData ? (initialData.from || '') : '',
         to: isEditMode && initialData ? (initialData.to || '') : (meetupContext ? 'Igatpuri' : ''),
-        dateOfTravel: isEditMode && initialData ? (initialData.dateOfTravel ? initialData.dateOfTravel.substring(0, 10) : '') : '',
+        dateOfTravel: initialDate,
         preferredDepartureWindow: isEditMode && initialData ? (initialData.preferredDepartureWindow || '') : '',
         returnDate: isEditMode && initialData ? (initialData.returnDate ? initialData.returnDate.substring(0, 10) : '') : '',
         returnFrom: isEditMode && initialData ? (initialData.returnFrom || initialData.to || '') : (meetupContext ? 'Igatpuri' : ''),
         returnTo: isEditMode && initialData ? (initialData.returnTo || initialData.from || '') : '',
         returnPreferredDepartureWindow: isEditMode && initialData ? (initialData.returnPreferredDepartureWindow || '') : '',
         travellerNames: isEditMode && initialData ? (initialData.travellerNames || '') : currentUser.name,
-        priority: isEditMode && initialData ? (initialData.priority || policy?.defaultBookingUrgency || Priority.MEDIUM) : (policy?.defaultBookingUrgency || Priority.MEDIUM),
+        priority: initialPriority,
         specialRequirements: isEditMode && initialData ? (initialData.specialRequirements || '') : '',
         emergencyContactName: isEditMode && initialData ? (initialData.emergencyContactName || '') : (currentUser.emergencyContactName || ''),
         emergencyContactPhone: isEditMode && initialData ? (initialData.emergencyContactPhone || '') : (currentUser.emergencyContactPhone || ''),
@@ -71,24 +79,20 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
         violationReason: isEditMode && initialData ? (initialData.violationDetails || '') : ''
     });
 
-    // Auto-escalation check if travel date is imminent
-    const isAutoEscalated = React.useMemo(() => {
-        if (!data.dateOfTravel) return false;
-        const reqDate = new Date();
-        reqDate.setHours(0, 0, 0, 0);
-        const travelDate = new Date(data.dateOfTravel);
-        travelDate.setHours(0, 0, 0, 0);
-        const daysDiff = Math.ceil((travelDate.getTime() - reqDate.getTime()) / (1000 * 60 * 60 * 24));
-        const threshold = policy?.autoEscalateUrgentDays ?? 3;
-        return daysDiff >= 0 && daysDiff <= threshold;
-    }, [data.dateOfTravel, policy?.autoEscalateUrgentDays]);
+    const daysRemaining = useMemo(() => {
+        return getDaysRemaining(data.dateOfTravel);
+    }, [data.dateOfTravel]);
 
-    // Automatically elevate priority to HIGH when auto-escalation triggers
-    React.useEffect(() => {
-        if (isAutoEscalated && data.priority !== Priority.CRITICAL && data.priority !== Priority.HIGH) {
-            setData(prev => ({ ...prev, priority: Priority.HIGH }));
+    const dynamicUrgency = useMemo(() => {
+        return calculateDynamicUrgency(data.dateOfTravel, policy);
+    }, [data.dateOfTravel, policy]);
+
+    // Keep data.priority in sync with dynamic urgency unless requester manually overrode
+    useEffect(() => {
+        if (!hasManualUrgencyOverride && data.dateOfTravel) {
+            setData(prev => ({ ...prev, priority: dynamicUrgency }));
         }
-    }, [isAutoEscalated]);
+    }, [dynamicUrgency, hasManualUrgencyOverride, data.dateOfTravel]);
 
     // Meetup specific date logic
     React.useEffect(() => {
@@ -398,48 +402,6 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
                                             ))}
                                         </div>
                                     </div>
-
-                                    {/* Urgency / Priority Selection */}
-                                    {policy?.allowRequesterUrgency !== false && (
-                                        <div className="space-y-2.5 md:col-span-2">
-                                            <div className="flex items-center justify-between">
-                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                                    Booking Urgency / Priority
-                                                </label>
-                                                {isAutoEscalated && (
-                                                    <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 flex items-center gap-1">
-                                                        <i className="fa-solid fa-bolt text-[10px]"></i> Auto-escalated (&le; {policy?.autoEscalateUrgentDays ?? 3} days to departure)
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                {[
-                                                    { key: Priority.LOW, label: 'Low', icon: 'fa-gauge-simple', activeClass: 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-700 dark:text-emerald-400' },
-                                                    { key: Priority.MEDIUM, label: 'Medium', icon: 'fa-clock', activeClass: 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-700 dark:text-amber-400' },
-                                                    { key: Priority.HIGH, label: 'High', icon: 'fa-bolt', activeClass: 'ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-700 dark:text-orange-400' },
-                                                    { key: Priority.CRITICAL, label: 'Critical', icon: 'fa-triangle-exclamation', activeClass: 'ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-950/50 border-rose-500 text-rose-700 dark:text-rose-400' },
-                                                ].map(opt => {
-                                                    const isSelected = data.priority === opt.key;
-                                                    return (
-                                                        <button
-                                                            key={opt.key}
-                                                            type="button"
-                                                            onClick={() => handleInputChange('priority', opt.key)}
-                                                            className={`p-2.5 rounded-md border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                                                                isSelected
-                                                                    ? opt.activeClass
-                                                                    : 'border-slate-200 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                                            }`}
-                                                        >
-                                                            <i className={`fa-solid ${opt.icon} text-[11px]`}></i>
-                                                            <span>{opt.label}</span>
-                                                            {isSelected && <i className="fa-solid fa-check text-2xs ml-0.5"></i>}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}
@@ -495,6 +457,70 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
                                                 <option value="Anytime">Anytime</option>
                                             </select>
                                         </div>
+
+                                        {/* Dynamic Urgency Indicator */}
+                                        {data.dateOfTravel && (
+                                            <div className="md:col-span-2 p-3.5 rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/80 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${
+                                                        data.priority === Priority.CRITICAL ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
+                                                        data.priority === Priority.HIGH ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                                                        data.priority === Priority.MEDIUM ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' :
+                                                        'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                                    }`}>
+                                                        <i className={`fa-solid ${
+                                                            data.priority === Priority.CRITICAL ? 'fa-triangle-exclamation' :
+                                                            data.priority === Priority.HIGH ? 'fa-bolt' :
+                                                            data.priority === Priority.MEDIUM ? 'fa-clock' :
+                                                            'fa-calendar-check'
+                                                        }`}></i>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-bold text-slate-800 dark:text-neutral-100">
+                                                                Assigned Urgency:
+                                                            </span>
+                                                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider border ${
+                                                                data.priority === Priority.CRITICAL ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' :
+                                                                data.priority === Priority.HIGH ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                                                                data.priority === Priority.MEDIUM ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' :
+                                                                'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                                            }`}>
+                                                                {data.priority}
+                                                            </span>
+                                                            {daysRemaining !== null && (
+                                                                <span className="text-2xs text-slate-500 dark:text-neutral-400">
+                                                                    ({daysRemaining > 0 ? `${daysRemaining} days to travel` : 'Departing today'})
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-500 dark:text-neutral-400 mt-0.5">
+                                                            {data.priority === Priority.LOW && `Starts at Low. Dynamically moves to Medium at ${policy?.urgencyThresholds?.mediumDays ?? 20}d, High at ${policy?.urgencyThresholds?.highDays ?? 10}d, and Critical at ${policy?.urgencyThresholds?.criticalDays ?? 2}d.`}
+                                                            {data.priority === Priority.MEDIUM && `Standard turnaround. Dynamically moves to High at ${policy?.urgencyThresholds?.highDays ?? 10}d.`}
+                                                            {data.priority === Priority.HIGH && `Expedited turnaround. Dynamically moves to Critical at ${policy?.urgencyThresholds?.criticalDays ?? 2}d.`}
+                                                            {data.priority === Priority.CRITICAL && 'Critical emergency queue. Immediate action required.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Optional manual override if policy allows */}
+                                                {policy?.allowRequesterUrgency && (
+                                                    <select
+                                                        value={data.priority}
+                                                        onChange={e => {
+                                                            setHasManualUrgencyOverride(true);
+                                                            handleInputChange('priority', e.target.value as Priority);
+                                                        }}
+                                                        className="px-2.5 py-1 text-xs font-semibold rounded border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-850 text-slate-800 dark:text-neutral-200"
+                                                    >
+                                                        <option value={Priority.LOW}>Low</option>
+                                                        <option value={Priority.MEDIUM}>Medium</option>
+                                                        <option value={Priority.HIGH}>High</option>
+                                                        <option value={Priority.CRITICAL}>Critical</option>
+                                                    </select>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {isViolated && (

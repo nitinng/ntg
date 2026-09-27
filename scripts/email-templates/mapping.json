@@ -1,0 +1,125 @@
+{
+  "_doc": [
+    "Maps each row of 'Travel Desk Stages- mails - Triggers.xlsx' (Final tab) onto one or more",
+    "mail_templates records. Source of truth for the seed migration; edit this, then re-run",
+    "  python scripts/email-templates/generate_seed.py",
+    "",
+    "Trigger tuple is (event, audience, context_key).",
+    "  event       - TravelEvent value, matches types.ts",
+    "  audience    - employee | manager | pnc | finance | escalation_owner",
+    "  context_key - nullable discriminator used when several sheet rows share one event+audience",
+    "                but carry different copy. null = the default/fallback template for that pair.",
+    "",
+    "from_status / to_status are stored for documentation, UI display and validation.",
+    "They are NOT used for template resolution - context_key is.",
+    "",
+    "cc_rule     - default | default_finance | default_manager | manager | default_manager_if_approved",
+    "body_from   - row number to copy the rendered body from (used by the sheet's merged rows)"
+  ],
+
+  "emit": [
+    { "row": "2",   "event": "POLICY_VIOLATION_DETECTED",        "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "3",   "event": "POLICY_VIOLATION_DETECTED",        "audience": "manager",          "context_key": null,                             "cc_rule": "default" },
+    { "row": "4",   "event": "POLICY_EVALUATION_PASSED",         "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "5",   "event": "MANAGER_APPROVED",                 "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "7",   "event": "MANAGER_REJECTED",                 "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "8",   "event": "EMPLOYEE_CANCELLED_PRE_APPROVAL",  "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "9",   "event": "EMPLOYEE_CANCELLED_PRE_APPROVAL",  "audience": "manager",          "context_key": null,                             "cc_rule": "default" },
+
+    { "row": "12",  "event": "POLICY_VIOLATION_DETECTED",        "audience": "employee",         "context_key": "resubmit_after_manager_rejection", "cc_rule": "default" },
+    { "row": "13",  "event": "POLICY_VIOLATION_DETECTED",        "audience": "manager",          "context_key": "resubmit_after_manager_rejection", "cc_rule": "default" },
+    { "row": "14",  "event": "POLICY_EVALUATION_PASSED",         "audience": "employee",         "context_key": "resubmit_after_manager_rejection", "cc_rule": "default" },
+
+    { "row": "15",  "event": "PNC_REJECTED",                     "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "18a", "event": "POLICY_VIOLATION_DETECTED",        "audience": "employee",         "context_key": "resubmit_after_pnc_rejection",   "cc_rule": "default", "body_from": "12" },
+    { "row": "18b", "event": "POLICY_VIOLATION_DETECTED",        "audience": "manager",          "context_key": "resubmit_after_pnc_rejection",   "cc_rule": "default", "body_from": "13" },
+    { "row": "19",  "event": "POLICY_EVALUATION_PASSED",         "audience": "employee",         "context_key": "resubmit_after_pnc_rejection",   "cc_rule": "default" },
+
+    { "row": "21",  "event": "INFO_REQUESTED",                   "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "22",  "event": "BOOKING_CONFIRMED",                "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+
+    { "row": "23",  "event": "CANCELLATION_REQUESTED",           "audience": "pnc",              "context_key": null,                             "cc_rule": "default" },
+    { "row": "24",  "event": "CANCELLATION_REQUESTED",           "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "35",  "event": "CANCELLATION_REQUESTED",           "audience": "employee",         "context_key": "post_booking",                   "cc_rule": "default" },
+
+    { "row": "25",  "event": "INFO_PROVIDED",                    "audience": "pnc",              "context_key": null,                             "cc_rule": "default" },
+    { "row": "26",  "event": "INFO_REQUEST_REMINDER_24H",        "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "26b", "event": "INFO_REQUEST_REMINDER_72H",        "audience": "employee",         "context_key": null,                             "cc_rule": "default_manager" },
+    { "row": "27",  "event": "INFO_REQUEST_ESCALATED",           "audience": "escalation_owner", "context_key": null,                             "cc_rule": "manager" },
+    { "row": "28",  "event": "INFO_REQUEST_EXPIRED",             "audience": "employee",         "context_key": null,                             "cc_rule": "default_manager" },
+
+    { "row": "29",  "event": "BOOKING_UPDATED",                  "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+
+    { "row": "33",  "event": "CANCELLATION_PROCESSED_EMPLOYEE",  "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "37",  "event": "CANCELLATION_PROCESSED_EMPLOYEE",  "audience": "employee",         "context_key": "post_booking",                   "cc_rule": "default" },
+    { "row": "39",  "event": "NO_REFUND_REQUIRED",               "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "40",  "event": "PNC_CANCELLATION",                 "audience": "employee",         "context_key": null,                             "cc_rule": "default_manager_if_approved" },
+
+    { "row": "43",  "event": "PARTIAL_CANCELLATION",             "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "45",  "event": "SEGMENT_REFUND_COMPLETED",         "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+
+    { "row": "46",  "event": "PARTIAL_REFUND_RECEIVED",          "audience": "employee",         "context_key": null,                             "cc_rule": "default_finance" },
+    { "row": "47",  "event": "REFUND_COMPLETED",                 "audience": "employee",         "context_key": null,                             "cc_rule": "default_finance" },
+    { "row": "49",  "event": "REFUND_COMPLETED",                 "audience": "employee",         "context_key": "after_partial_refund",           "cc_rule": "default_finance" },
+    { "row": "48",  "event": "REFUND_WRITTEN_OFF",               "audience": "employee",         "context_key": null,                             "cc_rule": "default_finance" },
+    { "row": "50",  "event": "REFUND_WRITTEN_OFF",               "audience": "employee",         "context_key": "after_partial_refund",           "cc_rule": "default_finance" },
+    { "row": "51",  "event": "REFUND_RECONCILIATION_COMPLETED",  "audience": "employee",         "context_key": null,                             "cc_rule": "default" },
+    { "row": "52",  "event": "REFUND_RECONCILIATION_COMPLETED",  "audience": "employee",         "context_key": "after_write_off",                "cc_rule": "default", "body_from": "51" },
+    { "row": "53",  "event": "REFUND_DISPUTED",                  "audience": "finance",          "context_key": null,                             "cc_rule": "default" },
+
+    { "row": "57",  "event": "RETROACTIVE_BOOKING_RECORDED",     "audience": "employee",         "context_key": null,                             "cc_rule": "default" }
+  ],
+
+  "authored": {
+    "_doc": [
+      "Sheet row 33 carries a subject but 'Na' in both the Email Template and Revised Email Template",
+      "columns, so there is no body to import. The copy below is written to the sheet's own brief for",
+      "that row ('States plainly that no money is owed') and to the house voice of the surrounding rows.",
+      "REVIEW THIS COPY before go-live - it is the only body in the seed not taken from the sheet."
+    ],
+    "33": {
+      "subject": "Travel Request Cancelled - {{submissionId}}",
+      "body": [
+        "Hi {{requester_name}},",
+        "",
+        "Your travel request {{submissionId}} has been cancelled, as you asked.",
+        "",
+        "Route: {{origin}} to {{destination}}",
+        "Date: {{departure_date}}",
+        "",
+        "Nothing had been booked on this request, so there is no cancellation charge and nothing is owed by you.",
+        "",
+        "If you need to travel after all, please raise a fresh request on the Travel Desk.",
+        "",
+        "View Request: Travel Desk",
+        "",
+        "Best regards,",
+        "",
+        "Navgurukul Travel Desk"
+      ]
+    }
+  },
+
+  "silent": {
+    "_doc": "Sheet rows that deliberately send no email. Recorded so the absence is intentional and testable.",
+    "1":   "REQUEST_SUBMITTED - next transition carries the notification",
+    "6":   "APPROVAL_COMPLETED - row 5 already told the employee",
+    "10":  "REQUEST_EDIT_STARTED",
+    "11":  "REQUEST_RESUBMITTED - re-evaluation result carries it",
+    "16":  "REQUEST_EDIT_STARTED",
+    "17":  "REQUEST_RESUBMITTED",
+    "20":  "PNC_STARTED_PROCESSING - employee already told at row 4/14/19",
+    "30":  "TICKET_DOCUMENT_REPLACED - deliberately silent, document housekeeping",
+    "31":  "BOOKING_DETAIL_EDITED - non-material edit",
+    "32":  "merged into rows 23 and 24",
+    "34":  "CANCELLATION_CLOSED_PRE_BOOKING - row 33 closed it out",
+    "36":  "CANCELLATION_REQUEST_ASSIGNED - merged into row 23",
+    "38":  "REFUND_PROCESS_STARTED - row 37 already said recovery underway",
+    "41":  "REFUND_PROCESS_STARTED",
+    "42":  "NO_REFUND_REQUIRED after PNC cancellation - row 40 already covered it",
+    "44":  "SEGMENT_REFUND_PENDING",
+    "54":  "TRAVEL_DATE_REACHED",
+    "55":  "TRIP_COMPLETED - deliberate, carries no action",
+    "58":  "BOOKING_DOCUMENT_UPDATED - document housekeeping"
+  }
+}

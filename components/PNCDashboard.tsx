@@ -3,7 +3,7 @@ import { TravelRequest, PNCStatus, TravelModePolicy } from '../types';
 import StatusBadge from './StatusBadge';
 import Card from './Card';
 import { supabase } from '../supabaseClient';
-import { checkPolicyViolation } from '../utils/policyUtils';
+import { checkPolicyViolation, getEffectiveBookingSlaHours } from '../utils/policyUtils';
 import { MermaidDiagram } from './MermaidDiagram';
 import { PageBanner } from './PageBanner';
 
@@ -419,7 +419,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
 
   const approvalBreaches = filteredRequests.filter(r => r.pncStatus === PNCStatus.APPROVAL_PENDING && getTimeInState(r, PNCStatus.APPROVAL_PENDING) > tatApproval * 60 * 60 * 1000).length;
   const processingBreaches = filteredRequests.filter(r => r.pncStatus === PNCStatus.PROCESSING && getTimeInState(r, PNCStatus.PROCESSING) > tatProcessing * 60 * 60 * 1000).length;
-  const bookedBreaches = filteredRequests.filter(r => (r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED) && getBookingTime(r) > tatBooking * 60 * 60 * 1000).length;
+  const bookedBreaches = filteredRequests.filter(r => (r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED) && getBookingTime(r) > getEffectiveBookingSlaHours(r.priority, policy) * 60 * 60 * 1000).length;
 
   const getEmployeeCancellationStats = () => {
     let intake = 0;

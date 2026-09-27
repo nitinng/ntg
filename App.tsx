@@ -19,6 +19,7 @@ import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
 import { queueEmailsForTransition } from './utils/emailQueueUtils';
 import { calculateProfileCompleteness, isUserVerified, isAppLockedForUser } from './utils/verificationUtils';
+import { calculateDynamicUrgency } from './utils/policyUtils';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -113,9 +114,13 @@ const App: React.FC = () => {
     cancellationPncEmpCover: 0,
     cancellationEmpNgCover: 50,
     cancellationEmpEmpCover: 50,
-    defaultBookingUrgency: Priority.MEDIUM,
-    allowRequesterUrgency: true,
-    autoEscalateUrgentDays: 3,
+    urgencyThresholds: {
+      criticalDays: 2,
+      highDays: 10,
+      mediumDays: 20
+    },
+    allowRequesterUrgency: false,
+    enableUrgencySla: false,
     urgencySlaHours: {
       critical: 4,
       high: 12,
@@ -757,7 +762,7 @@ const App: React.FC = () => {
         return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
-        return <AnalyticsView requests={requests} currentUser={currentUser} />;
+        return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} />;
       }
       return null;
     };
@@ -767,7 +772,7 @@ const App: React.FC = () => {
         return renderDashboard();
       case 'analytics':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <AnalyticsView requests={requests} currentUser={currentUser} />;
+        return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} />;
       case 'past-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <PastRequestsView requests={requests.filter(r => r.requesterId === currentUser.id)} onView={setSelectedRequest} />;
@@ -1223,7 +1228,7 @@ const App: React.FC = () => {
                   return_preferred_departure_window: data.returnPreferredDepartureWindow,
                   number_of_travelers: data.numberOfTravelers,
                   traveller_names: data.travellerNames,
-                  priority: data.priority || policy.defaultBookingUrgency || Priority.MEDIUM,
+                  priority: (policy.allowRequesterUrgency && data.priority) ? data.priority : calculateDynamicUrgency(data.dateOfTravel, policy),
                   special_requirements: data.specialRequirements,
                   emergency_contact_name: data.emergencyContactName,
                   emergency_contact_phone: data.emergencyContactPhone,
@@ -1328,7 +1333,7 @@ const App: React.FC = () => {
                   return_preferred_departure_window: data.returnPreferredDepartureWindow,
                   number_of_travelers: data.numberOfTravelers,
                   traveller_names: data.travellerNames,
-                  priority: data.priority || policy.defaultBookingUrgency || Priority.MEDIUM,
+                  priority: (policy.allowRequesterUrgency && data.priority) ? data.priority : calculateDynamicUrgency(data.dateOfTravel, policy),
                   special_requirements: data.specialRequirements,
                   emergency_contact_name: data.emergencyContactName,
                   emergency_contact_phone: data.emergencyContactPhone,
@@ -1520,7 +1525,7 @@ const App: React.FC = () => {
 
                 number_of_travelers: 1,
                 traveller_names: data.travellerNames,
-                priority: data.priority || policy.defaultBookingUrgency || Priority.MEDIUM,
+                priority: (policy.allowRequesterUrgency && data.priority) ? data.priority : calculateDynamicUrgency(data.dateOfTravel, policy),
 
                 approval_status: ApprovalStatus.APPROVED, // Auto-approved since PNC is booking
                 pnc_status: PNCStatus.CLOSED, // Closed immediately as details are entered

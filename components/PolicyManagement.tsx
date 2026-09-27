@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, PolicyConfig, TravelModePolicy } from '../types';
+import { User, UserRole, PolicyConfig, TravelModePolicy, Priority } from '../types';
 import Card from './Card';
 import Input from './Input';
 import Toggle from './Toggle';
@@ -527,6 +527,154 @@ export const PolicyManagement = ({
                   onChange={e => setPolicy({ ...policy, tatBookingHours: parseInt(e.target.value) || 0 })}
                   onBlur={() => handleUpdatePolicy({ tatBookingHours: policy.tatBookingHours })}
                 />
+              </div>
+            </div>
+
+            {/* Booking Urgency & Priority Policy */}
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-2xs font-bold text-slate-400 uppercase tracking-widest">Booking Urgency & Priority Policies</h4>
+                  <p className="text-2xs text-slate-500 mt-0.5">Control default booking urgency, requester controls, and auto-escalation thresholds.</p>
+                </div>
+              </div>
+
+              {/* Default Urgency Pill Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Default Urgency for New Bookings</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { key: Priority.LOW, label: 'Low', icon: 'fa-gauge-simple', activeClass: 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-700 dark:text-emerald-400' },
+                    { key: Priority.MEDIUM, label: 'Medium', icon: 'fa-clock', activeClass: 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-700 dark:text-amber-400' },
+                    { key: Priority.HIGH, label: 'High', icon: 'fa-bolt', activeClass: 'ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-700 dark:text-orange-400' },
+                    { key: Priority.CRITICAL, label: 'Critical', icon: 'fa-triangle-exclamation', activeClass: 'ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-950/50 border-rose-500 text-rose-700 dark:text-rose-400' },
+                  ].map(opt => {
+                    const isSelected = (policy.defaultBookingUrgency || Priority.MEDIUM) === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => handleUpdatePolicy({ defaultBookingUrgency: opt.key })}
+                        className={`p-2.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                          isSelected
+                            ? opt.activeClass
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <i className={`fa-solid ${opt.icon} text-xs`}></i>
+                        <span>{opt.label}</span>
+                        {isSelected && <i className="fa-solid fa-check text-2xs ml-0.5"></i>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Requester Control & Auto-Escalation */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between p-3.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div className="pr-3">
+                    <h5 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Allow Requesters to Select Urgency</h5>
+                    <p className="text-2xs text-slate-500 mt-0.5">Display urgency pills directly in the booking request modal.</p>
+                  </div>
+                  <Toggle
+                    active={policy.allowRequesterUrgency !== false}
+                    onChange={() => handleUpdatePolicy({ allowRequesterUrgency: policy.allowRequesterUrgency === false })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div className="pr-3">
+                    <h5 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Auto-Escalate Imminent Trips</h5>
+                    <p className="text-2xs text-slate-500 mt-0.5">Elevate urgency to High if travel is within threshold days.</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={policy.autoEscalateUrgentDays ?? 3}
+                      onChange={e => handleUpdatePolicy({ autoEscalateUrgentDays: parseInt(e.target.value) || 0 })}
+                      className="w-16 px-2 py-1 text-xs font-bold rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-center"
+                    />
+                    <span className="text-2xs text-slate-400">days</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Urgency SLA Targets */}
+              <div className="pt-2">
+                <h5 className="text-2xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Urgency SLA Targets (Hours)</h5>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-2xs font-bold text-rose-600 dark:text-rose-400 block mb-1">Critical SLA</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={policy.urgencySlaHours?.critical ?? 4}
+                      onChange={e => handleUpdatePolicy({
+                        urgencySlaHours: {
+                          critical: parseInt(e.target.value) || 1,
+                          high: policy.urgencySlaHours?.high ?? 12,
+                          medium: policy.urgencySlaHours?.medium ?? 24,
+                          low: policy.urgencySlaHours?.low ?? 48
+                        }
+                      })}
+                      className="w-full px-2.5 py-1.5 text-xs font-bold rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-2xs font-bold text-orange-600 dark:text-orange-400 block mb-1">High SLA</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={policy.urgencySlaHours?.high ?? 12}
+                      onChange={e => handleUpdatePolicy({
+                        urgencySlaHours: {
+                          critical: policy.urgencySlaHours?.critical ?? 4,
+                          high: parseInt(e.target.value) || 1,
+                          medium: policy.urgencySlaHours?.medium ?? 24,
+                          low: policy.urgencySlaHours?.low ?? 48
+                        }
+                      })}
+                      className="w-full px-2.5 py-1.5 text-xs font-bold rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-2xs font-bold text-amber-600 dark:text-amber-400 block mb-1">Medium SLA</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={policy.urgencySlaHours?.medium ?? 24}
+                      onChange={e => handleUpdatePolicy({
+                        urgencySlaHours: {
+                          critical: policy.urgencySlaHours?.critical ?? 4,
+                          high: policy.urgencySlaHours?.high ?? 12,
+                          medium: parseInt(e.target.value) || 1,
+                          low: policy.urgencySlaHours?.low ?? 48
+                        }
+                      })}
+                      className="w-full px-2.5 py-1.5 text-xs font-bold rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-2xs font-bold text-emerald-600 dark:text-emerald-400 block mb-1">Low SLA</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={policy.urgencySlaHours?.low ?? 48}
+                      onChange={e => handleUpdatePolicy({
+                        urgencySlaHours: {
+                          critical: policy.urgencySlaHours?.critical ?? 4,
+                          high: policy.urgencySlaHours?.high ?? 12,
+                          medium: policy.urgencySlaHours?.medium ?? 24,
+                          low: parseInt(e.target.value) || 1
+                        }
+                      })}
+                      className="w-full px-2.5 py-1.5 text-xs font-bold rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </Card>

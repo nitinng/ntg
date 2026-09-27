@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy, Department, TestingSettings } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy, Department, TestingSettings, PolicyConfig } from '../types';
 import Input from './Input';
 import Select from './Select';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ interface NewRequestModalProps {
     onSubmit: (data: any) => void;
     currentUser: User;
     policies: TravelModePolicy[];
+    policy?: PolicyConfig;
     meetupContext?: {
         startDate: string;
         endDate: string;
@@ -19,7 +20,7 @@ interface NewRequestModalProps {
     isEditMode?: boolean;
 }
 
-const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupContext, departments = [], testingSettings, initialData, isEditMode = false }: NewRequestModalProps) => {
+const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, meetupContext, departments = [], testingSettings, initialData, isEditMode = false }: NewRequestModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
@@ -60,7 +61,7 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
         returnTo: isEditMode && initialData ? (initialData.returnTo || initialData.from || '') : '',
         returnPreferredDepartureWindow: isEditMode && initialData ? (initialData.returnPreferredDepartureWindow || '') : '',
         travellerNames: isEditMode && initialData ? (initialData.travellerNames || '') : currentUser.name,
-        priority: isEditMode && initialData ? (initialData.priority || Priority.MEDIUM) : Priority.MEDIUM,
+        priority: isEditMode && initialData ? (initialData.priority || policy?.defaultBookingUrgency || Priority.MEDIUM) : (policy?.defaultBookingUrgency || Priority.MEDIUM),
         specialRequirements: isEditMode && initialData ? (initialData.specialRequirements || '') : '',
         emergencyContactName: isEditMode && initialData ? (initialData.emergencyContactName || '') : (currentUser.emergencyContactName || ''),
         emergencyContactPhone: isEditMode && initialData ? (initialData.emergencyContactPhone || '') : (currentUser.emergencyContactPhone || ''),
@@ -69,6 +70,25 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
         medicalConditions: isEditMode && initialData ? (initialData.medicalConditions || '') : (currentUser.medicalConditions || ''),
         violationReason: isEditMode && initialData ? (initialData.violationDetails || '') : ''
     });
+
+    // Auto-escalation check if travel date is imminent
+    const isAutoEscalated = React.useMemo(() => {
+        if (!data.dateOfTravel) return false;
+        const reqDate = new Date();
+        reqDate.setHours(0, 0, 0, 0);
+        const travelDate = new Date(data.dateOfTravel);
+        travelDate.setHours(0, 0, 0, 0);
+        const daysDiff = Math.ceil((travelDate.getTime() - reqDate.getTime()) / (1000 * 60 * 60 * 24));
+        const threshold = policy?.autoEscalateUrgentDays ?? 3;
+        return daysDiff >= 0 && daysDiff <= threshold;
+    }, [data.dateOfTravel, policy?.autoEscalateUrgentDays]);
+
+    // Automatically elevate priority to HIGH when auto-escalation triggers
+    React.useEffect(() => {
+        if (isAutoEscalated && data.priority !== Priority.CRITICAL && data.priority !== Priority.HIGH) {
+            setData(prev => ({ ...prev, priority: Priority.HIGH }));
+        }
+    }, [isAutoEscalated]);
 
     // Meetup specific date logic
     React.useEffect(() => {
@@ -378,6 +398,48 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, meetupConte
                                             ))}
                                         </div>
                                     </div>
+
+                                    {/* Urgency / Priority Selection */}
+                                    {policy?.allowRequesterUrgency !== false && (
+                                        <div className="space-y-2.5 md:col-span-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                    Booking Urgency / Priority
+                                                </label>
+                                                {isAutoEscalated && (
+                                                    <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 flex items-center gap-1">
+                                                        <i className="fa-solid fa-bolt text-[10px]"></i> Auto-escalated (&le; {policy?.autoEscalateUrgentDays ?? 3} days to departure)
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                {[
+                                                    { key: Priority.LOW, label: 'Low', icon: 'fa-gauge-simple', activeClass: 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-700 dark:text-emerald-400' },
+                                                    { key: Priority.MEDIUM, label: 'Medium', icon: 'fa-clock', activeClass: 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-700 dark:text-amber-400' },
+                                                    { key: Priority.HIGH, label: 'High', icon: 'fa-bolt', activeClass: 'ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-700 dark:text-orange-400' },
+                                                    { key: Priority.CRITICAL, label: 'Critical', icon: 'fa-triangle-exclamation', activeClass: 'ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-950/50 border-rose-500 text-rose-700 dark:text-rose-400' },
+                                                ].map(opt => {
+                                                    const isSelected = data.priority === opt.key;
+                                                    return (
+                                                        <button
+                                                            key={opt.key}
+                                                            type="button"
+                                                            onClick={() => handleInputChange('priority', opt.key)}
+                                                            className={`p-2.5 rounded-md border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                                                                isSelected
+                                                                    ? opt.activeClass
+                                                                    : 'border-slate-200 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                                            }`}
+                                                        >
+                                                            <i className={`fa-solid ${opt.icon} text-[11px]`}></i>
+                                                            <span>{opt.label}</span>
+                                                            {isSelected && <i className="fa-solid fa-check text-2xs ml-0.5"></i>}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

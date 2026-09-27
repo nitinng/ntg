@@ -399,6 +399,16 @@ export interface PolicyConfig {
   cancellationPncEmpCover: number;
   cancellationEmpNgCover: number;
   cancellationEmpEmpCover: number;
+  // Booking Urgency & Priority Configuration
+  defaultBookingUrgency?: Priority;
+  allowRequesterUrgency?: boolean;
+  autoEscalateUrgentDays?: number;
+  urgencySlaHours?: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
 
 export interface TravelModePolicy {

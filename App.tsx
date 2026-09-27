@@ -112,7 +112,16 @@ const App: React.FC = () => {
     cancellationPncNgCover: 100,
     cancellationPncEmpCover: 0,
     cancellationEmpNgCover: 50,
-    cancellationEmpEmpCover: 50
+    cancellationEmpEmpCover: 50,
+    defaultBookingUrgency: Priority.MEDIUM,
+    allowRequesterUrgency: true,
+    autoEscalateUrgentDays: 3,
+    urgencySlaHours: {
+      critical: 4,
+      high: 12,
+      medium: 24,
+      low: 48
+    }
   });
 
   const [travelModePolicies, setTravelModePolicies] = useState<TravelModePolicy[]>([]);
@@ -512,6 +521,23 @@ const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
+  const handleUpdatePolicy = async (updates: Partial<PolicyConfig>) => {
+    const newPolicy = { ...policy, ...updates };
+    setPolicy(newPolicy);
+    try {
+      const { error } = await supabase.from('meetup_settings').upsert({
+        setting_key: 'policy_config',
+        setting_value: newPolicy as any,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+      if (error) throw error;
+      toast.success('Settings updated successfully');
+    } catch (err: any) {
+      console.error('Failed to update policy in settings:', err);
+      toast.error('Failed to save settings: ' + (err.message || 'Unknown error'));
+    }
+  };
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setIsSidebarOpen(false);
@@ -826,7 +852,15 @@ const App: React.FC = () => {
           </div>
         );
       case 'settings':
-        return <SettingsView isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />;
+        return (
+          <SettingsView
+            isDarkMode={isDarkMode}
+            onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+            policy={policy}
+            onUpdatePolicy={handleUpdatePolicy}
+            currentUser={currentUser}
+          />
+        );
       case 'guide':
         return <EmployeeGuideView onTabChange={handleTabChange} policies={travelModePolicies} isChatEnabled={isChatEnabled} />;
       case 'approvals':
@@ -1145,6 +1179,7 @@ const App: React.FC = () => {
           }}
           currentUser={currentUser!}
           policies={travelModePolicies}
+          policy={policy}
           meetupContext={meetupContext}
           departments={departments}
           testingSettings={testingSettings}
@@ -1188,7 +1223,7 @@ const App: React.FC = () => {
                   return_preferred_departure_window: data.returnPreferredDepartureWindow,
                   number_of_travelers: data.numberOfTravelers,
                   traveller_names: data.travellerNames,
-                  priority: data.priority || Priority.MEDIUM,
+                  priority: data.priority || policy.defaultBookingUrgency || Priority.MEDIUM,
                   special_requirements: data.specialRequirements,
                   emergency_contact_name: data.emergencyContactName,
                   emergency_contact_phone: data.emergencyContactPhone,
@@ -1293,7 +1328,7 @@ const App: React.FC = () => {
                   return_preferred_departure_window: data.returnPreferredDepartureWindow,
                   number_of_travelers: data.numberOfTravelers,
                   traveller_names: data.travellerNames,
-                  priority: data.priority || Priority.MEDIUM,
+                  priority: data.priority || policy.defaultBookingUrgency || Priority.MEDIUM,
                   special_requirements: data.specialRequirements,
                   emergency_contact_name: data.emergencyContactName,
                   emergency_contact_phone: data.emergencyContactPhone,
@@ -1442,6 +1477,7 @@ const App: React.FC = () => {
           currentUser={currentUser!}
           employees={users} // Pass all users for selection
           policies={travelModePolicies}
+          policy={policy}
           departments={departments}
           testingSettings={testingSettings}
           onSubmit={async (data: any) => {
@@ -1484,7 +1520,7 @@ const App: React.FC = () => {
 
                 number_of_travelers: 1,
                 traveller_names: data.travellerNames,
-                priority: Priority.MEDIUM, // Default
+                priority: data.priority || policy.defaultBookingUrgency || Priority.MEDIUM,
 
                 approval_status: ApprovalStatus.APPROVED, // Auto-approved since PNC is booking
                 pnc_status: PNCStatus.CLOSED, // Closed immediately as details are entered

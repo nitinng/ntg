@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus, Department, TestingSettings } from '../types';
+import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus, Department, TestingSettings, PolicyConfig } from '../types';
 import Input from './Input';
 import Select from './Select';
 import { toast } from 'sonner';
@@ -11,11 +11,12 @@ interface PNCBookingModalProps {
     currentUser: User; // The PNC user
     employees: User[]; // List of all employees to select from
     policies: TravelModePolicy[];
+    policy?: PolicyConfig;
     departments?: Department[];
     testingSettings?: TestingSettings;
 }
 
-const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, departments = [], testingSettings }: PNCBookingModalProps) => {
+const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, policy, departments = [], testingSettings }: PNCBookingModalProps) => {
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
@@ -50,7 +51,7 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
         returnFrom: '',
         returnTo: '',
 
-        priority: Priority.MEDIUM,
+        priority: policy?.defaultBookingUrgency || Priority.MEDIUM,
 
         // Booking Details (Step 3)
         ticketCost: '',
@@ -328,6 +329,39 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
                                                     {t}
                                                 </button>
                                             ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Booking Urgency / Priority */}
+                                    <div className="space-y-2.5 md:col-span-2">
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            Booking Urgency / Priority
+                                        </label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {[
+                                                { key: Priority.LOW, label: 'Low', icon: 'fa-gauge-simple', activeClass: 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-700 dark:text-emerald-400' },
+                                                { key: Priority.MEDIUM, label: 'Medium', icon: 'fa-clock', activeClass: 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-700 dark:text-amber-400' },
+                                                { key: Priority.HIGH, label: 'High', icon: 'fa-bolt', activeClass: 'ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-700 dark:text-orange-400' },
+                                                { key: Priority.CRITICAL, label: 'Critical', icon: 'fa-triangle-exclamation', activeClass: 'ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-950/50 border-rose-500 text-rose-700 dark:text-rose-400' },
+                                            ].map(opt => {
+                                                const isSelected = data.priority === opt.key;
+                                                return (
+                                                    <button
+                                                        key={opt.key}
+                                                        type="button"
+                                                        onClick={() => handleInputChange('priority', opt.key)}
+                                                        className={`p-2.5 rounded-md border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                                                            isSelected
+                                                                ? opt.activeClass
+                                                                : 'border-slate-200 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                                        }`}
+                                                    >
+                                                        <i className={`fa-solid ${opt.icon} text-[11px]`}></i>
+                                                        <span>{opt.label}</span>
+                                                        {isSelected && <i className="fa-solid fa-check text-2xs ml-0.5"></i>}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>

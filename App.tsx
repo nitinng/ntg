@@ -893,30 +893,77 @@ const App: React.FC = () => {
                   .update({
                     pnc_status: newStatus,
                     status_change_reason: reason,
-                    timeline: newTimeline
+                    timeline: newTimeline,
+                    ...(newStatus === PNCStatus.APPROVED ? { manager_approval_date: new Date().toISOString() } : {})
                   })
                   .eq('id', updatedReq.id);
 
                 if (error) throw error;
 
+                let finalStatus = newStatus;
+                let finalTimeline = newTimeline;
+
+                // Auto-advance Approved → Processing
+                if (newStatus === PNCStatus.APPROVED) {
+                  const processingTimeline = [
+                    ...newTimeline,
+                    {
+                      id: (Date.now() + 1).toString(),
+                      timestamp: new Date().toISOString(),
+                      actor: 'System',
+                      event: `Status changed to: ${PNCStatus.PROCESSING}`,
+                      details: 'Auto-advanced to Processing after manager approval'
+                    }
+                  ];
+
+                  const { error: procError } = await supabase
+                    .from('travel_requests')
+                    .update({
+                      pnc_status: PNCStatus.PROCESSING,
+                      status_change_reason: 'Auto-advanced to Processing after manager approval',
+                      timeline: processingTimeline
+                    })
+                    .eq('id', updatedReq.id);
+
+                  if (!procError) {
+                    finalStatus = PNCStatus.PROCESSING;
+                    finalTimeline = processingTimeline;
+                  } else {
+                    console.warn('Auto-advance to Processing failed:', procError.message);
+                  }
+                }
+
                 const updated = {
                   ...updatedReq,
-                  pncStatus: newStatus,
-                  statusChangeReason: reason,
-                  timeline: newTimeline
+                  pncStatus: finalStatus,
+                  statusChangeReason: finalStatus === PNCStatus.PROCESSING
+                    ? 'Auto-advanced to Processing after manager approval'
+                    : reason,
+                  timeline: finalTimeline,
+                  ...(newStatus === PNCStatus.APPROVED ? { managerApprovalDate: new Date().toISOString() } : {})
                 };
 
                 setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
-                toast.success(`Request ${newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'}`);
+                toast.success(
+                  finalStatus === PNCStatus.PROCESSING
+                    ? 'Approved & moved to Processing'
+                    : newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'
+                );
 
-                // Queue emails
+                // Queue emails for manager's action (Approved or Rejected)
                 await queueEmailsForTransition(updated, updatedReq.pncStatus, newStatus);
 
-                if (pendingApprovals.length <= 1) handleTabChange('dashboard'); // Go back if no more
+                // Queue emails for the auto-advance to Processing (MANAGER_APPROVED event)
+                if (finalStatus === PNCStatus.PROCESSING) {
+                  await queueEmailsForTransition(updated, newStatus, PNCStatus.PROCESSING);
+                }
+
+                if (pendingApprovals.length <= 1) handleTabChange('dashboard');
               } catch (e: any) {
                 toast.error("Failed to update: " + e.message);
               }
             }}
+
           />;
         }
         return renderDashboard();
@@ -1454,10 +1501,40 @@ const App: React.FC = () => {
 
                 if (error) throw error;
 
+                // Auto-advance Approved → Processing (mirrors manager approval behaviour)
+                let finalPncStatus = updated.pncStatus;
+                let finalTimeline = newTimeline;
+                if (updated.pncStatus === PNCStatus.APPROVED) {
+                  const processingTimeline = [
+                    ...newTimeline,
+                    {
+                      id: (Date.now() + 1).toString(),
+                      timestamp: new Date().toISOString(),
+                      actor: 'System',
+                      event: `Status changed to: ${PNCStatus.PROCESSING}`,
+                      details: 'Auto-advanced to Processing after approval'
+                    }
+                  ];
+                  const { error: procError } = await supabase
+                    .from('travel_requests')
+                    .update({
+                      pnc_status: PNCStatus.PROCESSING,
+                      status_change_reason: 'Auto-advanced to Processing after approval',
+                      timeline: processingTimeline
+                    })
+                    .eq('id', updated.id);
+
+                  if (!procError) {
+                    finalPncStatus = PNCStatus.PROCESSING;
+                    finalTimeline = processingTimeline;
+                  }
+                }
+
                 // Update local state
                 const finalUpdated = mapDbRequest({
                   ...updated,
-                  timeline: newTimeline
+                  pncStatus: finalPncStatus,
+                  timeline: finalTimeline
                 });
                 setRequests(prev => prev.map(r => r.id === updated.id ? finalUpdated : r));
                 setSelectedRequest(finalUpdated);
@@ -1467,6 +1544,10 @@ const App: React.FC = () => {
                 if (statusChanged) {
                   await queueEmailsForTransition(finalUpdated, selectedRequest.pncStatus, updated.pncStatus);
                 }
+                if (finalPncStatus === PNCStatus.PROCESSING && updated.pncStatus === PNCStatus.APPROVED) {
+                  await queueEmailsForTransition(finalUpdated, PNCStatus.APPROVED, PNCStatus.PROCESSING);
+                }
+
               } catch (error: any) {
                 console.error('Error updating request:', error);
                 toast.error("Failed to update request: " + error.message);

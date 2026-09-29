@@ -263,7 +263,7 @@ class EdgeSmtpProvider implements EmailProvider {
       return {
         ok: true,
         latencyMs: res.latencyMs,
-        message: `SMTP Connected & Authenticated successfully to ${this.host}:${this.port} (${res.latencyMs}ms)`
+        message: `SMTP Connected & Authenticated as ${this.username || this.host} (${res.latencyMs}ms)`
       };
     } catch (err: any) {
       return {
@@ -678,6 +678,77 @@ const corsHeaders = {
 // 5. Central Edge Function Handler
 // ---------------------------------------------------------------------------
 // @ts-ignore: Deno global
+
+// =============================================================================
+// SLOT ROUTER — mirrored from utils/email/smtpSlotRouter.ts
+// -----------------------------------------------------------------------------
+// This worker is deliberately self-contained (supabase deploy only ships the
+// functions directory), so the dual-SMTP routing rules are duplicated here.
+// Keep both copies in step; utils/email/smtpSlotRouter.ts carries the tests.
+// =============================================================================
+
+type SmtpSlotName = 'smtp' | 'smtp2';
+
+interface FailureStreak {
+  slot: SmtpSlotName;
+  count: number;
+}
+
+const otherSlot = (slot: SmtpSlotName): SmtpSlotName => (slot === 'smtp' ? 'smtp2' : 'smtp');
+
+const pickSlot = (input: {
+  activeSlot: SmtpSlotName;
+  usage: Record<SmtpSlotName, number>;
+  perAccountQuota: number;
+  configured: Record<SmtpSlotName, boolean>;
+}): { slot: SmtpSlotName | null; reason: string } => {
+  const { activeSlot, usage, perAccountQuota, configured } = input;
+  const backupSlot = otherSlot(activeSlot);
+  const available = (slot: SmtpSlotName) =>
+    configured[slot] && (usage[slot] || 0) < perAccountQuota;
+
+  if (available(activeSlot)) return { slot: activeSlot, reason: 'active' };
+  if (available(backupSlot)) {
+    return {
+      slot: backupSlot,
+      reason: configured[activeSlot] ? 'active_at_quota' : 'active_unconfigured'
+    };
+  }
+  return { slot: null, reason: 'all_at_quota' };
+};
+
+const nextStreakState = (input: {
+  streak: FailureStreak | null | undefined;
+  slot: SmtpSlotName;
+  failed: boolean;
+  isTransient: boolean;
+  promoteAfter: number;
+}): { streak: FailureStreak; promoteTo: SmtpSlotName | null } => {
+  const { streak, slot, failed, isTransient, promoteAfter } = input;
+
+  if (!failed) return { streak: { slot, count: 0 }, promoteTo: null };
+
+  if (isTransient) {
+    const count = streak?.slot === slot ? streak.count : 0;
+    return { streak: { slot, count }, promoteTo: null };
+  }
+
+  const count = (streak?.slot === slot ? streak.count : 0) + 1;
+  return { streak: { slot, count }, promoteTo: count >= promoteAfter ? otherSlot(slot) : null };
+};
+
+const IST_OFFSET_MINUTES = 330;
+
+const shiftIstIso = (now: Date, days: number): string => {
+  const shifted = new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000);
+  shifted.setUTCHours(0, 0, 0, 0);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return new Date(shifted.getTime() - IST_OFFSET_MINUTES * 60_000).toISOString();
+};
+
+const istDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 0);
+const istNextDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 1);
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -702,24 +773,35 @@ Deno.serve(async (req: Request) => {
 
     // Load active provider and settings dynamically from email_routing_settings
     let activeProviderType = 'smtp';
+    let activeSmtpSlot: SmtpSlotName = 'smtp';
     let providerConfig: any = {};
     let quotaSettings: any = {};
+    let failureStreak: FailureStreak = { slot: 'smtp', count: 0 };
 
     try {
       const { data: routingRows } = await supabase
         .from('email_routing_settings')
         .select('key, value')
-        .in('key', ['active_email_provider', 'provider_config', 'quota_settings']);
+        .in('key', ['active_email_provider', 'active_smtp_slot', 'provider_config', 'quota_settings', 'smtp_failure_streak']);
 
       if (routingRows) {
         for (const row of routingRows) {
           if (row.key === 'active_email_provider' && row.value) {
             const rawVal = typeof row.value === 'string' ? row.value.replace(/"/g, '') : String(row.value);
             activeProviderType = rawVal.trim().toLowerCase();
+          } else if (row.key === 'active_smtp_slot' && row.value) {
+            const rawSlot = typeof row.value === 'string' ? row.value.replace(/"/g, '') : String(row.value);
+            activeSmtpSlot = rawSlot.trim().toLowerCase() === 'smtp2' ? 'smtp2' : 'smtp';
           } else if (row.key === 'provider_config' && row.value) {
             providerConfig = row.value;
           } else if (row.key === 'quota_settings' && row.value) {
             quotaSettings = row.value;
+          } else if (row.key === 'smtp_failure_streak' && row.value) {
+            const raw = row.value as any;
+            failureStreak = {
+              slot: raw?.slot === 'smtp2' ? 'smtp2' : 'smtp',
+              count: Number(raw?.count) || 0
+            };
           }
         }
       }
@@ -732,9 +814,19 @@ Deno.serve(async (req: Request) => {
     const requestedProvider = String(rawReqProvider).replace(/['"]/g, '').trim().toLowerCase();
 
     // Build Provider Instance
-    const buildProvider = (type: string, customConfig?: any): EmailProvider => {
+    const buildProvider = (type: string, customConfig?: any, slotOverride?: SmtpSlotName): EmailProvider => {
       const cleanType = String(type || '').replace(/['"]/g, '').trim().toLowerCase();
-      const cfg = customConfig?.[cleanType] || customConfig || providerConfig?.[cleanType] || {};
+      let cfg = customConfig?.[cleanType] || customConfig || providerConfig?.[cleanType] || {};
+
+      if (cleanType === 'smtp') {
+        // slotOverride wins so the queue worker can address a specific account
+        // (for per-email failover) regardless of which one is currently active.
+        const slot: SmtpSlotName = slotOverride
+          || ((reqBody?.activeSmtpSlot || activeSmtpSlot) === 'smtp2' ? 'smtp2' : 'smtp');
+        cfg = customConfig?.[slot] || (customConfig?.username ? customConfig : undefined) || providerConfig?.[slot] || providerConfig?.smtp || {};
+      } else if (cleanType === 'smtp2') {
+        cfg = customConfig?.smtp2 || (customConfig?.username ? customConfig : undefined) || providerConfig?.smtp2 || {};
+      }
 
       // 1. Google Apps Script Web App Provider
       if (cleanType === 'apps_script') {
@@ -744,7 +836,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // 2. SMTP Providers (Custom SMTP, AWS SES SMTP, Gmail SMTP)
-      if (cleanType === 'smtp' || cleanType === 'ses' || cleanType === 'gmail_smtp') {
+      if (cleanType === 'smtp' || cleanType === 'smtp2' || cleanType === 'ses' || cleanType === 'gmail_smtp') {
         const isGmailSmtp = cleanType === 'gmail_smtp' || cfg.host === 'smtp.gmail.com';
         // @ts-ignore: Deno.env
         const gmailUser = Deno.env.get('GMAIL_USER') || '';
@@ -759,11 +851,11 @@ Deno.serve(async (req: Request) => {
           if (p && !cfg.port) port = Number(p);
         }
 
-        const username = isGmailSmtp ? (cfg.username || gmailUser) : (cfg.username || cfg.accessKeyId || 'inp-xjixoqpi7g5fjchj7lbwkpmy');
-        const password = isGmailSmtp ? (cfg.password || gmailAppPass) : (cfg.password || cfg.secretAccessKey || 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U');
-        const senderEmail = cfg.senderEmail || (isGmailSmtp ? gmailUser : 'travel@navgurukul.org');
+        const username = cfg.username || (isGmailSmtp ? gmailUser : (cfg.accessKeyId || 'inp-xjixoqpi7g5fjchj7lbwkpmy'));
+        const password = cfg.password || (isGmailSmtp ? gmailAppPass : (cfg.secretAccessKey || 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U'));
+        const senderEmail = (cfg.senderEmail && String(cfg.senderEmail).trim()) || cfg.username || (isGmailSmtp ? gmailUser : 'travel@navgurukul.org');
         const senderName = cfg.senderName || 'Navgurukul Travel Desk';
-        const replyTo = cfg.replyTo || senderEmail;
+        const replyTo = (cfg.replyTo && String(cfg.replyTo).trim()) || senderEmail;
 
         return new EdgeSmtpProvider({
           host,
@@ -897,6 +989,72 @@ Deno.serve(async (req: Request) => {
     const nowIso = new Date().toISOString();
     const staleIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
+    // -------------------------------------------------------------------------
+    // Dual SMTP account routing
+    // -------------------------------------------------------------------------
+    // Only applies when the active transport is custom SMTP; SES/Gmail/Resend
+    // keep the single-provider path below.
+    const perAccountQuota = Number(quotaSettings?.perAccountQuota) || 2000;
+    const failoverAfterFailures = Number(quotaSettings?.failoverAfterFailures) || 3;
+
+    // @ts-ignore: Deno.env
+    const envGmailUser = Deno.env.get('GMAIL_USER') || '';
+    // @ts-ignore: Deno.env
+    const envGmailPass = Deno.env.get('GMAIL_APP_PASSWORD') || '';
+
+    const hasCredentials = (slot: SmtpSlotName) => {
+      const cfg = providerConfig?.[slot];
+      if (cfg && String(cfg.username || '').trim() && String(cfg.password || '').trim()) return true;
+      // Account A also resolves through the GMAIL_* env vars in buildProvider,
+      // so an env-only deployment still counts as configured.
+      return slot === 'smtp' && Boolean(envGmailUser && envGmailPass);
+    };
+    const slotConfigured: Record<SmtpSlotName, boolean> = {
+      smtp: hasCredentials('smtp'),
+      smtp2: hasCredentials('smtp2')
+    };
+
+    // With no SMTP account configured at all, keep the legacy single-provider
+    // path rather than deferring the whole queue to tomorrow on a quota check.
+    const slotRoutingEnabled =
+      requestedProvider === 'smtp' && (slotConfigured.smtp || slotConfigured.smtp2);
+
+    // Today's sends per account. Rows predating smtp_slot carry NULL and belong
+    // to Account A, which was the only account sending at the time.
+    const slotUsage: Record<SmtpSlotName, number> = { smtp: 0, smtp2: 0 };
+    if (slotRoutingEnabled) {
+      const dayStart = istDayStartIso();
+      try {
+        const { count: usedA } = await supabase
+          .from('email_queue')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['Sent', 'Delivered'])
+          .gte('sent_at', dayStart)
+          .or('smtp_slot.eq.smtp,smtp_slot.is.null');
+        const { count: usedB } = await supabase
+          .from('email_queue')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['Sent', 'Delivered'])
+          .gte('sent_at', dayStart)
+          .eq('smtp_slot', 'smtp2');
+        slotUsage.smtp = usedA || 0;
+        slotUsage.smtp2 = usedB || 0;
+      } catch (err) {
+        console.warn('Could not read per-account SMTP usage:', err);
+      }
+    }
+
+    const slotProviderCache: Partial<Record<SmtpSlotName, EmailProvider>> = {};
+    const slotProvider = (slot: SmtpSlotName): EmailProvider => {
+      if (!slotProviderCache[slot]) {
+        slotProviderCache[slot] = buildProvider('smtp', undefined, slot);
+      }
+      return slotProviderCache[slot]!;
+    };
+
+    let pendingPromotion: SmtpSlotName | null = null;
+    const initialStreak: FailureStreak = { ...failureStreak };
+
     const { data: queueItems, error: fetchErr } = await supabase
       .from('email_queue')
       .select('*')
@@ -932,29 +1090,84 @@ Deno.serve(async (req: Request) => {
       }
 
       const attempt = (item.attempt_count || item.retry_count || 0) + 1;
-      let sendRes = await provider.send({
+      const payload = {
         to: item.recipients || [],
         cc: item.cc || [],
         bcc: item.bcc || [],
         subject: item.subject,
         html: item.body,
         idempotencyKey: item.idempotency_key
-      });
+      };
 
-      // Provider failover protection: If primary fails due to auth/config and fallback exists
+      let usedSlot: SmtpSlotName | null = null;
+      let sendRes: any;
+
+      if (slotRoutingEnabled) {
+        const pick = pickSlot({
+          activeSlot: activeSmtpSlot,
+          usage: slotUsage,
+          perAccountQuota,
+          configured: slotConfigured
+        });
+
+        if (!pick.slot) {
+          // Both accounts have spent their daily cap. Hold the item until the
+          // quota rolls over instead of burning a retry attempt on it.
+          await supabase
+            .from('email_queue')
+            .update({
+              status: 'Pending',
+              available_at: istNextDayStartIso(),
+              processed_at: new Date().toISOString(),
+              last_error: `Daily quota exhausted on both SMTP accounts (${perAccountQuota}/account)`
+            })
+            .eq('id', item.id);
+          results.skipped++;
+          continue;
+        }
+
+        usedSlot = pick.slot;
+        sendRes = await slotProvider(usedSlot).send(payload);
+
+        const streakUpdate = nextStreakState({
+          streak: failureStreak,
+          slot: usedSlot,
+          failed: !sendRes.success,
+          isTransient: sendRes.error?.isTransient ?? true,
+          promoteAfter: failoverAfterFailures
+        });
+        failureStreak = streakUpdate.streak;
+        if (streakUpdate.promoteTo) pendingPromotion = streakUpdate.promoteTo;
+
+        // Any failure retries once on the other account before giving up.
+        if (!sendRes.success) {
+          const backupSlot = otherSlot(usedSlot);
+          if (slotConfigured[backupSlot] && (slotUsage[backupSlot] || 0) < perAccountQuota) {
+            console.warn(`SMTP ${usedSlot} failed (${sendRes.error?.message || 'unknown'}). Retrying on ${backupSlot}...`);
+            const backupRes = await slotProvider(backupSlot).send(payload);
+            if (backupRes.success) {
+              sendRes = backupRes;
+              usedSlot = backupSlot;
+            }
+          }
+        }
+
+        if (sendRes.success) {
+          slotUsage[usedSlot] = (slotUsage[usedSlot] || 0) + 1;
+        }
+      } else {
+        sendRes = await provider.send(payload);
+      }
+
+      // Cross-provider last resort: both SMTP accounts are out, try SES/Gmail.
       if (!sendRes.success && quotaSettings?.fallbackProvider && quotaSettings.fallbackProvider !== provider.name) {
         console.warn(`Primary provider ${provider.name} failed. Attempting failover to ${quotaSettings.fallbackProvider}...`);
         const fallbackProvider = buildProvider(quotaSettings.fallbackProvider);
-        const fallbackRes = await fallbackProvider.send({
-          to: item.recipients || [],
-          cc: item.cc || [],
-          bcc: item.bcc || [],
-          subject: item.subject,
-          html: item.body,
-          idempotencyKey: item.idempotency_key
-        });
+        const fallbackRes = await fallbackProvider.send(payload);
         if (fallbackRes.success) {
           sendRes = fallbackRes;
+          // A different transport carried it, so no SMTP account owns this send.
+          usedSlot = null;
         }
       }
 
@@ -964,6 +1177,7 @@ Deno.serve(async (req: Request) => {
           .update({
             status: 'Sent',
             provider: sendRes.provider,
+            smtp_slot: usedSlot,
             provider_message_id: sendRes.messageId,
             sent_at: new Date().toISOString(),
             processed_at: new Date().toISOString(),
@@ -1007,7 +1221,77 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, results, activeProvider: provider.name }), {
+    // -------------------------------------------------------------------------
+    // Persist failure streak and promote the backup account if it has tipped
+    // -------------------------------------------------------------------------
+    if (slotRoutingEnabled) {
+      const streakChanged =
+        failureStreak.slot !== initialStreak.slot || failureStreak.count !== initialStreak.count;
+
+      if (streakChanged) {
+        await supabase.from('email_routing_settings').upsert({
+          key: 'smtp_failure_streak',
+          value: failureStreak,
+          label: 'SMTP Consecutive Failure Streak',
+          description: 'Consecutive non-transient send failures on the active account. Reaching failoverAfterFailures promotes the backup.',
+          value_type: 'json',
+          group: 'provider',
+          updated_at: new Date().toISOString(),
+          updated_by: 'email-worker'
+        }, { onConflict: 'key' });
+      }
+
+      if (pendingPromotion && pendingPromotion !== activeSmtpSlot) {
+        console.warn(`Promoting SMTP ${pendingPromotion} to active after ${failoverAfterFailures} consecutive failures.`);
+
+        await supabase.from('email_routing_settings').upsert({
+          key: 'active_smtp_slot',
+          value: pendingPromotion,
+          label: 'Active SMTP Account Slot',
+          description: 'Designates whether Account A (smtp) or Account B (smtp2) is the primary transport.',
+          value_type: 'text',
+          group: 'provider',
+          updated_at: new Date().toISOString(),
+          updated_by: 'email-worker'
+        }, { onConflict: 'key' });
+
+        // Reset the counter against the newly active account so the next
+        // promotion needs its own full run of failures.
+        await supabase.from('email_routing_settings').upsert({
+          key: 'smtp_failure_streak',
+          value: { slot: pendingPromotion, count: 0 },
+          label: 'SMTP Consecutive Failure Streak',
+          description: 'Consecutive non-transient send failures on the active account. Reaching failoverAfterFailures promotes the backup.',
+          value_type: 'json',
+          group: 'provider',
+          updated_at: new Date().toISOString(),
+          updated_by: 'email-worker'
+        }, { onConflict: 'key' });
+
+        await supabase.from('email_audit_logs').insert({
+          action: 'Active SMTP Account Auto-Promoted',
+          details: {
+            from: activeSmtpSlot,
+            to: pendingPromotion,
+            consecutiveFailures: failoverAfterFailures
+          },
+          actor_email: 'email-worker',
+          actor_name: 'Email Queue Worker',
+          created_at: new Date().toISOString()
+        });
+
+        activeSmtpSlot = pendingPromotion;
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      results,
+      activeProvider: provider.name,
+      activeSmtpSlot: slotRoutingEnabled ? activeSmtpSlot : null,
+      slotUsage: slotRoutingEnabled ? slotUsage : null,
+      perAccountQuota: slotRoutingEnabled ? perAccountQuota : null
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

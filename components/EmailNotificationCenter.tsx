@@ -19,6 +19,7 @@ import { PageBanner } from './PageBanner';
 import {
   pingProviderConnection,
   dispatchLiveTestEmail,
+  loadPerAccountUsage,
   loadEmailNotificationSettings,
   saveEmailNotificationSettings,
   triggerEmailWorker,
@@ -44,15 +45,31 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   // Provider Settings State
   const [activeProvider, setActiveProvider] = useState<string>('smtp');
   const [selectedProviderCard, setSelectedProviderCard] = useState<string>('smtp');
+  // Which of the two SMTP accounts is currently "active" (vs backup)
+  const [activeSmtpSlot, setActiveSmtpSlot] = useState<'smtp' | 'smtp2'>('smtp');
+  // Which account's form is being edited
+  const [editingSmtpSlot, setEditingSmtpSlot] = useState<'smtp' | 'smtp2'>('smtp');
+  // Whether the credentials guide is expanded
+  const [showCredGuide, setShowCredGuide] = useState(false);
   const [providerConfig, setProviderConfig] = useState<any>({
     smtp: {
       host: 'smtp.gmail.com',
       port: 587,
-      username: 'travel@navgurukul.org',
+      username: 'nitin@navgurukul.org',
       password: '',
-      senderEmail: 'travel@navgurukul.org',
+      senderEmail: 'nitin@navgurukul.org',
       senderName: 'Navgurukul Travel Desk',
-      replyTo: 'travel@navgurukul.org'
+      replyTo: 'nitin@navgurukul.org'
+    },
+    // Second SMTP account — acts as hot-standby backup
+    smtp2: {
+      host: 'smtp.gmail.com',
+      port: 587,
+      username: '',
+      password: '',
+      senderEmail: '',
+      senderName: 'Navgurukul Travel Desk',
+      replyTo: ''
     },
     ses: {
       region: 'ap-south-1',
@@ -81,10 +98,21 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   });
 
   const [quotaSettings, setQuotaSettings] = useState<any>({
-    dailyQuota: 2000,
+    dailyQuota: 4000,
+    // Gmail Workspace caps each mailbox separately; 4000 is the sum of the two.
+    perAccountQuota: 2000,
+    failoverAfterFailures: 3,
     warningThresholdPct: 80,
     criticalThresholdPct: 95,
     fallbackProvider: 'ses'
+  });
+
+  // Today's sends split by SMTP account. A pooled figure would hide one account
+  // nearing its own cap while the combined total still looks healthy.
+  const [slotUsage, setSlotUsage] = useState<{ smtp: number; smtp2: number; total: number }>({
+    smtp: 0,
+    smtp2: 0,
+    total: 0
   });
 
   const [domainSecurity, setDomainSecurity] = useState<any>({
@@ -103,6 +131,12 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
     message: string;
     checkedAt: string;
   } | null>(null);
+
+  // Health is tracked per SMTP account so testing Account B no longer discards
+  // Account A's result.
+  type SlotHealth = { ok: boolean; latencyMs: number; message: string; checkedAt: string };
+  const [slotHealth, setSlotHealth] = useState<Partial<Record<'smtp' | 'smtp2', SlotHealth>>>({});
+  const [slotPinging, setSlotPinging] = useState<'smtp' | 'smtp2' | null>(null);
 
   // Live Test Dispatch State
   const [testRecipient, setTestRecipient] = useState(currentUser?.email || 'nitin@navgurukul.org');
@@ -136,6 +170,9 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
       const sanitized = ['smtp', 'ses'].includes(data.activeProvider) ? data.activeProvider : 'smtp';
       setActiveProvider(sanitized);
       setSelectedProviderCard(sanitized);
+    }
+    if (data.activeSmtpSlot) {
+      setActiveSmtpSlot(data.activeSmtpSlot);
     }
     if (data.providerConfig) {
       setProviderConfig((prev: any) => ({ ...prev, ...data.providerConfig }));
@@ -183,6 +220,9 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
           else if (row.status === 'Bounced') bounced++;
         }
 
+        const perAccount = await loadPerAccountUsage();
+        setSlotUsage(perAccount);
+
         setStats({
           sentToday: sent + delivered,
           deliveredToday: delivered,
@@ -201,7 +241,10 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
     const p = providerToPing || activeProvider;
     setPingLoading(true);
     try {
-      const res = await pingProviderConnection(p, providerConfig[p]);
+      const configToPing = p === 'smtp'
+        ? (providerConfig[editingSmtpSlot] || providerConfig.smtp)
+        : providerConfig[p];
+      const res = await pingProviderConnection(p, configToPing);
       setProviderHealth({
         ok: res.ok,
         latencyMs: res.latencyMs,
@@ -221,6 +264,44 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
     }
   };
 
+  /**
+   * Tests one SMTP account's credentials without disturbing the other's result.
+   * Sends the slot's in-form values so Account B can be verified before it is
+   * saved or made active.
+   */
+  const handlePingSlot = async (slot: 'smtp' | 'smtp2') => {
+    const cfg = providerConfig[slot];
+    if (!cfg?.username || !cfg?.password) {
+      toast.error(`${slot === 'smtp' ? 'Account A' : 'Account B'} needs a username and App Password before testing.`);
+      return;
+    }
+
+    setSlotPinging(slot);
+    try {
+      const res = await pingProviderConnection('smtp', cfg);
+      setSlotHealth((prev) => ({
+        ...prev,
+        [slot]: {
+          ok: res.ok,
+          latencyMs: res.latencyMs,
+          message: res.message,
+          checkedAt: new Date().toLocaleTimeString()
+        }
+      }));
+
+      const label = slot === 'smtp' ? 'Account A' : 'Account B';
+      if (res.ok) {
+        toast.success(`${label} online: ${res.latencyMs}ms`);
+      } else {
+        toast.error(`${label} failed: ${res.message}`);
+      }
+    } catch (err: any) {
+      toast.error(`Connection check error: ${err.message}`);
+    } finally {
+      setSlotPinging(null);
+    }
+  };
+
   const handleSaveProviderConfig = async () => {
     if (!canEdit) {
       toast.error('Only Administrators can modify email provider settings.');
@@ -231,6 +312,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
       await saveEmailNotificationSettings(
         {
           activeProvider,
+          activeSmtpSlot,
           providerConfig,
           quotaSettings
         },
@@ -290,10 +372,38 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   };
 
   // Quota computations
-  const dailyQuota = quotaSettings.dailyQuota || 2000;
-  const quotaUsedPct = Math.min(100, Math.round((stats.sentToday / dailyQuota) * 100));
-  const isQuotaWarning = quotaUsedPct >= (quotaSettings.warningThresholdPct || 80);
-  const isQuotaCritical = quotaUsedPct >= (quotaSettings.criticalThresholdPct || 95);
+  const perAccountQuota = quotaSettings.perAccountQuota || 2000;
+  const dailyQuota = quotaSettings.dailyQuota || perAccountQuota * 2;
+  const warnPct = quotaSettings.warningThresholdPct || 80;
+  const critPct = quotaSettings.criticalThresholdPct || 95;
+
+  // Quota is measured against actual sends (slotUsage), not rows created today,
+  // so the bars agree with what the queue worker counts.
+  const quotaUsedPct = Math.min(100, Math.round((slotUsage.total / dailyQuota) * 100));
+  const isQuotaWarning = quotaUsedPct >= warnPct;
+  const isQuotaCritical = quotaUsedPct >= critPct;
+
+  /** Per-account figures — each Gmail mailbox has its own cap to watch. */
+  const accountQuota = (slot: 'smtp' | 'smtp2') => {
+    const used = slotUsage[slot] || 0;
+    const pct = Math.min(100, Math.round((used / perAccountQuota) * 100));
+    return {
+      slot,
+      label: slot === 'smtp' ? 'Account A' : 'Account B',
+      sender: providerConfig[slot]?.senderEmail || providerConfig[slot]?.username || 'Not configured',
+      isActive: activeSmtpSlot === slot,
+      used,
+      remaining: Math.max(0, perAccountQuota - used),
+      pct,
+      isWarning: pct >= warnPct && pct < critPct,
+      isCritical: pct >= critPct
+    };
+  };
+  const accountQuotas = [accountQuota('smtp'), accountQuota('smtp2')];
+  const quotaBarClass = (a: { isCritical: boolean; isWarning: boolean }) =>
+    a.isCritical ? 'bg-rose-500' : a.isWarning ? 'bg-amber-500' : 'bg-indigo-600';
+  const quotaTextClass = (a: { isCritical: boolean; isWarning: boolean }) =>
+    a.isCritical ? 'text-rose-500' : a.isWarning ? 'text-amber-500' : 'text-slate-700 dark:text-slate-300';
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -407,14 +517,15 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
           >
             <i className="fa-solid fa-chart-column" />
             <span>Usage & Quota</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              isQuotaCritical
-                ? 'bg-rose-500 text-white'
-                : isQuotaWarning
-                ? 'bg-amber-500 text-white'
-                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}>
-              {stats.sentToday} / {dailyQuota}
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 dark:bg-slate-800 flex items-center gap-1 font-mono">
+              {accountQuotas.map((a, i) => (
+                <React.Fragment key={a.slot}>
+                  {i > 0 && <span className="text-slate-400">-</span>}
+                  <span className={quotaTextClass(a)}>
+                    {a.slot === 'smtp' ? 'A' : 'B'} {a.used}
+                  </span>
+                </React.Fragment>
+              ))}
             </span>
           </button>
         </div>
@@ -550,15 +661,15 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 line-clamp-2">
-                  Direct authenticated relay via smtp.gmail.com using your workspace email and App Password.
-                </p>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-500">
-                  <span>Quota: 2,000 / day</span>
-                  <span className={activeProvider === 'smtp' ? 'text-indigo-600 font-bold' : ''}>
-                    {activeProvider === 'smtp' ? '● Active' : 'Standby'}
-                  </span>
-                </div>
+                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 line-clamp-2">
+                   Direct authenticated relay via smtp.gmail.com using your workspace email and App Password. Two accounts configured (A + B).
+                 </p>
+                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-500">
+                   <span>Quota: 4,000 / day</span>
+                   <span className={activeProvider === 'smtp' ? 'text-indigo-600 font-bold' : ''}>
+                     {activeProvider === 'smtp' ? `● Active (Acct ${activeSmtpSlot === 'smtp' ? 'A' : 'B'})` : 'Standby'}
+                   </span>
+                 </div>
               </div>
 
               {/* 2. Amazon SES */}
@@ -634,25 +745,140 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                 </div>
               </div>
 
-              {/* A. Custom SMTP Form */}
+              {/* A. Custom SMTP Form — Dual Account (Primary + Backup) */}
               {selectedProviderCard === 'smtp' && (
-                <div className="space-y-4">
-                  {providerConfig.smtp?.host?.includes('mail-manager-smtp') && (
+                <div className="space-y-5">
+
+                  {/* Info banner */}
+                  <div className="p-3.5 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-300 leading-relaxed">
+                    <strong>Direct TLS/STARTTLS Transport:</strong> Use Google Workspace Relay (<code>smtp.gmail.com</code> with an App Password), Amazon SES Outbound (<code>email-smtp.ap-south-1.amazonaws.com</code>), or any corporate MTA.
+                  </div>
+
+                  {/* Dual-account slot tabs */}
+                  <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mr-1">Account Slot:</span>
+                    {(['smtp', 'smtp2'] as const).map((slot) => {
+                      const isActive = activeSmtpSlot === slot;
+                      const isEditing = editingSmtpSlot === slot;
+                      const health = slotHealth[slot];
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => setEditingSmtpSlot(slot)}
+                          className={`relative px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all border ${
+                            isEditing
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                          }`}
+                        >
+                          <i className={`fa-solid fa-server text-[10px] ${isEditing ? 'text-indigo-200' : 'text-slate-400'}`} />
+                          {slot === 'smtp' ? 'Account A' : 'Account B'}
+                          {isActive && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500 text-white tracking-wider">
+                              Active
+                            </span>
+                          )}
+                          {!isActive && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 tracking-wider">
+                              Backup
+                            </span>
+                          )}
+                          {health && (
+                            <span
+                              title={`${health.ok ? 'Reachable' : 'Failed'} at ${health.checkedAt}: ${health.message}`}
+                              className={`ml-0.5 w-2 h-2 rounded-full ${health.ok ? 'bg-emerald-400' : 'bg-rose-400'}`}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {/* Per-account credential test. Each slot keeps its own
+                        result, so verifying B does not erase A's. */}
+                    {(['smtp', 'smtp2'] as const).map((slot) => (
+                      editingSmtpSlot === slot ? (
+                        <button
+                          key={`test-${slot}`}
+                          type="button"
+                          onClick={() => handlePingSlot(slot)}
+                          disabled={slotPinging !== null}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-indigo-400 disabled:opacity-50 flex items-center gap-1.5 transition-all"
+                        >
+                          <i className={`fa-solid fa-wifi text-[10px] ${slotPinging === slot ? 'fa-spin' : ''}`} />
+                          {slotPinging === slot ? 'Testing...' : `Test ${slot === 'smtp' ? 'A' : 'B'}`}
+                        </button>
+                      ) : null
+                    ))}
+
+                    {/* Toggle active slot */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const next = activeSmtpSlot === 'smtp' ? 'smtp2' : 'smtp';
+                        const nextLabel = next === 'smtp' ? 'Account A' : 'Account B';
+
+                        if (!providerConfig[next]?.username || !providerConfig[next]?.password) {
+                          toast.error(`Configure ${nextLabel} credentials before activating it.`);
+                          return;
+                        }
+                        // Promoting an untested account silently breaks every
+                        // outbound email, so require a passing test first.
+                        if (!slotHealth[next]?.ok) {
+                          toast.error(`Run "Test ${next === 'smtp' ? 'A' : 'B'}" and get a pass before making ${nextLabel} active.`);
+                          return;
+                        }
+                        setActiveSmtpSlot(next);
+                        if (canEdit) {
+                          try {
+                            await saveEmailNotificationSettings(
+                              {
+                                activeProvider,
+                                activeSmtpSlot: next,
+                                providerConfig,
+                                quotaSettings
+                              },
+                              currentUser ? { email: currentUser.email, name: currentUser.name } : undefined
+                            );
+                          } catch (e) {
+                            // non-blocking local toggle
+                          }
+                        }
+                        toast.success(`Switched active SMTP to ${next === 'smtp' ? 'Account A' : 'Account B'}`);
+                      }}
+                      className="ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 flex items-center gap-1.5 transition-all"
+                    >
+                      <i className="fa-solid fa-arrow-right-arrow-left text-[10px]" />
+                      Toggle Active / Backup
+                    </button>
+                  </div>
+
+                  {/* Role banner for the slot being edited */}
+                  <div className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border ${
+                    editingSmtpSlot === activeSmtpSlot
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}>
+                    <i className={`fa-solid ${editingSmtpSlot === activeSmtpSlot ? 'fa-circle-check text-emerald-500' : 'fa-shield text-slate-400'}`} />
+                    Editing: <strong className="ml-1">{editingSmtpSlot === 'smtp' ? 'Account A' : 'Account B'}</strong>
+                    <span className="mx-1 text-slate-300 dark:text-slate-600">—</span>
+                    {editingSmtpSlot === activeSmtpSlot ? 'currently the Active transport' : 'currently the Primary Backup'}
+                  </div>
+
+                  {/* Ingress warning for whichever slot is being edited */}
+                  {providerConfig[editingSmtpSlot]?.host?.includes('mail-manager-smtp') && (
                     <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1">
                       <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
                         <i className="fa-solid fa-triangle-exclamation text-amber-500 text-sm" />
                         <span>Ingress Endpoint Detected (Non-Relay)</span>
                       </div>
                       <p>
-                        <code>{providerConfig.smtp.host}</code> is an AWS Mail Manager <strong>Ingress Endpoint</strong>. It accepts incoming emails for archiving/filtering, but <strong>does NOT relay outbound emails to external inboxes</strong>. Please use <code>smtp.gmail.com</code> with your App Password, or Amazon SES Outbound.
+                        <code>{providerConfig[editingSmtpSlot].host}</code> is an AWS Mail Manager <strong>Ingress Endpoint</strong> and cannot relay outbound email. Use <code>smtp.gmail.com</code> with an App Password instead.
                       </p>
                     </div>
                   )}
 
-                  <div className="p-3.5 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-300 leading-relaxed">
-                    <strong>Direct TLS/STARTTLS Transport:</strong> Use Google Workspace Relay (<code>smtp.gmail.com</code> with an App Password), Amazon SES Outbound (<code>email-smtp.ap-south-1.amazonaws.com</code>), or any corporate MTA.
-                  </div>
-
+                  {/* Form fields for the editing slot */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
@@ -660,15 +886,15 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                       </label>
                       <input
                         type="text"
-                        value={providerConfig.smtp.host}
+                        value={providerConfig[editingSmtpSlot]?.host || ''}
                         onChange={(e) =>
                           setProviderConfig({
                             ...providerConfig,
-                            smtp: { ...providerConfig.smtp, host: e.target.value }
+                            [editingSmtpSlot]: { ...providerConfig[editingSmtpSlot], host: e.target.value }
                           })
                         }
                         className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono text-slate-900 dark:text-white"
-                        placeholder="e.g. jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com"
+                        placeholder="smtp.gmail.com"
                       />
                     </div>
                     <div>
@@ -677,11 +903,11 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                       </label>
                       <input
                         type="number"
-                        value={providerConfig.smtp.port}
+                        value={providerConfig[editingSmtpSlot]?.port || 587}
                         onChange={(e) =>
                           setProviderConfig({
                             ...providerConfig,
-                            smtp: { ...providerConfig.smtp, port: Number(e.target.value) }
+                            [editingSmtpSlot]: { ...providerConfig[editingSmtpSlot], port: Number(e.target.value) }
                           })
                         }
                         className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono text-slate-900 dark:text-white"
@@ -693,32 +919,39 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                        SMTP Username
+                        SMTP Username (Google Workspace Email)
                       </label>
                       <input
                         type="text"
-                        value={providerConfig.smtp.username || ''}
-                        onChange={(e) =>
+                        value={providerConfig[editingSmtpSlot]?.username || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const current = providerConfig[editingSmtpSlot] || {};
                           setProviderConfig({
                             ...providerConfig,
-                            smtp: { ...providerConfig.smtp, username: e.target.value }
-                          })
-                        }
+                            [editingSmtpSlot]: {
+                              ...current,
+                              username: val,
+                              senderEmail: current.senderEmail || val,
+                              replyTo: current.replyTo || val
+                            }
+                          });
+                        }}
                         className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono text-slate-900 dark:text-white"
-                        placeholder="e.g. inp-xjixoqpi7g5fjchj7lbwkpmy"
+                        placeholder="user@navgurukul.org"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                        SMTP Password / Auth Token
+                        SMTP Password / App Password (16-char token)
                       </label>
                       <input
                         type="password"
-                        value={providerConfig.smtp.password || ''}
+                        value={providerConfig[editingSmtpSlot]?.password || ''}
                         onChange={(e) =>
                           setProviderConfig({
                             ...providerConfig,
-                            smtp: { ...providerConfig.smtp, password: e.target.value }
+                            [editingSmtpSlot]: { ...providerConfig[editingSmtpSlot], password: e.target.value }
                           })
                         }
                         className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono text-slate-900 dark:text-white"
@@ -726,6 +959,149 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                        From Email (Sender Address)
+                      </label>
+                      <input
+                        type="email"
+                        value={providerConfig[editingSmtpSlot]?.senderEmail || providerConfig[editingSmtpSlot]?.username || ''}
+                        onChange={(e) =>
+                          setProviderConfig({
+                            ...providerConfig,
+                            [editingSmtpSlot]: { ...providerConfig[editingSmtpSlot], senderEmail: e.target.value }
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white"
+                        placeholder="travel@navgurukul.org"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                        From Name (Display Name)
+                      </label>
+                      <input
+                        type="text"
+                        value={providerConfig[editingSmtpSlot]?.senderName || 'Navgurukul Travel Desk'}
+                        onChange={(e) =>
+                          setProviderConfig({
+                            ...providerConfig,
+                            [editingSmtpSlot]: { ...providerConfig[editingSmtpSlot], senderName: e.target.value }
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white"
+                        placeholder="Navgurukul Travel Desk"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                        Reply-To Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={providerConfig[editingSmtpSlot]?.replyTo || providerConfig[editingSmtpSlot]?.senderEmail || providerConfig[editingSmtpSlot]?.username || ''}
+                        onChange={(e) =>
+                          setProviderConfig({
+                            ...providerConfig,
+                            [editingSmtpSlot]: { ...providerConfig[editingSmtpSlot], replyTo: e.target.value }
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white"
+                        placeholder="travel@navgurukul.org"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ── Credentials Guide ─────────────────────────────────────── */}
+                  <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/50 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowCredGuide(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-colors text-left"
+                    >
+                      <span className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+                        <i className="fa-solid fa-key" />
+                        How to get a Gmail App Password (SMTP credentials)
+                      </span>
+                      <i className={`fa-solid fa-chevron-${showCredGuide ? 'up' : 'down'} text-indigo-500 text-[10px]`} />
+                    </button>
+
+                    {showCredGuide && (
+                      <div className="px-4 py-4 bg-white dark:bg-slate-900 space-y-4 text-xs text-slate-700 dark:text-slate-300">
+                        <p className="text-slate-500 dark:text-slate-400 italic">
+                          Each Google Workspace account generates a unique 16-character App Password that serves as the SMTP auth token. Repeat for both Account A and Account B using different Workspace addresses.
+                        </p>
+
+                        {([
+                          {
+                            step: '1',
+                            title: 'Enable 2-Step Verification',
+                            body: 'Sign in to the Google account you want to use (e.g. nitin@navgurukul.org). Go to myaccount.google.com → Security → "How you sign in to Google" and turn on 2-Step Verification.',
+                            url: 'https://myaccount.google.com/security',
+                            urlLabel: 'Open Google Security Settings'
+                          },
+                          {
+                            step: '2',
+                            title: 'Open App Passwords',
+                            body: 'In the same Security page, click App Passwords (only visible once 2-Step is active). If not visible, search "App Passwords" in the Google Account search bar at the top.',
+                            url: 'https://myaccount.google.com/apppasswords',
+                            urlLabel: 'Open App Passwords'
+                          },
+                          {
+                            step: '3',
+                            title: 'Create a new App Password',
+                            body: 'In the App name field type a label like "NTG Travel Desk SMTP A". Click Create. Google shows a 16-character password (e.g. xxxx xxxx xxxx xxxx).',
+                            url: null,
+                            urlLabel: null
+                          },
+                          {
+                            step: '4',
+                            title: 'Fill in this form',
+                            body: 'SMTP Host: smtp.gmail.com · Port: 587 · Username: full Workspace email · Password: the 16-char code (spaces optional).',
+                            url: null,
+                            urlLabel: null
+                          },
+                          {
+                            step: '5',
+                            title: 'Configure Account B (Backup)',
+                            body: 'Switch to the Account B tab above. Use a different Workspace address, generate its own separate App Password ("NTG Travel Desk SMTP B"), and fill in the same fields. Then use "Toggle Active / Backup" to test before going live.',
+                            url: null,
+                            urlLabel: null
+                          }
+                        ] as { step: string; title: string; body: string; url: string | null; urlLabel: string | null }[]).map(({ step, title, body, url, urlLabel }) => (
+                          <div key={step} className="flex gap-3">
+                            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center text-[11px] shrink-0 mt-0.5">
+                              {step}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold text-slate-800 dark:text-slate-100 mb-0.5">{title}</p>
+                              <p className="leading-relaxed text-slate-500 dark:text-slate-400">{body}</p>
+                              {url && (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 mt-1.5 text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                                >
+                                  <i className="fa-solid fa-arrow-up-right-from-square text-[10px]" />
+                                  {urlLabel}
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 leading-relaxed">
+                          <i className="fa-solid fa-triangle-exclamation mr-1.5" />
+                          <strong>Security note:</strong> App Passwords grant full Gmail send access. Revoke them immediately at myaccount.google.com → Security → App Passwords if a credential is ever compromised.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* ── End Credentials Guide ──────────────────────────────────── */}
+
                 </div>
               )}
 
@@ -900,7 +1276,12 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
               {/* Common Sender Profile Section */}
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-                  Default Sender Profile & Routing
+                  Default Sender Profile &amp; Routing
+                  {selectedProviderCard === 'smtp' && (
+                    <span className="ml-2 text-indigo-500 normal-case font-semibold">
+                      ({editingSmtpSlot === 'smtp' ? 'Account A' : 'Account B'})
+                    </span>
+                  )}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -909,16 +1290,17 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                     </label>
                     <input
                       type="text"
-                      value={providerConfig[selectedProviderCard]?.senderName || 'Navgurukul Travel Desk'}
-                      onChange={(e) =>
+                      value={providerConfig[selectedProviderCard === 'smtp' ? editingSmtpSlot : selectedProviderCard]?.senderName || 'Navgurukul Travel Desk'}
+                      onChange={(e) => {
+                        const slot = selectedProviderCard === 'smtp' ? editingSmtpSlot : selectedProviderCard;
                         setProviderConfig({
                           ...providerConfig,
-                          [selectedProviderCard]: {
-                            ...providerConfig[selectedProviderCard],
+                          [slot]: {
+                            ...providerConfig[slot],
                             senderName: e.target.value
                           }
-                        })
-                      }
+                        });
+                      }}
                       className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white"
                     />
                   </div>
@@ -928,16 +1310,17 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                     </label>
                     <input
                       type="email"
-                      value={providerConfig[selectedProviderCard]?.senderEmail || 'travel@navgurukul.org'}
-                      onChange={(e) =>
+                      value={providerConfig[selectedProviderCard === 'smtp' ? editingSmtpSlot : selectedProviderCard]?.senderEmail || 'travel@navgurukul.org'}
+                      onChange={(e) => {
+                        const slot = selectedProviderCard === 'smtp' ? editingSmtpSlot : selectedProviderCard;
                         setProviderConfig({
                           ...providerConfig,
-                          [selectedProviderCard]: {
-                            ...providerConfig[selectedProviderCard],
+                          [slot]: {
+                            ...providerConfig[slot],
                             senderEmail: e.target.value
                           }
-                        })
-                      }
+                        });
+                      }}
                       className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white"
                     />
                   </div>
@@ -947,16 +1330,17 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                     </label>
                     <input
                       type="email"
-                      value={providerConfig[selectedProviderCard]?.replyTo || 'travel@navgurukul.org'}
-                      onChange={(e) =>
+                      value={providerConfig[selectedProviderCard === 'smtp' ? editingSmtpSlot : selectedProviderCard]?.replyTo || 'travel@navgurukul.org'}
+                      onChange={(e) => {
+                        const slot = selectedProviderCard === 'smtp' ? editingSmtpSlot : selectedProviderCard;
                         setProviderConfig({
                           ...providerConfig,
-                          [selectedProviderCard]: {
-                            ...providerConfig[selectedProviderCard],
+                          [slot]: {
+                            ...providerConfig[slot],
                             replyTo: e.target.value
                           }
-                        })
-                      }
+                        });
+                      }}
                       className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white"
                     />
                   </div>
@@ -1126,24 +1510,66 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                   Daily Quota Consumption Progress
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Current dispatch count against the {activeProvider.toUpperCase()} daily limit ({dailyQuota} emails / 24h cycle).
+                  Each SMTP account carries its own {perAccountQuota.toLocaleString()} / day cap.
+                  The pooled ceiling is {dailyQuota.toLocaleString()} across both.
                 </p>
               </div>
 
               <div className="text-right">
                 <span className="text-xs font-mono text-slate-500">
-                  Status: <strong>{stats.sentToday}</strong> of {dailyQuota} used ({dailyQuota - stats.sentToday} remaining)
+                  Status: <strong>{slotUsage.total}</strong> of {dailyQuota} used ({dailyQuota - slotUsage.total} remaining)
                 </span>
               </div>
             </div>
 
-            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden flex">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  isQuotaCritical ? 'bg-rose-500' : isQuotaWarning ? 'bg-amber-500' : 'bg-indigo-600'
-                }`}
-                style={{ width: `${Math.max(2, quotaUsedPct)}%` }}
-              />
+            {/* Per-account bars: a pooled bar would hide one mailbox hitting its
+                own Gmail cap while the combined total still looks healthy. */}
+            <div className="space-y-4">
+              {accountQuotas.map((a) => (
+                <div key={a.slot} className="space-y-1.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">{a.label}</span>
+                      <span className="text-[11px] font-mono text-slate-400 truncate">{a.sender}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                        a.isActive
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {a.isActive ? 'Active' : 'Backup'}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-mono font-bold ${quotaTextClass(a)}`}>
+                      {a.used.toLocaleString()} / {perAccountQuota.toLocaleString()}
+                      <span className="text-slate-400 font-normal"> · {a.remaining.toLocaleString()} left</span>
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${quotaBarClass(a)}`}
+                      style={{ width: `${a.used > 0 ? Math.max(2, a.pct) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Combined</span>
+                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                  {slotUsage.total.toLocaleString()} / {dailyQuota.toLocaleString()}
+                  <span className="text-slate-400 font-normal"> · {(dailyQuota - slotUsage.total).toLocaleString()} left</span>
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden flex">
+                <div
+                  className={`h-full transition-all duration-500 ${
+                    isQuotaCritical ? 'bg-rose-500' : isQuotaWarning ? 'bg-amber-500' : 'bg-indigo-600'
+                  }`}
+                  style={{ width: `${slotUsage.total > 0 ? Math.max(2, quotaUsedPct) : 0}%` }}
+                />
+              </div>
             </div>
 
             <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
@@ -1165,24 +1591,24 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                 {dailyQuota.toLocaleString()}
               </span>
               <span className="text-xs text-slate-400 mt-2 block">
-                Provider: {activeProvider.toUpperCase()} (Resets at 00:00 UTC)
+                {perAccountQuota.toLocaleString()} per account x 2 (Resets at 00:00 IST)
               </span>
             </div>
 
             <div className="p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Used Today</span>
               <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1 block font-mono">
-                {stats.sentToday}
+                {slotUsage.total}
               </span>
               <span className="text-xs text-slate-400 mt-2 block">
-                {quotaUsedPct}% of daily allocation consumed
+                A {slotUsage.smtp} · B {slotUsage.smtp2} — {quotaUsedPct}% of pooled allocation
               </span>
             </div>
 
             <div className="p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Remaining Left</span>
               <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 block font-mono">
-                {(dailyQuota - stats.sentToday).toLocaleString()}
+                {(dailyQuota - slotUsage.total).toLocaleString()}
               </span>
               <span className="text-xs text-slate-400 mt-2 block">
                 Ample headroom for pending dispatches
@@ -1225,14 +1651,14 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                   <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="py-3 px-3 font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                      Custom SMTP / AWS Mail Manager
+                      Custom SMTP (Acct A + B)
                     </td>
                     <td className="py-3 px-3">
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                        {activeProvider === 'smtp' ? 'Active Primary' : 'Standby'}
+                        {activeProvider === 'smtp' ? `Active Primary (${activeSmtpSlot === 'smtp' ? 'A' : 'B'})` : 'Standby'}
                       </span>
                     </td>
-                    <td className="py-3 px-3">2,000 / day</td>
+                    <td className="py-3 px-3">4,000 / day</td>
                     <td className="py-3 px-3 text-emerald-600 font-bold">Operational</td>
                     <td className="py-3 px-3">Priority 1</td>
                   </tr>

@@ -43,6 +43,10 @@ ALTER TABLE public.email_routing_settings ADD CONSTRAINT email_routing_settings_
   CHECK (value_type IN ('email_list', 'number', 'text', 'boolean', 'json'));
 
 -- 5. Seed multi-provider routing & quota settings
+--    Credentials are intentionally blank. They are entered through the Email
+--    Notification Center or supplied as edge-function secrets; this file is
+--    public. The values originally seeded here were rotated after exposure.
+--    (Redacted 2026-09-29; see 20260929130000_scrub_seeded_smtp_credentials.sql.)
 INSERT INTO public.email_routing_settings (key, value, label, description, value_type, "group", sort_order)
 VALUES
   ('active_email_provider', '"smtp"'::jsonb,
@@ -52,10 +56,10 @@ VALUES
 
   ('provider_config', '{
     "smtp": {
-      "host": "jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com",
+      "host": "smtp.gmail.com",
       "port": 587,
-      "username": "inp-xjixoqpi7g5fjchj7lbwkpmy",
-      "password": "vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U",
+      "username": "",
+      "password": "",
       "senderEmail": "travel@navgurukul.org",
       "senderName": "Navgurukul Travel Desk",
       "replyTo": "travel@navgurukul.org"
@@ -63,7 +67,7 @@ VALUES
     "ses": {
       "region": "ap-south-1",
       "smtpEndpoint": "email-smtp.ap-south-1.amazonaws.com:587",
-      "accessKeyId": "AKIA6GB5ELC7NAV24GUR",
+      "accessKeyId": "",
       "configurationSet": "travel-desk-production",
       "senderEmail": "travel@navgurukul.org",
       "senderName": "Navgurukul Travel Desk",

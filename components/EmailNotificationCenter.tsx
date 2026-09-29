@@ -74,7 +74,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
     ses: {
       region: 'ap-south-1',
       smtpEndpoint: 'email-smtp.ap-south-1.amazonaws.com:587',
-      accessKeyId: 'AKIA6GB5ELC7NAV24GUR',
+      accessKeyId: '',
       secretAccessKey: '',
       configurationSet: 'travel-desk-production',
       senderEmail: 'travel@navgurukul.org',

@@ -838,12 +838,18 @@ Deno.serve(async (req: Request) => {
       // 2. SMTP Providers (Custom SMTP, AWS SES SMTP, Gmail SMTP)
       if (cleanType === 'smtp' || cleanType === 'smtp2' || cleanType === 'ses' || cleanType === 'gmail_smtp') {
         const isGmailSmtp = cleanType === 'gmail_smtp' || cfg.host === 'smtp.gmail.com';
+        // Credentials come from the environment or the saved provider config.
+        // Never bake them into source — this file lives in a public repo.
+        // @ts-ignore: Deno.env
+        const sesSmtpUser = Deno.env.get('SES_SMTP_USERNAME') || '';
+        // @ts-ignore: Deno.env
+        const sesSmtpPass = Deno.env.get('SES_SMTP_PASSWORD') || '';
         // @ts-ignore: Deno.env
         const gmailUser = Deno.env.get('GMAIL_USER') || '';
         // @ts-ignore: Deno.env
         const gmailAppPass = Deno.env.get('GMAIL_APP_PASSWORD') || '';
 
-        let host = isGmailSmtp ? 'smtp.gmail.com' : (cfg.host || cfg.smtpEndpoint || 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com');
+        let host = isGmailSmtp ? 'smtp.gmail.com' : (cfg.host || cfg.smtpEndpoint || 'smtp.gmail.com');
         let port = Number(cfg.port) || 587;
         if (typeof host === 'string' && host.includes(':')) {
           const [h, p] = host.split(':');
@@ -851,8 +857,8 @@ Deno.serve(async (req: Request) => {
           if (p && !cfg.port) port = Number(p);
         }
 
-        const username = cfg.username || (isGmailSmtp ? gmailUser : (cfg.accessKeyId || 'inp-xjixoqpi7g5fjchj7lbwkpmy'));
-        const password = cfg.password || (isGmailSmtp ? gmailAppPass : (cfg.secretAccessKey || 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U'));
+        const username = cfg.username || (isGmailSmtp ? gmailUser : (cfg.accessKeyId || sesSmtpUser));
+        const password = cfg.password || (isGmailSmtp ? gmailAppPass : (cfg.secretAccessKey || sesSmtpPass));
         const senderEmail = (cfg.senderEmail && String(cfg.senderEmail).trim()) || cfg.username || (isGmailSmtp ? gmailUser : 'travel@navgurukul.org');
         const senderName = cfg.senderName || 'Navgurukul Travel Desk';
         const replyTo = (cfg.replyTo && String(cfg.replyTo).trim()) || senderEmail;

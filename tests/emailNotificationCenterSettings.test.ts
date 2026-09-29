@@ -127,7 +127,7 @@ describe('Email Notification Center Settings & Validation Tests', () => {
   });
 
   it('flags AWS Mail Manager ingress endpoint as non-relay', () => {
-    const ingressHost = 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com';
+    const ingressHost = 'example.hkph.mail-manager-smtp.amazonaws.com';
     const isIngress = ingressHost.includes('mail-manager-smtp');
     expect(isIngress).toBe(true);
 

@@ -9,6 +9,7 @@ import { supabase } from '../supabaseClient';
 import { TravelEvent, EmailAudience, EmailContextKey, TravelRequest, User } from '../types';
 import { getEmailRoutingConfig } from './emailTriggers';
 import { resolveTemplateVariables } from './emailQueueUtils';
+import { istDayStartIso, SmtpSlot } from './email/smtpSlotRouter';
 
 export interface SendNotificationOptions {
   event?: TravelEvent;
@@ -363,21 +364,32 @@ export const logEmailAuditAction = async (
  */
 export const loadEmailNotificationSettings = async (): Promise<{
   activeProvider: string;
+  activeSmtpSlot: 'smtp' | 'smtp2';
   providerConfig: any;
   quotaSettings: any;
   domainSecurity: any;
 }> => {
   const defaults = {
     activeProvider: 'smtp',
+    activeSmtpSlot: 'smtp' as 'smtp' | 'smtp2',
     providerConfig: {
       smtp: {
-        host: 'jc37vubwcvn9.hkph.mail-manager-smtp.amazonaws.com',
+        host: 'smtp.gmail.com',
         port: 587,
-        username: 'inp-xjixoqpi7g5fjchj7lbwkpmy',
-        password: 'vZSR[99P*po=#bt-!?wiwwzP]nOF{W%U',
-        senderEmail: 'travel@navgurukul.org',
+        username: 'nitin@navgurukul.org',
+        password: '',
+        senderEmail: 'nitin@navgurukul.org',
         senderName: 'Navgurukul Travel Desk',
-        replyTo: 'travel@navgurukul.org'
+        replyTo: 'nitin@navgurukul.org'
+      },
+      smtp2: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        username: '',
+        password: '',
+        senderEmail: '',
+        senderName: 'Navgurukul Travel Desk',
+        replyTo: ''
       },
       ses: {
         region: 'ap-south-1',
@@ -399,7 +411,11 @@ export const loadEmailNotificationSettings = async (): Promise<{
       }
     },
     quotaSettings: {
-      dailyQuota: 2000,
+      dailyQuota: 4000,
+      // Gmail Workspace caps each account at ~2000/day; the 4000 headline is the
+      // sum of the two accounts, not a budget either one may spend alone.
+      perAccountQuota: 2000,
+      failoverAfterFailures: 3,
       warningThresholdPct: 80,
       criticalThresholdPct: 95,
       fallbackProvider: 'ses'
@@ -417,12 +433,15 @@ export const loadEmailNotificationSettings = async (): Promise<{
     const { data } = await supabase
       .from('email_routing_settings')
       .select('key, value')
-      .in('key', ['active_email_provider', 'provider_config', 'quota_settings', 'domain_security_status']);
+      .in('key', ['active_email_provider', 'active_smtp_slot', 'provider_config', 'quota_settings', 'domain_security_status']);
 
     if (data && data.length > 0) {
       for (const row of data) {
         if (row.key === 'active_email_provider' && row.value) {
           defaults.activeProvider = String(row.value).replace(/['"]/g, '').trim().toLowerCase();
+        } else if (row.key === 'active_smtp_slot' && row.value) {
+          const rawSlot = String(row.value).replace(/['"]/g, '').trim().toLowerCase();
+          defaults.activeSmtpSlot = rawSlot === 'smtp2' ? 'smtp2' : 'smtp';
         } else if (row.key === 'provider_config' && row.value) {
           defaults.providerConfig = { ...defaults.providerConfig, ...row.value };
         } else if (row.key === 'quota_settings' && row.value) {
@@ -445,6 +464,7 @@ export const loadEmailNotificationSettings = async (): Promise<{
 export const saveEmailNotificationSettings = async (
   updates: {
     activeProvider?: string;
+    activeSmtpSlot?: string;
     providerConfig?: any;
     quotaSettings?: any;
   },
@@ -467,6 +487,25 @@ export const saveEmailNotificationSettings = async (
     await logEmailAuditAction(
       'Active Email Provider Changed',
       { newActiveProvider: updates.activeProvider },
+      actor
+    );
+  }
+
+  if (updates.activeSmtpSlot !== undefined) {
+    await supabase.from('email_routing_settings').upsert({
+      key: 'active_smtp_slot',
+      value: updates.activeSmtpSlot,
+      label: 'Active SMTP Account Slot',
+      description: 'Designates whether Account A (smtp) or Account B (smtp2) is the primary transport.',
+      value_type: 'text',
+      group: 'provider',
+      updated_at: new Date().toISOString(),
+      updated_by: actorEmail
+    }, { onConflict: 'key' });
+
+    await logEmailAuditAction(
+      'Active SMTP Account Swapped',
+      { activeSmtpSlot: updates.activeSmtpSlot },
       actor
     );
   }
@@ -507,5 +546,41 @@ export const saveEmailNotificationSettings = async (
       { quotaSettings: updates.quotaSettings },
       actor
     );
+  }
+};
+
+/**
+ * Counts today's successful sends per SMTP account.
+ *
+ * Gmail Workspace enforces its daily cap per mailbox, so the dashboard and the
+ * queue worker both need the split rather than one pooled figure. Rows written
+ * before `smtp_slot` existed carry NULL and are attributed to Account A, which
+ * was the only account sending at the time.
+ */
+export const loadPerAccountUsage = async (
+  now: Date = new Date()
+): Promise<{ smtp: number; smtp2: number; total: number }> => {
+  const dayStart = istDayStartIso(now);
+
+  const countForSlot = async (slot: SmtpSlot): Promise<number> => {
+    const query = supabase
+      .from('email_queue')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['Sent', 'Delivered'])
+      .gte('sent_at', dayStart);
+
+    const { count } = slot === 'smtp'
+      ? await query.or('smtp_slot.eq.smtp,smtp_slot.is.null')
+      : await query.eq('smtp_slot', 'smtp2');
+
+    return count || 0;
+  };
+
+  try {
+    const [smtp, smtp2] = await Promise.all([countForSlot('smtp'), countForSlot('smtp2')]);
+    return { smtp, smtp2, total: smtp + smtp2 };
+  } catch (err) {
+    console.warn('Per-account usage query notice:', err);
+    return { smtp: 0, smtp2: 0, total: 0 };
   }
 };

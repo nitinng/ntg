@@ -8,10 +8,16 @@ vi.mock('../supabaseClient', () => {
   const inMock = vi.fn().mockResolvedValue({
     data: [
       { key: 'active_email_provider', value: '"smtp"' },
+      { key: 'active_smtp_slot', value: '"smtp2"' },
       {
         key: 'provider_config',
         value: {
           smtp: {
+            host: 'smtp.gmail.com',
+            port: 587,
+            senderEmail: 'nitin@navgurukul.org'
+          },
+          smtp2: {
             host: 'smtp.gmail.com',
             port: 587,
             senderEmail: 'travel@navgurukul.org'
@@ -20,7 +26,7 @@ vi.mock('../supabaseClient', () => {
       },
       {
         key: 'quota_settings',
-        value: { dailyQuota: 2000, warningThresholdPct: 80 }
+        value: { dailyQuota: 4000, warningThresholdPct: 80 }
       }
     ],
     error: null
@@ -92,12 +98,28 @@ describe('Email Notification Center Settings & Validation Tests', () => {
     expect(settings.providerConfig?.smtp?.host).toBe('smtp.gmail.com');
   });
 
+  it('supports dual SMTP slots with active slot selection and 4000 daily quota', async () => {
+    const settings = await loadEmailNotificationSettings();
+    expect(settings.activeSmtpSlot).toBeDefined();
+    expect(settings.quotaSettings.dailyQuota).toBe(4000);
+    expect(settings.providerConfig.smtp2).toBeDefined();
+  });
+
+  it('defaults to a 2000 per-account cap and a 3-failure promotion threshold', async () => {
+    const settings = await loadEmailNotificationSettings();
+    expect(settings.quotaSettings.perAccountQuota).toBe(2000);
+    expect(settings.quotaSettings.failoverAfterFailures).toBe(3);
+  });
+
   it('saves email notification settings with onConflict key constraint', async () => {
     await saveEmailNotificationSettings({
       activeProvider: 'smtp',
+      activeSmtpSlot: 'smtp2',
       providerConfig: {
-        smtp: { host: 'smtp.gmail.com', port: 587 }
-      }
+        smtp: { host: 'smtp.gmail.com', port: 587 },
+        smtp2: { host: 'smtp.gmail.com', port: 587 }
+      },
+      quotaSettings: { dailyQuota: 4000 }
     });
 
     const fromMock = supabase.from as any;

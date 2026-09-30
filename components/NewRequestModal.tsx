@@ -4,6 +4,7 @@ import Input from './Input';
 import Select from './Select';
 import { toast } from 'sonner';
 import { calculateDynamicUrgency, getDaysRemaining } from '../utils/policyUtils';
+import { areBookingEmailsIdentical, validateBookingStep1Data } from '../utils/bookingValidation';
 
 interface NewRequestModalProps {
     onClose: () => void;
@@ -130,36 +131,21 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
     const validationActive = (() => {
         if (!testingSettings) return true;
         if (currentUser.role === 'Admin') return testingSettings.admin;
-        if (currentUser.role === 'PNC') return testingSettings.pnc;
+        if (currentUser.role === 'PNC' || currentUser.role === 'PNC Admin') return testingSettings.pnc;
         return testingSettings.employee;
     })();
+
+    const isManagerEmailSame = useMemo(() => {
+        return areBookingEmailsIdentical(data.requesterEmail || currentUser.email, data.approvingManagerEmail);
+    }, [data.requesterEmail, data.approvingManagerEmail, currentUser.email]);
 
     const validateStep = (currentStep: number): boolean => {
         if (!validationActive) return true;
 
         if (currentStep === 1) {
-            if (!data.requesterName.trim()) {
-                toast.error("Full Name is required");
-                return false;
-            }
-            if (!data.requesterPhone.trim()) {
-                toast.error("Phone Number is required");
-                return false;
-            }
-            if (data.requesterPhone.replace(/\D/g, '').length !== 10) {
-                toast.error("Phone Number must be exactly 10 digits");
-                return false;
-            }
-            if (!data.purpose.trim()) {
-                toast.error("Purpose of Travel is required");
-                return false;
-            }
-            if (!data.approvingManagerName.trim()) {
-                toast.error("Approving Manager Name is required");
-                return false;
-            }
-            if (!data.approvingManagerEmail.trim()) {
-                toast.error("Approving Manager Email is required");
+            const step1Validation = validateBookingStep1Data(data, currentUser.email);
+            if (!step1Validation.isValid) {
+                toast.error(step1Validation.error);
                 return false;
             }
         } else if (currentStep === 2) {
@@ -227,17 +213,27 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
     };
 
     const handleSubmit = () => {
-        if (validateStep(3)) {
-            // Provide database insert fallbacks for optional validations
-            const finalData = {
-                ...data,
-                purpose: data.purpose.trim() || 'Testing Booking',
-                from: data.from.trim() || '—',
-                to: data.to.trim() || '—',
-                dateOfTravel: data.dateOfTravel || new Date().toISOString().split('T')[0]
-            };
-            onSubmit(finalData);
+        if (!validateStep(1)) {
+            setStep(1);
+            return;
         }
+        if (!validateStep(2)) {
+            setStep(2);
+            return;
+        }
+        if (!validateStep(3)) {
+            return;
+        }
+
+        // Provide database insert fallbacks for optional validations
+        const finalData = {
+            ...data,
+            purpose: data.purpose.trim() || 'Testing Booking',
+            from: data.from.trim() || '—',
+            to: data.to.trim() || '—',
+            dateOfTravel: data.dateOfTravel || new Date().toISOString().split('T')[0]
+        };
+        onSubmit(finalData);
     };
 
     const progress = (step / totalSteps) * 100;
@@ -355,7 +351,9 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
                                     <Input
                                         label="Approving Manager Email"
                                         required
+                                        type="email"
                                         value={data.approvingManagerEmail}
+                                        error={isManagerEmailSame ? "Email address and Approving Manager Email cannot be the same" : undefined}
                                         onChange={(e: any) => handleInputChange('approvingManagerEmail', e.target.value)}
                                     />
                                 </div>

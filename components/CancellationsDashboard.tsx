@@ -243,7 +243,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
                             </div>
                           </div>
                         </div>
-                        {(currentUser?.role === UserRole.PNC || currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.FINANCE) && 
+                        {(currentUser?.role === UserRole.PNC || currentUser?.role === UserRole.PNC_ADMIN || currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.FINANCE) && 
                          cancel.status !== 'Fully Refunded' && 
                          cancel.status !== 'Reconciled' && 
                          cancel.status !== 'Written Off' && (

@@ -238,7 +238,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
   const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const canEdit = currentUserRole === UserRole.ADMIN;
+  const canEdit = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.PNC_ADMIN;
 
   const published = templates.filter(t => t.status === 'Published' || (!t.isDraft && t.status !== 'Archived'));
   const drafts = templates.filter(t => t.status === 'Draft' || (t.isDraft && t.status !== 'Archived'));
@@ -395,6 +395,10 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
 
   // Save (publish or save as draft)
   const handleSave = async (saveAsDraft: boolean) => {
+    if (!canEdit) {
+      toast.error('Only PNC Admin or Admin can edit templates.');
+      return;
+    }
     if (!currentTemplate.name) {
       toast.error('Template name is required');
       return;

@@ -16,6 +16,7 @@ const ROLE_TABS = [
   { id: 'ALL', label: 'All Roles', icon: 'fa-users' },
   { id: UserRole.EMPLOYEE, label: 'Employees', icon: 'fa-user' },
   { id: UserRole.PNC, label: 'PNC Team', icon: 'fa-plane-departure' },
+  { id: UserRole.PNC_ADMIN, label: 'PNC Admin', icon: 'fa-user-shield' },
   { id: UserRole.FINANCE, label: 'Finance', icon: 'fa-wallet' },
   { id: UserRole.ADMIN, label: 'Admins', icon: 'fa-shield-halved' },
 ];
@@ -49,6 +50,27 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
   const getRoleCount = (roleId: string) => {
     if (roleId === 'ALL') return users.length;
     return users.filter(u => u.role === roleId).length;
+  };
+
+  const allowedRoles = useMemo(() => {
+    if (currentUser.role === UserRole.PNC) {
+      return [UserRole.EMPLOYEE, UserRole.PNC];
+    }
+    if (currentUser.role === UserRole.PNC_ADMIN) {
+      return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN];
+    }
+    return Object.values(UserRole);
+  }, [currentUser]);
+
+  const isSelectDisabled = (targetUser: User) => {
+    if (targetUser.id === currentUser.id) return true;
+    if (currentUser.role === UserRole.PNC) {
+      return targetUser.role !== UserRole.EMPLOYEE && targetUser.role !== UserRole.PNC;
+    }
+    if (currentUser.role === UserRole.PNC_ADMIN) {
+      return targetUser.role !== UserRole.EMPLOYEE && targetUser.role !== UserRole.PNC && targetUser.role !== UserRole.PNC_ADMIN;
+    }
+    return false;
   };
 
   const filteredUsers = useMemo(() => {
@@ -366,14 +388,9 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
                           value={user.role}
                           onChange={(e) => onUpdateRole(user, e.target.value as UserRole)}
                           className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-2xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-2xs hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={user.id === currentUser.id || (currentUser.role === UserRole.PNC && user.role !== UserRole.EMPLOYEE && user.role !== UserRole.PNC)}
+                          disabled={isSelectDisabled(user)}
                         >
-                          {Object.values(UserRole).filter(role => {
-                            if (currentUser.role === UserRole.PNC) {
-                              return role === UserRole.EMPLOYEE || role === UserRole.PNC;
-                            }
-                            return true;
-                          }).map(role => (
+                          {allowedRoles.map(role => (
                             <option key={role} value={role}>{role}</option>
                           ))}
                         </select>

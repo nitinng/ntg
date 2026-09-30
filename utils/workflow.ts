@@ -142,7 +142,7 @@ export const isUserAuthorizedForAction = (
     case 'process_pnc':
     case 'book_pnc':
     case 'cancel_as_pnc':
-      return user.role === UserRole.PNC || user.role === UserRole.ADMIN;
+      return user.role === UserRole.PNC || user.role === UserRole.PNC_ADMIN || user.role === UserRole.ADMIN;
 
     case 'cancel_as_employee':
       if (!request) return false;
@@ -156,7 +156,7 @@ export const isUserAuthorizedForAction = (
              (request.requesterId && user.id ? request.requesterId === user.id : false);
 
     case 'modify_role':
-      if (user.role !== UserRole.ADMIN && user.role !== UserRole.PNC) return false;
+      if (user.role !== UserRole.ADMIN && user.role !== UserRole.PNC_ADMIN && user.role !== UserRole.PNC) return false;
       if (targetUser?.email?.toLowerCase() === PROTECTED_ADMIN_EMAIL) return false; // Protected admin cannot be changed
       if (targetUser?.id && user.id && targetUser.id === user.id) return false; // Cannot self-demote
       return true;

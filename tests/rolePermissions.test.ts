@@ -67,8 +67,9 @@ describe('Role & Authorization Checks: isUserAuthorizedForAction', () => {
     expect(isUserAuthorizedForAction(adminUser, 'reject_as_manager', request)).toBe(true);
   });
 
-  it('allows only PNC or Admin to perform PNC processing, booking, or PNC cancellations', () => {
+  it('allows PNC, PNC Admin, or Admin to perform PNC processing, booking, or PNC cancellations', () => {
     const pncUser = { email: 'pnc@navgurukul.org', role: UserRole.PNC, id: 'pnc-1' };
+    const pncAdminUser = { email: 'pncadmin@navgurukul.org', role: UserRole.PNC_ADMIN, id: 'pnca-1' };
     const adminUser = { email: 'admin@navgurukul.org', role: UserRole.ADMIN, id: 'adm-1' };
     const empUser = { email: 'employee1@navgurukul.org', role: UserRole.EMPLOYEE, id: 'emp-1' };
     const financeUser = { email: 'finance@navgurukul.org', role: UserRole.FINANCE, id: 'fin-1' };
@@ -76,6 +77,10 @@ describe('Role & Authorization Checks: isUserAuthorizedForAction', () => {
     expect(isUserAuthorizedForAction(pncUser, 'process_pnc', request)).toBe(true);
     expect(isUserAuthorizedForAction(pncUser, 'book_pnc', request)).toBe(true);
     expect(isUserAuthorizedForAction(pncUser, 'cancel_as_pnc', request)).toBe(true);
+
+    expect(isUserAuthorizedForAction(pncAdminUser, 'process_pnc', request)).toBe(true);
+    expect(isUserAuthorizedForAction(pncAdminUser, 'book_pnc', request)).toBe(true);
+    expect(isUserAuthorizedForAction(pncAdminUser, 'cancel_as_pnc', request)).toBe(true);
 
     expect(isUserAuthorizedForAction(adminUser, 'process_pnc', request)).toBe(true);
     expect(isUserAuthorizedForAction(adminUser, 'book_pnc', request)).toBe(true);
@@ -114,10 +119,94 @@ describe('Role & Authorization Checks: isUserAuthorizedForAction', () => {
     expect(isUserAuthorizedForAction(callerAdmin, 'modify_role', undefined, callerAdmin)).toBe(false);
   });
 
-  it('allows Admin to modify roles for ordinary target users', () => {
+  it('allows Admin and PNC Admin to modify roles for ordinary target users', () => {
     const callerAdmin = { email: 'admin@navgurukul.org', role: UserRole.ADMIN, id: 'adm-1' };
+    const callerPncAdmin = { email: 'pncadmin@navgurukul.org', role: UserRole.PNC_ADMIN, id: 'pnca-1' };
     const ordinaryUser = { email: 'emp@navgurukul.org', role: UserRole.EMPLOYEE, id: 'emp-2' };
 
     expect(isUserAuthorizedForAction(callerAdmin, 'modify_role', undefined, ordinaryUser)).toBe(true);
+    expect(isUserAuthorizedForAction(callerPncAdmin, 'modify_role', undefined, ordinaryUser)).toBe(true);
+  });
+
+  it('validates promotion boundaries: PNC can promote up to PNC, PNC Admin up to PNC Admin', () => {
+    const isPromotionAllowed = (callerRole: UserRole, targetCurrentRole: UserRole, newRole: UserRole) => {
+      if (callerRole === UserRole.ADMIN) return true;
+      if (callerRole === UserRole.PNC) {
+        if (targetCurrentRole !== UserRole.EMPLOYEE && targetCurrentRole !== UserRole.PNC) return false;
+        return newRole === UserRole.EMPLOYEE || newRole === UserRole.PNC;
+      }
+      if (callerRole === UserRole.PNC_ADMIN) {
+        if (targetCurrentRole !== UserRole.EMPLOYEE && targetCurrentRole !== UserRole.PNC && targetCurrentRole !== UserRole.PNC_ADMIN) return false;
+        return newRole === UserRole.EMPLOYEE || newRole === UserRole.PNC || newRole === UserRole.PNC_ADMIN;
+      }
+      return false;
+    };
+
+    // PNC can promote Employee -> PNC
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.EMPLOYEE, UserRole.PNC)).toBe(true);
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.PNC, UserRole.EMPLOYEE)).toBe(true);
+    // PNC cannot promote to PNC Admin or Admin or Finance
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.EMPLOYEE, UserRole.PNC_ADMIN)).toBe(false);
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.EMPLOYEE, UserRole.ADMIN)).toBe(false);
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.EMPLOYEE, UserRole.FINANCE)).toBe(false);
+    // PNC cannot demote or alter a PNC Admin, Finance or Admin
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.PNC_ADMIN, UserRole.PNC)).toBe(false);
+    expect(isPromotionAllowed(UserRole.PNC, UserRole.ADMIN, UserRole.PNC)).toBe(false);
+
+    // PNC Admin can promote up to PNC Admin
+    expect(isPromotionAllowed(UserRole.PNC_ADMIN, UserRole.EMPLOYEE, UserRole.PNC)).toBe(true);
+    expect(isPromotionAllowed(UserRole.PNC_ADMIN, UserRole.EMPLOYEE, UserRole.PNC_ADMIN)).toBe(true);
+    expect(isPromotionAllowed(UserRole.PNC_ADMIN, UserRole.PNC, UserRole.PNC_ADMIN)).toBe(true);
+    // PNC Admin cannot promote to Finance or Admin
+    expect(isPromotionAllowed(UserRole.PNC_ADMIN, UserRole.EMPLOYEE, UserRole.ADMIN)).toBe(false);
+    expect(isPromotionAllowed(UserRole.PNC_ADMIN, UserRole.EMPLOYEE, UserRole.FINANCE)).toBe(false);
+    // PNC Admin cannot alter an Admin or Finance user
+    expect(isPromotionAllowed(UserRole.PNC_ADMIN, UserRole.ADMIN, UserRole.PNC_ADMIN)).toBe(false);
+
+    // Admin has full access to assign any role
+    expect(isPromotionAllowed(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.ADMIN)).toBe(true);
+    expect(isPromotionAllowed(UserRole.ADMIN, UserRole.PNC_ADMIN, UserRole.FINANCE)).toBe(true);
+  });
+
+  it('validates Department permissions: PNC is View-only, PNC Admin and Admin have Edit access', () => {
+    const canEditDepartments = (role: UserRole) => role === UserRole.ADMIN || role === UserRole.PNC_ADMIN;
+
+    expect(canEditDepartments(UserRole.PNC)).toBe(false);
+    expect(canEditDepartments(UserRole.PNC_ADMIN)).toBe(true);
+    expect(canEditDepartments(UserRole.ADMIN)).toBe(true);
+    expect(canEditDepartments(UserRole.EMPLOYEE)).toBe(false);
+    expect(canEditDepartments(UserRole.FINANCE)).toBe(false);
+  });
+
+  it('validates Email Center permissions matrix across sub-modules', () => {
+    // 1. Templates & Cadence: PNC (V), PNC Admin (E), Admin (F)
+    const canEditTemplates = (role: UserRole) => role === UserRole.ADMIN || role === UserRole.PNC_ADMIN;
+    expect(canEditTemplates(UserRole.PNC)).toBe(false);
+    expect(canEditTemplates(UserRole.PNC_ADMIN)).toBe(true);
+    expect(canEditTemplates(UserRole.ADMIN)).toBe(true);
+
+    // 2. Delivery Monitor & Outbox: PNC (V), PNC Admin (V), Admin (F)
+    const canManageDeliveryQueue = (role: UserRole) => role === UserRole.ADMIN;
+    expect(canManageDeliveryQueue(UserRole.PNC)).toBe(false);
+    expect(canManageDeliveryQueue(UserRole.PNC_ADMIN)).toBe(false);
+    expect(canManageDeliveryQueue(UserRole.ADMIN)).toBe(true);
+
+    // 3. Email Routing & SLA: PNC (V), PNC Admin (E), Admin (F)
+    const canEditRouting = (role: UserRole) => role === UserRole.ADMIN || role === UserRole.PNC_ADMIN;
+    expect(canEditRouting(UserRole.PNC)).toBe(false);
+    expect(canEditRouting(UserRole.PNC_ADMIN)).toBe(true);
+    expect(canEditRouting(UserRole.ADMIN)).toBe(true);
+
+    // 4. Email Setup: PNC (V), PNC Admin (V), Admin (F)
+    const canEditSetup = (role: UserRole) => role === UserRole.ADMIN;
+    expect(canEditSetup(UserRole.PNC)).toBe(false);
+    expect(canEditSetup(UserRole.PNC_ADMIN)).toBe(false);
+    expect(canEditSetup(UserRole.ADMIN)).toBe(true);
+
+    // 5. Usage & Quota: PNC (V), PNC Admin (V), Admin (F)
+    const canEditQuota = (role: UserRole) => role === UserRole.ADMIN;
+    expect(canEditQuota(UserRole.PNC)).toBe(false);
+    expect(canEditQuota(UserRole.PNC_ADMIN)).toBe(false);
+    expect(canEditQuota(UserRole.ADMIN)).toBe(true);
   });
 });

@@ -203,7 +203,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const [deptChartType, setDeptChartType] = useState<'bar' | 'line' | 'scatter' | 'bubble' | 'pie'>('bar');
   const [deptSort, setDeptSort] = useState<{ col: 'dept' | 'count' | 'avg' | 'total'; dir: 'asc' | 'desc' }>({ col: 'total', dir: 'desc' });
 
-  const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC;
+  const isFinancialView = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN;
   const showComparison = (filters.period || '').toUpperCase() !== 'ALL TIME';
 
   const CHART_ICONS: Record<string, string> = { bar: 'fa-chart-bar', line: 'fa-chart-line', scatter: 'fa-braille', bubble: 'fa-circle-dot', pie: 'fa-chart-pie' };

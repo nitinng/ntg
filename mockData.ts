@@ -60,6 +60,17 @@ export const mockUsers: User[] = [
     campus: 'Delhi'
   },
   {
+    id: 'u6',
+    name: 'PNC Lead Admin',
+    email: 'pnc.lead@navgurukul.org',
+    role: UserRole.PNC_ADMIN,
+    passportPhoto: { status: VerificationStatus.APPROVED, fileUrl: 'https://i.pravatar.cc/150?u=u6' },
+    idProof: { status: VerificationStatus.APPROVED, fileUrl: '#' },
+    team: 'People & Culture',
+    department: 'PnC',
+    campus: 'Dharamshala'
+  },
+  {
     id: 'u5',
     name: 'Finance User',
     email: 'finance@navgurukul.org',

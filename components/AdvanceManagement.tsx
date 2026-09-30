@@ -478,7 +478,7 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
                     onChange={(e) => setFormData({ ...formData, received_by: e.target.value })}
                   >
                     <option value="">Select PNC User</option>
-                    {users.filter(u => u.role === UserRole.PNC || u.role === UserRole.ADMIN).map(u => (
+                    {users.filter(u => u.role === UserRole.PNC || u.role === UserRole.PNC_ADMIN || u.role === UserRole.ADMIN).map(u => (
                       <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                     ))}
                   </select>

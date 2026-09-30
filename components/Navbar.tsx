@@ -39,7 +39,8 @@ export const Navbar = ({
 
   const getVisibleRoles = () => {
     if (baseRole === UserRole.ADMIN) return Object.values(UserRole);
-    if (baseRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.FINANCE];
+    if (baseRole === UserRole.PNC_ADMIN) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
+    if (baseRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
     if (baseRole === UserRole.FINANCE) return [UserRole.EMPLOYEE, UserRole.FINANCE];
     return [];
   };
@@ -141,12 +142,12 @@ export const Navbar = ({
           </div>
           <button
             onClick={onOpenProfile}
-            className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 font-bold rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-slate-700 flex items-center justify-center transition-all"
+            className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 font-bold rounded-full overflow-hidden border border-slate-200/80 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-slate-700 flex items-center justify-center transition-all shadow-sm ring-2 ring-transparent hover:ring-indigo-500/20"
           >
             {currentUser.avatar ? (
-              <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+              <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
             ) : currentUser.passportPhoto?.fileUrl ? (
-              <img src={currentUser.passportPhoto.fileUrl} alt="Profile" className="w-full h-full object-cover" />
+              <img src={currentUser.passportPhoto.fileUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />
             ) : (
               currentUser.name.charAt(0)
             )}

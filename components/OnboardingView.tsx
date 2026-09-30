@@ -7,6 +7,7 @@ import TextArea from './TextArea';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { areBookingEmailsIdentical } from '../utils/bookingValidation';
 
 interface SectionProps {
   title: string;
@@ -170,6 +171,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
       toast.error("Emergency Contact Number must be exactly 10 digits");
       return;
     }
+    if (areBookingEmailsIdentical(formData.email, formData.managerEmail)) {
+      toast.error("Email address and Approving Manager Email cannot be the same");
+      return;
+    }
 
     onUpdate(formData);
     toast.success("Profile updated successfully");
@@ -307,7 +312,13 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
           />
           <Input label="Campus / Location" value={formData.campus || ''} onChange={(e: any) => setFormData({ ...formData, campus: e.target.value })} />
           <Input label="Approving Manager Name" value={formData.managerName || ''} onChange={(e: any) => setFormData({ ...formData, managerName: e.target.value })} />
-          <Input label="Approving Manager Email" value={formData.managerEmail || ''} onChange={(e: any) => setFormData({ ...formData, managerEmail: e.target.value })} />
+          <Input
+            label="Approving Manager Email"
+            type="email"
+            value={formData.managerEmail || ''}
+            error={areBookingEmailsIdentical(formData.email, formData.managerEmail) ? "Email address and Approving Manager Email cannot be the same" : undefined}
+            onChange={(e: any) => setFormData({ ...formData, managerEmail: e.target.value })}
+          />
         </Section>
 
         {/* Emergency & Medical Information */}

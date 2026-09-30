@@ -11,6 +11,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { EmailRoutingSetting, User, UserRole } from '../types';
+import Toggle from './Toggle';
 import { invalidateRoutingConfigCache } from '../utils/emailTriggers';
 import { validateRoutingSettings, findDirtyKeys } from '../utils/emailRoutingValidation';
 
@@ -41,7 +42,7 @@ export const EmailSettingsView: React.FC<EmailSettingsViewProps> = ({ currentUse
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  const canEdit = currentUser?.role === UserRole.ADMIN;
+  const canEdit = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.PNC_ADMIN;
 
   useEffect(() => {
     void fetchSettings();
@@ -186,7 +187,7 @@ export const EmailSettingsView: React.FC<EmailSettingsViewProps> = ({ currentUse
       {!canEdit && (
         <div className="rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           <i className="fa-solid fa-lock mr-2" />
-          These settings are read-only for your role. An Admin can change them.
+          These settings are read-only for your role. An Admin or PNC Admin can change them.
         </div>
       )}
 
@@ -270,22 +271,19 @@ const SettingRow: React.FC<{
           disabled={disabled}
         />
       ) : setting.valueType === 'boolean' ? (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={Boolean(value)}
-          disabled={disabled}
-          onClick={() => onChange(!value)}
-          className={`relative w-11 h-6 rounded-full transition-colors disabled:opacity-40 ${
-            value ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-              value ? 'translate-x-5' : 'translate-x-0.5'
-            }`}
+        <div className="flex items-center gap-3">
+          <Toggle
+            active={Boolean(value)}
+            disabled={disabled}
+            onChange={() => onChange(!value)}
+            label={setting.label}
           />
-        </button>
+          <span className={`text-xs font-bold uppercase tracking-wider ${
+            value ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
+          }`}>
+            {value ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
       ) : setting.valueType === 'number' ? (
         <input
           type="number"

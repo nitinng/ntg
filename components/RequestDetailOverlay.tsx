@@ -558,7 +558,7 @@ export const RequestDetailOverlay = ({
 
         {/* Actions Area */}
         <div className="mt-8 pt-8 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800">
-            {role === UserRole.PNC || role === UserRole.ADMIN ? (
+            {role === UserRole.PNC || role === UserRole.PNC_ADMIN || role === UserRole.ADMIN ? (
             <div className="space-y-3">
               <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
 

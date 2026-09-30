@@ -729,7 +729,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {activeProvider !== selectedProviderCard && (
+                  {canEdit && activeProvider !== selectedProviderCard && (
                     <button
                       onClick={() => setActiveProvider(selectedProviderCard)}
                       className="px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold hover:bg-indigo-100 transition-all"
@@ -744,6 +744,13 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                   )}
                 </div>
               </div>
+
+              {!canEdit && (
+                <div className="p-3.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <i className="fa-solid fa-lock" />
+                  <span>Email provider setup and credentials are read-only for your role. Only Administrators can update credentials.</span>
+                </div>
+              )}
 
               {/* A. Custom SMTP Form — Dual Account (Primary + Backup) */}
               {selectedProviderCard === 'smtp' && (
@@ -812,24 +819,24 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                     ))}
 
                     {/* Toggle active slot */}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const next = activeSmtpSlot === 'smtp' ? 'smtp2' : 'smtp';
-                        const nextLabel = next === 'smtp' ? 'Account A' : 'Account B';
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const next = activeSmtpSlot === 'smtp' ? 'smtp2' : 'smtp';
+                          const nextLabel = next === 'smtp' ? 'Account A' : 'Account B';
 
-                        if (!providerConfig[next]?.username || !providerConfig[next]?.password) {
-                          toast.error(`Configure ${nextLabel} credentials before activating it.`);
-                          return;
-                        }
-                        // Promoting an untested account silently breaks every
-                        // outbound email, so require a passing test first.
-                        if (!slotHealth[next]?.ok) {
-                          toast.error(`Run "Test ${next === 'smtp' ? 'A' : 'B'}" and get a pass before making ${nextLabel} active.`);
-                          return;
-                        }
-                        setActiveSmtpSlot(next);
-                        if (canEdit) {
+                          if (!providerConfig[next]?.username || !providerConfig[next]?.password) {
+                            toast.error(`Configure ${nextLabel} credentials before activating it.`);
+                            return;
+                          }
+                          // Promoting an untested account silently breaks every
+                          // outbound email, so require a passing test first.
+                          if (!slotHealth[next]?.ok) {
+                            toast.error(`Run "Test ${next === 'smtp' ? 'A' : 'B'}" and get a pass before making ${nextLabel} active.`);
+                            return;
+                          }
+                          setActiveSmtpSlot(next);
                           try {
                             await saveEmailNotificationSettings(
                               {
@@ -843,14 +850,14 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                           } catch (e) {
                             // non-blocking local toggle
                           }
-                        }
-                        toast.success(`Switched active SMTP to ${next === 'smtp' ? 'Account A' : 'Account B'}`);
-                      }}
-                      className="ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 flex items-center gap-1.5 transition-all"
-                    >
-                      <i className="fa-solid fa-arrow-right-arrow-left text-[10px]" />
-                      Toggle Active / Backup
-                    </button>
+                          toast.success(`Switched active SMTP to ${next === 'smtp' ? 'Account A' : 'Account B'}`);
+                        }}
+                        className="ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 flex items-center gap-1.5 transition-all"
+                      >
+                        <i className="fa-solid fa-arrow-right-arrow-left text-[10px]" />
+                        Toggle Active / Backup
+                      </button>
+                    )}
                   </div>
 
                   {/* Role banner for the slot being edited */}
@@ -1358,14 +1365,16 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
                   <i className={`fa-solid fa-wifi ${pingLoading ? 'fa-spin' : ''}`} />
                   Test Connection
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSaveProviderConfig}
-                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-md transition-all active:scale-95"
-                >
-                  <i className="fa-solid fa-floppy-disk" />
-                  Save Provider Configuration
-                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={handleSaveProviderConfig}
+                    className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-md transition-all active:scale-95"
+                  >
+                    <i className="fa-solid fa-floppy-disk" />
+                    Save Provider Configuration
+                  </button>
+                )}
               </div>
             </div>
 

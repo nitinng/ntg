@@ -1,6 +1,7 @@
 export enum UserRole {
   EMPLOYEE = 'Employee',
   PNC = 'PNC',
+  PNC_ADMIN = 'PNC Admin',
   FINANCE = 'Finance',
   ADMIN = 'Admin' // Treated as Super Admin
 }

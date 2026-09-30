@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User } from '../types';
+import { User, UserRole } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import Card from './Card';
@@ -44,6 +44,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
   currentUser,
   defaultSubTab = 'logs'
 }) => {
+  const canManage = currentUser?.role === UserRole.ADMIN;
   const [activeSubTab, setActiveSubTab] = useState<'logs' | 'test-email'>(defaultSubTab);
   const [emails, setEmails] = useState<EmailQueueRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,6 +193,10 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
 
   // 1-Click Trigger Delivery Worker Now via Supabase Edge Function
   const handleProcessQueueNow = async () => {
+    if (!canManage) {
+      toast.error('Only Administrators can trigger the delivery worker manually.');
+      return;
+    }
     setIsProcessingQueue(true);
     try {
       const { data, error } = await supabase.functions.invoke('process-email-queue', {
@@ -217,6 +222,10 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
 
   // Retry an individual failed email
   const handleRetryEmail = async (emailId: string) => {
+    if (!canManage) {
+      toast.error('Only Administrators can retry failed emails.');
+      return;
+    }
     setRetryingId(emailId);
     try {
       const { error } = await supabase
@@ -242,6 +251,10 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
   // Clear all queue items
   const [isClearingQueue, setIsClearingQueue] = useState(false);
   const handleClearQueue = async () => {
+    if (!canManage) {
+      toast.error('Only Administrators can clear the outgoing email queue.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to clear all outgoing email records from the queue? This will purge all old test/pending/sent logs.')) {
       return;
     }
@@ -276,6 +289,10 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
   // Send Test Email
   const handleSendTestEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManage) {
+      toast.error('Only Administrators can dispatch test emails.');
+      return;
+    }
     if (!testRecipient || !testRecipient.includes('@')) {
       toast.error('Please enter a valid recipient email address.');
       return;
@@ -388,7 +405,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {emails.length > 0 && (
+          {canManage && emails.length > 0 && (
             <button
               onClick={handleClearQueue}
               disabled={isClearingQueue}
@@ -407,21 +424,23 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
             <i className={`fa-solid fa-rotate-right ${loading ? 'fa-spin' : ''}`}></i>
             Refresh
           </button>
-          <button
-            onClick={handleProcessQueueNow}
-            disabled={isProcessingQueue}
-            className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-          >
-            {isProcessingQueue ? (
-              <>
-                <i className="fa-solid fa-circle-notch fa-spin"></i> Processing Queue...
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-bolt"></i> Trigger Worker Now
-              </>
-            )}
-          </button>
+          {canManage && (
+            <button
+              onClick={handleProcessQueueNow}
+              disabled={isProcessingQueue}
+              className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {isProcessingQueue ? (
+                <>
+                  <i className="fa-solid fa-circle-notch fa-spin"></i> Processing Queue...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-bolt"></i> Trigger Worker Now
+                </>
+              )}
+            </button>
+          )}
         </div>
       </header>
 
@@ -466,17 +485,19 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
           <i className="fa-solid fa-list-ul text-xs"></i>
           Delivery Logs & Queue ({filteredEmails.length})
         </button>
-        <button
-          onClick={() => setActiveSubTab('test-email')}
-          className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${
-            activeSubTab === 'test-email'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
-          }`}
-        >
-          <i className="fa-solid fa-paper-plane text-xs"></i>
-          Send Test Email
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setActiveSubTab('test-email')}
+            className={`py-4 px-6 font-bold text-sm border-b-2 flex items-center gap-2 transition-all ${
+              activeSubTab === 'test-email'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+            }`}
+          >
+            <i className="fa-solid fa-paper-plane text-xs"></i>
+            Send Test Email
+          </button>
+        )}
       </div>
 
       {activeSubTab === 'logs' ? (
@@ -622,7 +643,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
                         </td>
                         <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
-                            {isFailed && (
+                            {canManage && isFailed && (
                               <button
                                 onClick={() => handleRetryEmail(item.id)}
                                 disabled={retryingId === item.id}

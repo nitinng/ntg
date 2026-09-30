@@ -41,6 +41,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
 }) => {
   const [activeTab, setActiveTab] = useState<'templates' | 'delivery' | 'routing' | 'setup' | 'quota'>(initialTab);
   const [templateSubTab, setTemplateSubTab] = useState<'templates' | 'cadence'>('templates');
+  const [quotaSubTab, setQuotaSubTab] = useState<'today' | 'past'>('today');
 
   // Provider Settings State
   const [activeProvider, setActiveProvider] = useState<string>('smtp');
@@ -157,12 +158,105 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
 
+  // Past Usage Graph State
+  const [pastUsageFilter, setPastUsageFilter] = useState<'7' | '14' | '30' | '90' | 'lifetime' | 'custom'>('14');
+  const [customDateRange, setCustomDateRange] = useState({ start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0], end: new Date().toISOString().split('T')[0] });
+  const [pastUsageData, setPastUsageData] = useState<{ day: string, vol: number, delivered: number, failed: number }[]>([]);
+  const [pastUsageStats, setPastUsageStats] = useState({ totalSent: 0, avgDaily: 0, deliveryRate: 100 });
+  const [loadingPastUsage, setLoadingPastUsage] = useState(false);
+  const [pastUsageToggles, setPastUsageToggles] = useState({ total: true, delivered: false, failed: false });
+
   const canEdit = currentUser?.role === UserRole.ADMIN;
 
   useEffect(() => {
     void initializeSettings();
     void fetchDeliveryMetrics();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'quota' && quotaSubTab === 'past') {
+      void fetchPastUsage();
+    }
+  }, [activeTab, quotaSubTab, pastUsageFilter, customDateRange]);
+
+  const fetchPastUsage = async () => {
+    setLoadingPastUsage(true);
+    try {
+      let startDate = new Date();
+      let endDate = new Date();
+      endDate.setHours(23,59,59,999);
+
+      if (pastUsageFilter === 'lifetime') {
+        const { data: oldest } = await supabase.from('email_queue').select('created_at').order('created_at', { ascending: true }).limit(1);
+        if (oldest && oldest.length > 0) {
+          startDate = new Date(oldest[0].created_at);
+        } else {
+          startDate.setDate(startDate.getDate() - 30);
+        }
+      } else if (pastUsageFilter === 'custom') {
+        startDate = new Date(customDateRange.start);
+        endDate = new Date(customDateRange.end);
+        endDate.setHours(23,59,59,999);
+      } else {
+        startDate.setDate(startDate.getDate() - parseInt(pastUsageFilter) + 1);
+      }
+      startDate.setHours(0,0,0,0);
+
+      const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+      
+      const { data, error } = await supabase
+        .from('email_queue')
+        .select('created_at, status')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+
+      if (error) throw error;
+      
+      const records = data || [];
+      const dailyMap: Record<string, { vol: number, delivered: number, failed: number }> = {};
+      
+      // Initialize map with all days in range
+      for (let i = 0; i < totalDays; i++) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        const dayStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        dailyMap[dayStr] = { vol: 0, delivered: 0, failed: 0 };
+      }
+
+      let delivered = 0;
+      let totalSent = 0;
+
+      records.forEach(r => {
+        totalSent++;
+        if (r.status === 'Sent') delivered++;
+        
+        const d = new Date(r.created_at);
+        const dayStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (dailyMap[dayStr] !== undefined) {
+          dailyMap[dayStr].vol++;
+          if (r.status === 'Sent') dailyMap[dayStr].delivered++;
+          if (r.status === 'Failed') dailyMap[dayStr].failed++;
+        }
+      });
+
+      const chartData = Object.keys(dailyMap).map(day => ({
+        day,
+        ...dailyMap[day]
+      }));
+
+      setPastUsageData(chartData);
+      setPastUsageStats({
+        totalSent,
+        avgDaily: Math.round(totalSent / totalDays),
+        deliveryRate: totalSent > 0 ? (delivered / totalSent) * 100 : 100
+      });
+
+    } catch (err: any) {
+      toast.error('Failed to load past usage data: ' + err.message);
+    } finally {
+      setLoadingPastUsage(false);
+    }
+  };
 
   const initializeSettings = async () => {
     const data = await loadEmailNotificationSettings();
@@ -504,7 +598,6 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
           >
             <i className="fa-solid fa-sliders" />
             <span>Email Setup</span>
-            <span className="text-[10px] text-slate-400 lowercase font-normal">(gmail, ses, resend, smtp)</span>
           </button>
 
           <button
@@ -1510,6 +1603,31 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
       {/* ========================================================================= */}
       {activeTab === 'quota' && (
         <div className="space-y-6">
+          <div className="flex bg-slate-100/50 dark:bg-slate-800/30 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/50 w-fit backdrop-blur-xl">
+            <button
+              onClick={() => setQuotaSubTab('today')}
+              className={`px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${
+                quotaSubTab === 'today'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              <i className="fa-solid fa-calendar-day" /> Today
+            </button>
+            <button
+              onClick={() => setQuotaSubTab('past')}
+              className={`px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${
+                quotaSubTab === 'past'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              <i className="fa-solid fa-clock-rotate-left" /> Past Usage
+            </button>
+          </div>
+
+          {quotaSubTab === 'today' && (
+            <div className="space-y-6 animate-in fade-in duration-500">
           {/* Daily Quota Progress Bar */}
           <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1717,6 +1835,152 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
               </table>
             </div>
           </div>
+          </div>
+          )}
+
+          {quotaSubTab === 'past' && (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              {loadingPastUsage ? (
+                <div className="py-12 text-center text-slate-400 animate-pulse">
+                  <i className="fa-solid fa-spinner fa-spin text-2xl mb-2" />
+                  <p className="text-xs">Loading historical data...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Mails Sent ({pastUsageFilter}d)</span>
+                      <span className="text-3xl font-extrabold text-slate-900 dark:text-white mt-1 block font-mono">{pastUsageStats.totalSent.toLocaleString()}</span>
+                    </div>
+                    <div className="p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Average Daily Volume</span>
+                      <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1 block font-mono">{pastUsageStats.avgDaily.toLocaleString()}</span>
+                    </div>
+                    <div className="p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Avg Delivery Rate</span>
+                      <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 block font-mono">{pastUsageStats.deliveryRate.toFixed(1)}%</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <i className="fa-solid fa-chart-column text-indigo-600" />
+                          Day-to-Day Sending Volume
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Historical overview of outgoing email volume and quota utilization.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {pastUsageFilter === 'custom' && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <input type="date" value={customDateRange.start} onChange={e => setCustomDateRange(prev => ({...prev, start: e.target.value}))} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 outline-none" />
+                            <span className="text-slate-400">to</span>
+                            <input type="date" value={customDateRange.end} onChange={e => setCustomDateRange(prev => ({...prev, end: e.target.value}))} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 outline-none" />
+                          </div>
+                        )}
+                        <select
+                          value={pastUsageFilter}
+                          onChange={(e) => setPastUsageFilter(e.target.value as any)}
+                          className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        >
+                          <option value="7">Last 7 Days</option>
+                          <option value="14">Last 14 Days</option>
+                          <option value="30">Last 30 Days</option>
+                          <option value="90">Last 90 Days</option>
+                          <option value="lifetime">Lifetime</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-5 pb-2 border-b border-slate-100 dark:border-slate-800/50">
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
+                        <input type="checkbox" checked={pastUsageToggles.total} onChange={e => setPastUsageToggles(prev => ({...prev, total: e.target.checked}))} className="rounded text-amber-500 focus:ring-amber-500 bg-slate-100 border-slate-300" />
+                        Total Attempted Trend
+                      </label>
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
+                        <input type="checkbox" checked={pastUsageToggles.delivered} onChange={e => setPastUsageToggles(prev => ({...prev, delivered: e.target.checked}))} className="rounded text-emerald-500 focus:ring-emerald-500 bg-slate-100 border-slate-300" />
+                        Delivered Trend
+                      </label>
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors">
+                        <input type="checkbox" checked={pastUsageToggles.failed} onChange={e => setPastUsageToggles(prev => ({...prev, failed: e.target.checked}))} className="rounded text-rose-500 focus:ring-rose-500 bg-slate-100 border-slate-300" />
+                        Failed Trend
+                      </label>
+                    </div>
+
+                    {(() => {
+                      const maxVol = Math.max(...pastUsageData.map(d => d.vol), 10);
+                      const midVol = Math.round(maxVol / 2);
+                      const totalDays = pastUsageData.length;
+                      
+                      const getInterval = (days: number) => {
+                        if (days <= 7) return 1;
+                        if (days <= 14) return 3;
+                        if (days <= 30) return 7;
+                        if (days <= 90) return 15;
+                        if (days <= 180) return 30;
+                        if (days <= 365) return 60;
+                        return 120;
+                      };
+                      const interval = getInterval(totalDays);
+
+                      const getTrendPoints = (key: 'vol' | 'delivered' | 'failed') => {
+                        const trendData = pastUsageData.map((d, i, arr) => {
+                          const window = arr.slice(Math.max(0, i - 2), i + 1);
+                          return window.reduce((sum, item) => sum + item[key], 0) / window.length;
+                        });
+                        return trendData.map((avg, i) => {
+                          const x = ((i + 0.5) / pastUsageData.length) * 100;
+                          const y = maxVol > 0 ? 100 - (avg / maxVol * 100) : 100;
+                          return `${x},${y}`;
+                        }).join(' ');
+                      };
+
+                      return (
+                        <div className="h-64 flex items-end gap-2 px-2 pb-6 border-b border-slate-100 dark:border-slate-800 relative pt-8">
+                          {/* Y-axis labels */}
+                          <div className="absolute left-0 top-8 bottom-6 flex flex-col justify-between text-[10px] text-slate-400 font-mono pr-2 border-r border-slate-100 dark:border-slate-800">
+                            <span>{maxVol}</span>
+                            <span>{midVol}</span>
+                            <span>0</span>
+                          </div>
+                          {/* Bars and Trendline */}
+                          <div className="flex-1 flex items-end justify-between pl-8 h-full relative">
+                            {pastUsageData.map((item, i) => (
+                              <div key={i} className="flex flex-col justify-end items-center gap-1 group w-full px-0.5 h-full relative z-10">
+                                <div 
+                                  className="w-full bg-indigo-300 dark:bg-indigo-500/70 rounded-t-md relative hover:bg-indigo-400 dark:hover:bg-indigo-400/90 transition-colors" 
+                                  style={{ height: `${maxVol > 0 ? (item.vol / maxVol) * 100 : 0}%`, minHeight: item.vol > 0 ? '4px' : '0' }}
+                                >
+                                  <div className="absolute -top-11 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white text-[10px] px-2.5 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity font-mono pointer-events-none whitespace-nowrap z-30 flex flex-col items-center leading-tight shadow-xl">
+                                    <span className="font-bold">{item.vol} total</span>
+                                    <span className="text-[8.5px] text-slate-300 mt-0.5">{item.day}</span>
+                                  </div>
+                                </div>
+                                {i % interval === 0 && (
+                                  <span className="absolute -bottom-5 text-[10px] text-slate-500 font-medium whitespace-nowrap pointer-events-none">
+                                    {item.day}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                            <svg className="absolute top-0 bottom-0 right-0 pointer-events-none z-20" style={{ left: '2rem', width: 'calc(100% - 2rem)', height: '100%' }} viewBox="0 0 100 100" preserveAspectRatio="none">
+                              {pastUsageToggles.total && <polyline points={getTrendPoints('vol')} fill="none" stroke="currentColor" strokeWidth="3" className="text-amber-500 dark:text-amber-400" vectorEffect="non-scaling-stroke" strokeDasharray="6 6" />}
+                              {pastUsageToggles.delivered && <polyline points={getTrendPoints('delivered')} fill="none" stroke="currentColor" strokeWidth="3" className="text-emerald-500 dark:text-emerald-400" vectorEffect="non-scaling-stroke" />}
+                              {pastUsageToggles.failed && <polyline points={getTrendPoints('failed')} fill="none" stroke="currentColor" strokeWidth="3" className="text-rose-500 dark:text-rose-400" vectorEffect="non-scaling-stroke" strokeDasharray="2 4" />}
+                            </svg>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

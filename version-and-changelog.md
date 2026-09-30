@@ -7,7 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.5.0 (2026-09-28)](#v250---2026-09-28)
+* [Current Release — v2.6.0 (2026-10-01)](#v260---2026-10-01)
+* [v2.5.0 (2026-09-28)](#v250---2026-09-28)
 * [v2.4.0 (2026-08-28)](#v240---2026-08-28)
 * [v2.3.0 (2026-08-28)](#v230---2026-08-28)
 * [v2.2.0 (2026-07-28)](#v220---2026-07-28)
@@ -15,6 +16,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.6.0] - 2026-10-01
+
+### ✉️ Dual SMTP Slot Router & Scalable Email Architecture
+
+#### ✨ Features & Architecture
+* **Dual SMTP Routing Engine**:
+  * Added a robust dual-slot SMTP router allowing the application to distribute outgoing emails across two different SMTP provider accounts.
+  * Increased combined daily sending quota limits tracking to 4000 emails per day.
+  * Real-time exposed per-account usage quotas and available slots directly in the Email/Provider settings UI.
+  * Integrated dedicated test functionalities to independently verify the connection health of each configured SMTP account.
+* **Email Queue Improvements**:
+  * Updated database schema for the email queue and templates to support the new routing setup.
+  * Implemented automatic ticket state progression, automatically advancing approved requests to `Processing` state while concurrently queuing the necessary notification emails.
+  
+#### 🔒 Security & Credentials Management
+* Removed hardcoded Amazon SES and generic SMTP credentials from the application source code.
+* Cleared exposed/seeded SMTP and SES credentials from the initial `provider_config` database schemas to ensure production security.
+
+### 📊 Analytics Design Polish
+* Upgraded analytics dashboard sub-tabs to a modern segmented pill bar with live metrics.
+* Aligned sub-tabs and time-range pills to the reference design.
+
+#### 📝 Commits in this Release
+* `ab8bf34` — `fix(db): clear seeded SMTP and SES credentials from provider_config`
+* `06d979b` — `fix(email): remove hardcoded SES SMTP credentials from source`
+* `4a775d6` — `feat(email): show per-account quota and test each SMTP account`
+* `81a534e` — `feat(email): route queue sends across both SMTP accounts`
+* `e490069` — `feat(email): expose per-account SMTP usage and slot settings`
+* `4df1293` — `feat(db): track SMTP usage per account and raise quota to 4000`
+* `b4b5453` — `feat(email): add dual SMTP slot router`
+* `020bcb2` — `feat(db): add email templates, RLS/routing, and update email queue columns`
+* `8ac2b39` — `feat(app): auto-advance approved requests to processing and queue emails`
+* `4bf6819` — `style(analytics): upgrade sub-tabs to modern segmented pill bar with live metrics`
+* `87bf176` — `style(analytics): align sub-tabs and time-range pills to reference design`
 
 ---
 

@@ -402,7 +402,7 @@ export const PolicyManagement = ({
   };
 
   const filteredPncUsers = users.filter(u =>
-    (u.role === UserRole.PNC || u.role === UserRole.ADMIN) &&
+    (u.role === UserRole.PNC || u.role === UserRole.PNC_ADMIN || u.role === UserRole.ADMIN) &&
     (u.name?.toLowerCase().includes(pncSearch.toLowerCase()) || u.email?.toLowerCase().includes(pncSearch.toLowerCase())) &&
     !meetupApprovers.some(a => a.email.toLowerCase() === u.email?.toLowerCase())
   );
@@ -416,22 +416,24 @@ export const PolicyManagement = ({
       />
 
       {/* Global Module Controls */}
-      {currentUser.role === UserRole.ADMIN && (
+      {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN) && (
         <section className="space-y-3">
           <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Global Features & Access Control</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            <Card className="p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center text-xs">
-                    <i className="fa-solid fa-person-shelter"></i>
+            {currentUser.role === UserRole.ADMIN && (
+              <Card className="p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg flex items-center justify-center text-xs">
+                      <i className="fa-solid fa-person-shelter"></i>
+                    </div>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Igathpuri Meetup</h4>
                   </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Igathpuri Meetup</h4>
+                  <Toggle active={isIgatpuriEnabled} onChange={handleToggleIgatpuri} />
                 </div>
-                <Toggle active={isIgatpuriEnabled} onChange={handleToggleIgatpuri} />
-              </div>
-              <p className="text-2xs text-slate-500 leading-relaxed font-medium">Enable or disable the Igathpuri Meetup booking and approval system for all users.</p>
-            </Card>
+                <p className="text-2xs text-slate-500 leading-relaxed font-medium">Enable or disable the Igathpuri Meetup booking and approval system for all users.</p>
+              </Card>
+            )}
 
             <Card className="p-4 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -446,42 +448,46 @@ export const PolicyManagement = ({
               <p className="text-2xs text-slate-500 leading-relaxed font-medium">Enable or disable live chat support between Employees and PNC/Admin teams.</p>
             </Card>
 
-            <Card className="p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-xs">
-                    <i className="fa-solid fa-envelope"></i>
+            {currentUser.role === UserRole.ADMIN && (
+              <Card className="p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-xs">
+                      <i className="fa-solid fa-envelope"></i>
+                    </div>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Email Password Login</h4>
                   </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Email Password Login</h4>
+                  <Toggle active={isEmailLoginEnabled} onChange={handleToggleEmailLogin} />
                 </div>
-                <Toggle active={isEmailLoginEnabled} onChange={handleToggleEmailLogin} />
-              </div>
-              <p className="text-2xs text-slate-500 leading-relaxed font-medium">Allow traditional email/password login alongside Google OAuth on the sign in page.</p>
-            </Card>
+                <p className="text-2xs text-slate-500 leading-relaxed font-medium">Allow traditional email/password login alongside Google OAuth on the sign in page.</p>
+              </Card>
+            )}
           </div>
         </section>
       )}
 
       {/* Travel Notice Policies */}
-      <section className="space-y-3">
-        <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Advance Booking Deadlines</h3>
-        <Card className="p-5 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            {travelModePolicies.map(p => (
-              <Input
-                key={p.id}
-                label={`${p.travelMode} Notice Days`}
-                type="number"
-                value={p.minAdvanceDays}
-                onChange={e => handleUpdateMinAdvanceDays(p.travelMode, parseInt(e.target.value) || 0)}
-              />
-            ))}
-          </div>
-        </Card>
-      </section>
+      {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN) && (
+        <section className="space-y-3">
+          <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Advance Booking Deadlines</h3>
+          <Card className="p-5 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {travelModePolicies.map(p => (
+                <Input
+                  key={p.id}
+                  label={`${p.travelMode} Notice Days`}
+                  type="number"
+                  value={p.minAdvanceDays}
+                  onChange={e => handleUpdateMinAdvanceDays(p.travelMode, parseInt(e.target.value) || 0)}
+                />
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* Admin Policy Settings */}
-      {currentUser.role === UserRole.ADMIN && (
+      {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN) && (
         <section className="space-y-3">
           <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Approval & Verification Settings</h3>
           <Card className="p-5 space-y-5">
@@ -867,8 +873,8 @@ export const PolicyManagement = ({
         </section>
       )}
 
-      {/* Global Email CC Configuration (Admin only) */}
-      {currentUser.role === UserRole.ADMIN && (
+      {/* Global Email CC Configuration */}
+      {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN) && (
         <section className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -953,8 +959,8 @@ export const PolicyManagement = ({
         </section>
       )}
 
-      {/* Cancellation Policy (Admin & PNC) */}
-      {(currentUser.role === UserRole.ADMIN || currentUser.role === 'PNC') && (
+      {/* Cancellation Policy Splits */}
+      {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN) && (
         <section className="space-y-3">
           <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Cancellation Policy Splits</h3>
           <Card className="p-5 space-y-5">
@@ -1018,7 +1024,7 @@ export const PolicyManagement = ({
       )}
 
       {/* Igathpuri Meetup Configuration */}
-      {isIgatpuriEnabled && (
+      {isIgatpuriEnabled && currentUser.role === UserRole.ADMIN && (
         <section className="space-y-3">
           <h3 className="text-2xs font-bold text-slate-400 uppercase tracking-widest px-1">Igathpuri Location Settings</h3>
           <div className="space-y-4">

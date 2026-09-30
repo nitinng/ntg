@@ -296,7 +296,8 @@ const App: React.FC = () => {
             // But if there's no stored role, or it isn't accessible to this user, fall back to DB role.
             const validRolesForDbRole = (() => {
               if (dbRole === UserRole.ADMIN) return Object.values(UserRole);
-              if (dbRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.FINANCE];
+              if (dbRole === UserRole.PNC_ADMIN) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
+              if (dbRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
               if (dbRole === UserRole.FINANCE) return [UserRole.EMPLOYEE, UserRole.FINANCE];
               return [UserRole.EMPLOYEE];
             })();
@@ -333,7 +334,7 @@ const App: React.FC = () => {
         };
 
         const fetchAllUsers = async () => {
-          if (mappedUser.role === UserRole.ADMIN || mappedUser.role === UserRole.PNC) {
+          if (mappedUser.role === UserRole.ADMIN || mappedUser.role === UserRole.PNC_ADMIN || mappedUser.role === UserRole.PNC) {
             const { data: allUsers, error: usersError } = await supabase.from('profiles').select('*');
             if (!usersError && allUsers) {
               setUsers(allUsers.map((u: any) => ({
@@ -375,7 +376,7 @@ const App: React.FC = () => {
           setIsMeetupApprover(!!userIsApprover);
 
           let meetupQuery = supabase.from('meetup_availability_requests').select('*');
-          if (!userIsApprover && mappedUser.role !== UserRole.PNC && mappedUser.role !== UserRole.ADMIN) {
+          if (!userIsApprover && mappedUser.role !== UserRole.PNC && mappedUser.role !== UserRole.PNC_ADMIN && mappedUser.role !== UserRole.ADMIN) {
             meetupQuery = meetupQuery.eq('profile_id', mappedUser.id);
           }
 
@@ -486,7 +487,7 @@ const App: React.FC = () => {
 
   // Re-fetch all users if role changes to Admin/PNC and we only have self
   useEffect(() => {
-    if ((currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.PNC) && users.length <= 1) {
+    if ((currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.PNC_ADMIN || currentUser?.role === UserRole.PNC) && users.length <= 1) {
       const fetchAllUsers = async () => {
         const { data: allUsers, error: usersError } = await supabase.from('profiles').select('*');
         if (!usersError && allUsers) {
@@ -601,7 +602,7 @@ const App: React.FC = () => {
     const callerRole = currentUser?.role;
 
     // 1. Only Admin or PNC (acting as PNC) can change roles
-    if (callerRole !== UserRole.ADMIN && callerRole !== UserRole.PNC) {
+    if (callerRole !== UserRole.ADMIN && callerRole !== UserRole.PNC_ADMIN && callerRole !== UserRole.PNC) {
       toast.error("Unauthorised: only Admin or PNC can change roles.");
       return;
     }
@@ -613,10 +614,23 @@ const App: React.FC = () => {
       return;
     }
 
-    // 3. PNC can only assign Employee or PNC roles
+    // 3. Promotion limits: PNC can promote till PNC, PNC Admin can promote till PNC Admin
     if (callerRole === UserRole.PNC) {
       if (newRole !== UserRole.EMPLOYEE && newRole !== UserRole.PNC) {
         toast.error("PNC can only assign Employee or PNC roles.");
+        return;
+      }
+      if (targetUser.role !== UserRole.EMPLOYEE && targetUser.role !== UserRole.PNC) {
+        toast.error("PNC cannot modify users with higher roles.");
+        return;
+      }
+    } else if (callerRole === UserRole.PNC_ADMIN) {
+      if (newRole !== UserRole.EMPLOYEE && newRole !== UserRole.PNC && newRole !== UserRole.PNC_ADMIN) {
+        toast.error("PNC Admin can only assign Employee, PNC, or PNC Admin roles.");
+        return;
+      }
+      if (targetUser.role !== UserRole.EMPLOYEE && targetUser.role !== UserRole.PNC && targetUser.role !== UserRole.PNC_ADMIN) {
+        toast.error("PNC Admin cannot modify users with higher roles.");
         return;
       }
     }
@@ -758,7 +772,7 @@ const App: React.FC = () => {
       if (currentUser.role === UserRole.ADMIN) {
         return <AdminDashboard requests={requests} users={users} onTabChange={handleTabChange} />;
       }
-      if (currentUser.role === UserRole.PNC) {
+      if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) {
         return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
@@ -803,7 +817,7 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} />;
       case 'advances':
-        if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.ADMIN) {
+        if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN) {
           return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
             const req = requests.find((r: TravelRequest) => r.id === id);
             if (req) {
@@ -816,10 +830,9 @@ const App: React.FC = () => {
         return <CancellationsDashboard currentUser={currentUser} />;
       case 'departments':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <DepartmentManagement departments={departments} setDepartments={setDepartments} />;
+        return <DepartmentManagement departments={departments} setDepartments={setDepartments} currentUser={currentUser} />;
       case 'testing-settings':
-        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <TestingSettingsView settings={testingSettings} onUpdateSettings={setTestingSettings} />;
+        return renderDashboard();
       case 'cancellation-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return (
@@ -848,7 +861,7 @@ const App: React.FC = () => {
           currentUser={currentUser}
         />;
       case 'role-management':
-        if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
+        if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC_ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
         return <UserRoleManagement users={users} onUpdateRole={handleUpdateUserRole} currentUser={currentUser} />;
       case 'profile':
         return (
@@ -1118,7 +1131,7 @@ const App: React.FC = () => {
             </>
           )}
 
-          {currentUser.role === UserRole.PNC && (
+          {(currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) && (
             <>
               <div className="space-y-1">
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
@@ -1163,11 +1176,9 @@ const App: React.FC = () => {
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
                 <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
                 <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
-                <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
+                {currentUser.role === UserRole.PNC_ADMIN && <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />}
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                 <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
-                <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
-                <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
               </div>
 
             </>
@@ -1179,7 +1190,6 @@ const App: React.FC = () => {
                 <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
                 <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
                 <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
-                <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
               </div>
 
             </>
@@ -1199,7 +1209,6 @@ const App: React.FC = () => {
                 <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                 <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                 <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
-                <SidebarLink icon="fa-sliders" label="Testing Settings" active={activeTab === 'testing-settings'} onClick={() => handleTabChange('testing-settings')} />
                 <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
               </div>
 

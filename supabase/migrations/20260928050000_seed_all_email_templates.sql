@@ -589,7 +589,7 @@ VALUES
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>
-    </div>', 'RETROACTIVE_BOOKING_RECORDED', 'employee', NULL, '-', 'Closed / Recorded', 'default', '57', TRUE, FALSE, 'Published', 1)
+    </div>', 'RETROACTIVE_BOOKING_RECORDED', 'employee', NULL, '-', 'Closed / Recorded - (self-booked)', 'default', '57', TRUE, FALSE, 'Published', 1)
 ON CONFLICT (template_key) DO UPDATE SET
   name       = EXCLUDED.name,
   subject    = EXCLUDED.subject,

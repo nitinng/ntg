@@ -35,7 +35,7 @@ DECLARE
     -- added for the triggers sheet
     'Cancelled by System', 'On Hold / Escalated', 'Booked / Partially Cancelled',
     'Pending Refund', 'Partially Refunded', 'Fully Refunded', 'Written Off',
-    'Disputed', 'Reconciled', 'Closed / Recorded'
+    'Disputed', 'Reconciled', 'Closed / Recorded - (self-booked)'
   $stages$;
 BEGIN
   EXECUTE 'ALTER TABLE public.travel_requests DROP CONSTRAINT IF EXISTS chk_pnc_status';

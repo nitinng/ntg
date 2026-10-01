@@ -633,7 +633,7 @@ FROM (VALUES
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>
-    </div>', 'RETROACTIVE_BOOKING_RECORDED', 'employee', NULL, '-', 'Closed / Recorded', 'default', '57', 'FIXED: ''Action after transition'' read ''Human resolution required'', copied from row 53. EMAIL ADDED so the employee gets confirmation their self-booked trip was logged, and a nudge on the documents reimbursement depends on.')
+    </div>', 'RETROACTIVE_BOOKING_RECORDED', 'employee', NULL, '-', 'Closed / Recorded - (self-booked)', 'default', '57', 'FIXED: ''Action after transition'' read ''Human resolution required'', copied from row 53. EMAIL ADDED so the employee gets confirmation their self-booked trip was logged, and a nudge on the documents reimbursement depends on.')
 ) AS v(template_key, name, subject, body, event, audience, context_key,
        from_status, to_status, cc_rule, sheet_row, sheet_summary)
 ON CONFLICT (template_key) DO UPDATE SET

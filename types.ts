@@ -95,7 +95,7 @@ export enum PNCStatus {
   WRITTEN_OFF = 'Written Off',
   DISPUTED = 'Disputed',
   RECONCILED = 'Reconciled',
-  CLOSED_RECORDED = 'Closed / Recorded'
+  CLOSED_RECORDED = 'Closed / Recorded - (self-booked)'
 }
 
 /**

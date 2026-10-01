@@ -515,7 +515,7 @@
   "audience": "employee",
   "context_key": null,
   "from_status": "-",
-  "to_status": "Closed / Recorded",
+  "to_status": "Closed / Recorded - (self-booked)",
   "cc_rule": "default",
   "sheet_row": "57"
  }

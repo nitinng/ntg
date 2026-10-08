@@ -20,6 +20,7 @@ import { Toaster, toast } from 'sonner';
 import { queueEmailsForTransition } from './utils/emailQueueUtils';
 import { calculateProfileCompleteness, isUserVerified, isAppLockedForUser } from './utils/verificationUtils';
 import { calculateDynamicUrgency } from './utils/policyUtils';
+import { requireWrittenRow } from './utils/supabaseWriteResult';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -1315,42 +1316,44 @@ const App: React.FC = () => {
                   updated_at: new Date().toISOString()
                 };
 
-                const { data: updatedRow, error: updateError } = await supabase
-                  .from('travel_requests')
-                  .update(updatedPayload)
-                  .eq('id', editingRequest.id)
-                  .select()
-                  .single();
-
-                if (updateError) throw updateError;
+                const updatedRow = requireWrittenRow(
+                  await supabase
+                    .from('travel_requests')
+                    .update(updatedPayload)
+                    .eq('id', editingRequest.id)
+                    .select()
+                    .maybeSingle(),
+                  'Resubmitting the travel request'
+                );
 
                 const mappedUpdated = mapDbRequest(updatedRow);
 
                 // Auto-advance logic:
                 // From NOT_STARTED, if violation -> Approval Pending, else -> Processing
                 const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
-                const { data: autoAdvancedRow, error: autoAdvancedError } = await supabase
-                  .from('travel_requests')
-                  .update({
-                    pnc_status: nextStatus,
-                    status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
-                    updated_at: new Date().toISOString(),
-                    timeline: [
-                      ...mappedUpdated.timeline,
-                      {
-                        id: (Date.now() + 1).toString(),
-                        timestamp: new Date().toISOString(),
-                        actor: 'System',
-                        event: `Status changed to: ${nextStatus}`,
-                        details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
-                      }
-                    ]
-                  })
-                  .eq('id', editingRequest.id)
-                  .select()
-                  .single();
-
-                if (autoAdvancedError) throw autoAdvancedError;
+                const autoAdvancedRow = requireWrittenRow(
+                  await supabase
+                    .from('travel_requests')
+                    .update({
+                      pnc_status: nextStatus,
+                      status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                      updated_at: new Date().toISOString(),
+                      timeline: [
+                        ...mappedUpdated.timeline,
+                        {
+                          id: (Date.now() + 1).toString(),
+                          timestamp: new Date().toISOString(),
+                          actor: 'System',
+                          event: `Status changed to: ${nextStatus}`,
+                          details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                        }
+                      ]
+                    })
+                    .eq('id', editingRequest.id)
+                    .select()
+                    .maybeSingle(),
+                  'Auto-advancing the resubmitted request'
+                );
 
                 const finalRequest = mapDbRequest(autoAdvancedRow);
 
@@ -1404,40 +1407,42 @@ const App: React.FC = () => {
                   booked_by: 'PNC'
                 };
 
-                const { data: inserted, error } = await supabase
-                  .from('travel_requests')
-                  .insert(newRequest)
-                  .select()
-                  .single();
-
-                if (error) throw error;
+                const inserted = requireWrittenRow(
+                  await supabase
+                    .from('travel_requests')
+                    .insert(newRequest)
+                    .select()
+                    .maybeSingle(),
+                  'Saving the travel request'
+                );
 
                 const mappedInserted = mapDbRequest(inserted);
 
                 // Auto-advance logic:
                 const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
-                const { data: autoAdvancedRow, error: autoAdvancedError } = await supabase
-                  .from('travel_requests')
-                  .update({
-                    pnc_status: nextStatus,
-                    status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
-                    updated_at: new Date().toISOString(),
-                    timeline: [
-                      ...mappedInserted.timeline,
-                      {
-                        id: (Date.now() + 1).toString(),
-                        timestamp: new Date().toISOString(),
-                        actor: 'System',
-                        event: `Status changed to: ${nextStatus}`,
-                        details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
-                      }
-                    ]
-                  })
-                  .eq('id', inserted.id)
-                  .select()
-                  .single();
-
-                if (autoAdvancedError) throw autoAdvancedError;
+                const autoAdvancedRow = requireWrittenRow(
+                  await supabase
+                    .from('travel_requests')
+                    .update({
+                      pnc_status: nextStatus,
+                      status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                      updated_at: new Date().toISOString(),
+                      timeline: [
+                        ...mappedInserted.timeline,
+                        {
+                          id: (Date.now() + 1).toString(),
+                          timestamp: new Date().toISOString(),
+                          actor: 'System',
+                          event: `Status changed to: ${nextStatus}`,
+                          details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                        }
+                      ]
+                    })
+                    .eq('id', inserted.id)
+                    .select()
+                    .maybeSingle(),
+                  'Auto-advancing the new request'
+                );
 
                 const finalRequest = mapDbRequest(autoAdvancedRow);
 

@@ -36,6 +36,17 @@
 -- server-side would close that too, and is the larger follow-up.
 -- =============================================================================
 
+-- NOTE ON APPLYING THIS BY HAND
+-- Through the Supabase CLI (supabase db push) or psql this file applies as-is.
+-- The Supabase dashboard's SQL editor, however, splits a pasted script into
+-- statements with a splitter that cuts function bodies in half; it rejected
+-- this file in three different shapes before we stopped fighting it. If you are
+-- pasting into the editor, run each CREATE FUNCTION on its own, then the
+-- trigger and policy last. Every statement is idempotent, so a partial run is
+-- fixed by continuing from where it stopped. Section numbers below mark the
+-- boundaries.
+-- =============================================================================
+
 -- NOTE ON QUOTING
 -- Each function body below is delimited by a uniquely named dollar tag rather
 -- than an unnamed one. Both are valid SQL and psql accepts either, but the
@@ -54,44 +65,45 @@
 
 CREATE OR REPLACE FUNCTION public.allowed_email_recipients(p_ticket_id UUID)
 RETURNS TEXT[] AS $allowed_email_recipients$
-  WITH req AS (
-    SELECT tr.requester_id, tr.requester_email, tr.approving_manager_email
-      FROM public.travel_requests tr
-     WHERE tr.id = p_ticket_id
-  ),
-  -- Settings values are jsonb and may be a bare string or an array of strings.
-  routing AS (
-    -- Normalise to an array first: a set-returning function cannot sit inside
-    -- CASE, so the CASE yields jsonb and the expansion wraps it.
-    SELECT jsonb_array_elements_text(
-             CASE jsonb_typeof(s.value)
-               WHEN 'array'  THEN s.value
-               WHEN 'string' THEN jsonb_build_array(s.value)
-               ELSE '[]'::jsonb
-             END
-           ) AS email
-      FROM public.email_routing_settings s
-     WHERE s.key IN ('pnc_queue_email', 'pnc_queue_cc', 'default_cc',
-                     'finance_cc', 'escalation_owners', 'support_email')
-  ),
-  everyone AS (
-    SELECT requester_email      AS email FROM req
-    UNION ALL
-    SELECT approving_manager_email       FROM req
-    -- The requester's own manager of record, which the client falls back to
-    -- when a request carries no approving manager.
-    UNION ALL
-    SELECT p.manager_email FROM public.profiles p JOIN req ON p.id = req.requester_id
-    -- The desk: mail about a request always reaches the people who action it.
-    UNION ALL
-    SELECT p.email FROM public.profiles p
-     WHERE p.role IN ('Admin', 'PNC', 'PNC Admin', 'Finance')
-    UNION ALL
-    SELECT email FROM routing
-  )
-  SELECT COALESCE(array_agg(DISTINCT lower(btrim(email))), ARRAY[]::text[])
-    FROM everyone
-   WHERE email IS NOT NULL AND btrim(email) <> '';
+  SELECT COALESCE(array_agg(DISTINCT lower(btrim(e.email))), ARRAY[]::text[])
+    FROM (
+           -- The requester, and the manager named on the request.
+           SELECT tr.requester_email AS email
+             FROM public.travel_requests tr
+            WHERE tr.id = p_ticket_id
+           UNION ALL
+           SELECT tr.approving_manager_email
+             FROM public.travel_requests tr
+            WHERE tr.id = p_ticket_id
+           UNION ALL
+           -- The requester's manager of record, which the client falls back to
+           -- when a request carries no approving manager.
+           SELECT p.manager_email
+             FROM public.profiles p
+             JOIN public.travel_requests tr ON tr.requester_id = p.id
+            WHERE tr.id = p_ticket_id
+           UNION ALL
+           -- The desk: mail about a request always reaches the people who action it.
+           SELECT p.email
+             FROM public.profiles p
+            WHERE p.role IN ('Admin', 'PNC', 'PNC Admin', 'Finance')
+           UNION ALL
+           -- Configured routing addresses. Settings values are jsonb and may be
+           -- a bare string or an array, so normalise to an array first: a
+           -- set-returning function cannot sit inside CASE, so the CASE yields
+           -- jsonb and the expansion wraps it.
+           SELECT jsonb_array_elements_text(
+                    CASE jsonb_typeof(s.value)
+                      WHEN 'array'  THEN s.value
+                      WHEN 'string' THEN jsonb_build_array(s.value)
+                      ELSE '[]'::jsonb
+                    END
+                  )
+             FROM public.email_routing_settings s
+            WHERE s.key IN ('pnc_queue_email', 'pnc_queue_cc', 'default_cc',
+                            'finance_cc', 'escalation_owners', 'support_email')
+         ) AS e
+   WHERE e.email IS NOT NULL AND btrim(e.email) <> ''
 $allowed_email_recipients$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 -- 2. Keep only the addresses that are on the list ------------------------------
@@ -100,7 +112,7 @@ CREATE OR REPLACE FUNCTION public.filter_allowed_emails(p_addrs TEXT[], p_allowe
 RETURNS TEXT[] AS $filter_allowed_emails$
   SELECT COALESCE(array_agg(a ORDER BY ord), ARRAY[]::text[])
     FROM unnest(COALESCE(p_addrs, ARRAY[]::text[])) WITH ORDINALITY AS t(a, ord)
-   WHERE lower(btrim(a)) = ANY (p_allowed);
+   WHERE lower(btrim(a)) = ANY (p_allowed)
 $filter_allowed_emails$ LANGUAGE sql IMMUTABLE;
 
 -- 3. The guard -----------------------------------------------------------------

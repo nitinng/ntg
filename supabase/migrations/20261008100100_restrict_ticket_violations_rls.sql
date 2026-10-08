@@ -24,13 +24,27 @@
 -- to staff does not break the automated path.
 -- =============================================================================
 
+-- NOTE ON ROLE NAMES
+-- types.ts defines UserRole.PNC_ADMIN = 'PNC Admin' and UserRoleManagement.tsx
+-- offers it as an assignable role, but no pre-existing RLS policy in this
+-- schema mentions it -- they all list only 'Admin', 'PNC', 'Finance'. A user
+-- holding 'PNC Admin' is therefore treated as an ordinary employee by the
+-- database while the UI shows them staff screens.
+--
+-- That mismatch predates this migration, but it matters here: the policy being
+-- replaced was USING (true), so PNC Admin users *could* manage violations.
+-- Omitting them would turn a security fix into a functional regression for
+-- that role, so they are listed explicitly below. The schema-wide
+-- inconsistency still needs fixing separately -- a single public.is_staff()
+-- helper used by every policy would stop this recurring.
+
 DROP POLICY IF EXISTS "System and PNC can insert/update violations" ON public.ticket_violations;
 
 CREATE POLICY "Staff manage violations" ON public.ticket_violations
   FOR ALL
   TO authenticated
-  USING (public.get_user_role() IN ('Admin', 'PNC', 'Finance'))
-  WITH CHECK (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
+  USING (public.get_user_role() IN ('Admin', 'PNC', 'PNC Admin', 'Finance'))
+  WITH CHECK (public.get_user_role() IN ('Admin', 'PNC', 'PNC Admin', 'Finance'));
 
 -- Same defect, same migration, same table family: ticket_status_history is the
 -- audit trail, and its INSERT policy is WITH CHECK (true) for any authenticated
@@ -43,4 +57,4 @@ DROP POLICY IF EXISTS "System and PNC can insert ticket history" ON public.ticke
 CREATE POLICY "Staff insert ticket history" ON public.ticket_status_history
   FOR INSERT
   TO authenticated
-  WITH CHECK (public.get_user_role() IN ('Admin', 'PNC', 'Finance'));
+  WITH CHECK (public.get_user_role() IN ('Admin', 'PNC', 'PNC Admin', 'Finance'));

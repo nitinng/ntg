@@ -85,8 +85,13 @@ CREATE POLICY "Invoices readable by owner or staff" ON storage.objects
         SELECT 1 FROM public.travel_requests tr
          WHERE tr.requester_id = auth.uid()
            AND (
-             COALESCE(tr.invoice_url, '') LIKE '%' || storage.objects.name
-             OR COALESCE(tr.split_tickets::text, '') LIKE '%' || storage.objects.name || '%'
+             -- Anchor on the path separator. An unanchored '%' || name would
+             -- also match a DIFFERENT object whose name merely ends with this
+             -- one (e.g. name 'a.pdf' matching '..._extra_a.pdf'), handing one
+             -- requester another's invoice. In the JSONB case the stored URL is
+             -- followed by the closing quote, so anchor both ends.
+             COALESCE(tr.invoice_url, '') LIKE '%/' || storage.objects.name
+             OR COALESCE(tr.split_tickets::text, '') LIKE '%/' || storage.objects.name || '"%'
            )
       )
     )

@@ -36,12 +36,24 @@
 -- server-side would close that too, and is the larger follow-up.
 -- =============================================================================
 
+-- NOTE ON QUOTING
+-- Each function body below is delimited by a uniquely named dollar tag rather
+-- than an unnamed one. Both are valid SQL and psql accepts either, but the
+-- Supabase dashboard's SQL editor splits a pasted script into statements with a
+-- splitter that mis-handles unnamed tags: it cuts the body in half and fails
+-- with "unterminated dollar-quoted string". Named tags are unambiguous, so one
+-- file works in the editor, in psql and through the CLI alike.
+--
+-- Keep the tags named, and keep the unnamed form out of the comments too -- a
+-- splitter that cannot parse it in code is unlikely to skip it in a comment.
+-- =============================================================================
+
 -- 1. The addresses a given ticket may legitimately notify ----------------------
 -- SECURITY DEFINER so it can read email_routing_settings and profiles, which
 -- RLS otherwise limits to staff.
 
 CREATE OR REPLACE FUNCTION public.allowed_email_recipients(p_ticket_id UUID)
-RETURNS TEXT[] AS $$
+RETURNS TEXT[] AS $allowed_email_recipients$
   WITH req AS (
     SELECT tr.requester_id, tr.requester_email, tr.approving_manager_email
       FROM public.travel_requests tr
@@ -80,21 +92,21 @@ RETURNS TEXT[] AS $$
   SELECT COALESCE(array_agg(DISTINCT lower(btrim(email))), ARRAY[]::text[])
     FROM everyone
    WHERE email IS NOT NULL AND btrim(email) <> '';
-$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+$allowed_email_recipients$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 -- 2. Keep only the addresses that are on the list ------------------------------
 
 CREATE OR REPLACE FUNCTION public.filter_allowed_emails(p_addrs TEXT[], p_allowed TEXT[])
-RETURNS TEXT[] AS $$
+RETURNS TEXT[] AS $filter_allowed_emails$
   SELECT COALESCE(array_agg(a ORDER BY ord), ARRAY[]::text[])
     FROM unnest(COALESCE(p_addrs, ARRAY[]::text[])) WITH ORDINALITY AS t(a, ord)
    WHERE lower(btrim(a)) = ANY (p_allowed);
-$$ LANGUAGE sql IMMUTABLE;
+$filter_allowed_emails$ LANGUAGE sql IMMUTABLE;
 
 -- 3. The guard -----------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.guard_email_queue_insert()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $guard_email_queue_insert$
 DECLARE
   v_allowed TEXT[];
   v_owner   UUID;
@@ -132,7 +144,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$guard_email_queue_insert$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS trg_guard_email_queue_insert ON public.email_queue;
 CREATE TRIGGER trg_guard_email_queue_insert

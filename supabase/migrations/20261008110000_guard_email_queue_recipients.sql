@@ -36,6 +36,17 @@
 -- server-side would close that too, and is the larger follow-up.
 -- =============================================================================
 
+-- NOTE ON APPLYING THIS BY HAND
+-- Through the Supabase CLI (supabase db push) or psql this file applies as-is.
+-- The Supabase dashboard's SQL editor, however, splits a pasted script into
+-- statements with a splitter that cuts function bodies in half; it rejected
+-- this file in three different shapes before we stopped fighting it. If you are
+-- pasting into the editor, run each CREATE FUNCTION on its own, then the
+-- trigger and policy last. Every statement is idempotent, so a partial run is
+-- fixed by continuing from where it stopped. Section numbers below mark the
+-- boundaries.
+-- =============================================================================
+
 -- NOTE ON QUOTING
 -- Each function body below is delimited by a uniquely named dollar tag rather
 -- than an unnamed one. Both are valid SQL and psql accepts either, but the

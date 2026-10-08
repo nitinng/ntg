@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sanitizeEmailHtml } from '../utils/sanitizeHtml';
 import { User, MailTemplate, MailTemplateStatus, MailTemplateHistory, UserRole, PNCStatus, TravelRequest, Priority, TravelMode, TripType, ApprovalStatus, TravelEvent, EmailAudience } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
@@ -1218,7 +1219,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
                   />
                 ) : (
                   <div className="p-6 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm prose dark:prose-invert max-w-none text-sm min-h-[260px] overflow-y-auto max-h-[400px]">
-                    <div dangerouslySetInnerHTML={{ __html: renderPreviewContent(currentTemplate.body || '') }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(renderPreviewContent(currentTemplate.body || '')) }} />
                   </div>
                 )}
               </div>
@@ -1354,7 +1355,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
             <div className="p-8 overflow-y-auto flex-1 custom-scrollbar bg-slate-50/50 dark:bg-slate-950/40">
               <div
                 className="p-6 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm prose dark:prose-invert max-w-none text-sm"
-                dangerouslySetInnerHTML={{ __html: renderPreviewContent(previewTemplate.body) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(renderPreviewContent(previewTemplate.body)) }}
               />
             </div>
 

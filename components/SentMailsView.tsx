@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { sanitizeEmailHtml } from '../utils/sanitizeHtml';
 import { User, UserRole } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
@@ -937,9 +938,11 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
                 <div
                   className="p-6 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm prose dark:prose-invert max-w-none text-sm"
                   dangerouslySetInnerHTML={{
-                    __html: (selectedEmail.body || '')
-                      .replace(/<h1[^>]*>navgurukul(?: travel desk)?<\/h1>/gi, '<img src="/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />')
-                      .replace(/https:\/\/ng-travel-desk\.vercel\.app\/navgurukul-brand-logo\.png/g, '/navgurukul-brand-logo.png')
+                    __html: sanitizeEmailHtml(
+                      (selectedEmail.body || '')
+                        .replace(/<h1[^>]*>navgurukul(?: travel desk)?<\/h1>/gi, '<img src="/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />')
+                        .replace(/https:\/\/ng-travel-desk\.vercel\.app\/navgurukul-brand-logo\.png/g, '/navgurukul-brand-logo.png')
+                    )
                   }}
                 />
               ) : inspectorTab === 'html' ? (

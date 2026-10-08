@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { sanitizeSvg } from '../utils/sanitizeHtml';
 import mermaid from 'mermaid';
 
 interface MermaidDiagramProps {
@@ -118,7 +119,7 @@ export const MermaidDiagram = ({ chart, config }: MermaidDiagramProps) => {
     <div
       ref={containerRef}
       className="w-full overflow-x-auto flex justify-center py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm"
-      dangerouslySetInnerHTML={{ __html: svgHtml }}
+      dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgHtml) }}
     />
   );
 };

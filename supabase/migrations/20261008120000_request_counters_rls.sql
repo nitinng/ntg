@@ -1,0 +1,38 @@
+-- =============================================================================
+-- SECURITY M1: request_counters is the one table with no row-level security
+-- =============================================================================
+-- supabase_schema.sql:78 creates public.request_counters, and no migration ever
+-- enables RLS on it. Every other table in the schema is covered; this one was
+-- missed. Supabase grants the anon and authenticated roles access to the public
+-- schema by default, so without RLS the table is fully exposed over PostgREST.
+--
+-- Verified: both the anon role (the key is published in the client bundle, so
+-- this needs no login at all) and an ordinary authenticated user could read the
+-- table, and an authenticated user could reset last_seq to 0.
+--
+-- The write is the damaging part. generate_submission_id() derives
+-- submission_id from last_seq, and submission_id is UNIQUE. Resetting the
+-- counter makes the trigger regenerate identifiers that already exist, so every
+-- new request fails on the unique constraint until the counter climbs back past
+-- the collision range -- a denial of service on the application's primary
+-- function, triggerable by any account. Reading it also leaks daily submission
+-- volume.
+--
+-- Fix: enable RLS and add no policies at all. With RLS on and no policy, every
+-- client read and write is denied regardless of the table-level grants.
+--
+-- Nothing legitimate is affected:
+--   - No client code touches the table -- it is written only by the
+--     trg_generate_submission_id trigger on travel_requests.
+--   - generate_submission_id() is SECURITY DEFINER (supabase_schema.sql:110),
+--     so it runs as the owner and bypasses RLS entirely.
+--   - The service role bypasses RLS too, so backups, the edge function and any
+--     maintenance job are unaffected.
+--
+-- Deliberately no policies below. A policy here would be a mistake: there is no
+-- caller that should reach this table directly, and adding one would reopen the
+-- hole. If a future feature needs the counter, expose it through a
+-- SECURITY DEFINER function rather than granting table access.
+-- =============================================================================
+
+ALTER TABLE public.request_counters ENABLE ROW LEVEL SECURITY;

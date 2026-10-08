@@ -40,6 +40,7 @@
 
 DROP POLICY IF EXISTS "System and PNC can insert/update violations" ON public.ticket_violations;
 
+DROP POLICY IF EXISTS "Staff manage violations" ON public.ticket_violations;
 CREATE POLICY "Staff manage violations" ON public.ticket_violations
   FOR ALL
   TO authenticated
@@ -54,6 +55,7 @@ CREATE POLICY "Staff manage violations" ON public.ticket_violations
 -- nothing stops a client writing to the table directly over PostgREST.
 DROP POLICY IF EXISTS "System and PNC can insert ticket history" ON public.ticket_status_history;
 
+DROP POLICY IF EXISTS "Staff insert ticket history" ON public.ticket_status_history;
 CREATE POLICY "Staff insert ticket history" ON public.ticket_status_history
   FOR INSERT
   TO authenticated

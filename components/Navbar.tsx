@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SignedImage } from './SignedMedia';
 import { User, UserRole } from '../types';
 
 interface NavbarProps {
@@ -147,7 +148,7 @@ export const Navbar = ({
             {currentUser.avatar ? (
               <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
             ) : currentUser.passportPhoto?.fileUrl ? (
-              <img src={currentUser.passportPhoto.fileUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />
+              <SignedImage storedUrl={currentUser.passportPhoto.fileUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />
             ) : (
               currentUser.name.charAt(0)
             )}

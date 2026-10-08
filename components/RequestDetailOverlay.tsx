@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { checkPolicyViolation } from '../utils/policyUtils';
 import CancellationModal from './CancellationModal';
+import { SignedLink } from './SignedMedia';
 
 interface RequestDetailOverlayProps {
   request: TravelRequest;
@@ -473,9 +474,10 @@ export const RequestDetailOverlay = ({
                               <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
                             </p>
                             {ticket.invoiceUrl ? (
-                              <a href={ticket.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                              <SignedLink storedUrl={ticket.invoiceUrl} className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                                fallback={<span className="text-xs font-bold text-slate-400">Unavailable</span>}>
                                 View Leg {index + 1} <i className="fa-solid fa-external-link-alt text-xs"></i>
-                              </a>
+                              </SignedLink>
                             ) : (
                               <span className="text-sm font-bold text-slate-800 dark:text-white">Not Uploaded</span>
                             )}
@@ -499,9 +501,10 @@ export const RequestDetailOverlay = ({
                         <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-1">
                           <i className="fa-solid fa-file-invoice opacity-50"></i> Ticket
                         </p>
-                        <a href={request.invoiceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                        <SignedLink storedUrl={request.invoiceUrl} className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                          fallback={<span className="text-xs font-bold text-slate-400">Unavailable</span>}>
                           View Ticket <i className="fa-solid fa-external-link-alt text-xs"></i>
-                        </a>
+                        </SignedLink>
                       </div>
                     ) : (
                       <InfoRow label="Ticket" value="Not Uploaded" icon={<i className="fa-solid fa-file-invoice"></i>} />

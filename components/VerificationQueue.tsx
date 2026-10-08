@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, VerificationStatus } from '../types';
 import { toast } from 'sonner';
 import { PageBanner } from './PageBanner';
+import { SignedImage, SignedLink } from './SignedMedia';
 
 interface VerificationQueueProps {
   users: User[];
@@ -73,7 +74,7 @@ export const VerificationQueue: React.FC<VerificationQueueProps> = ({ users, onU
                 {u.avatar ? (
                   <img src={u.avatar} className="w-full h-full object-cover rounded-lg transition-all duration-300" />
                 ) : u.passportPhoto?.fileUrl ? (
-                  <img src={u.passportPhoto.fileUrl} className="w-full h-full object-cover rounded-lg transition-all duration-300" />
+                  <SignedImage storedUrl={u.passportPhoto.fileUrl} className="w-full h-full object-cover rounded-lg transition-all duration-300" alt="Passport photo" fallback={<>{u.name.charAt(0)}</>} />
                 ) : (
                   u.name.charAt(0)
                 )}
@@ -113,8 +114,8 @@ export const VerificationQueue: React.FC<VerificationQueueProps> = ({ users, onU
                 <div className="h-48 aspect-video mx-auto bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border-2 border-slate-50 dark:border-slate-700 shadow-inner group relative">
                   {selectedUser.passportPhoto?.fileUrl ? (
                     <>
-                      <img src={selectedUser.passportPhoto.fileUrl} className="w-full h-full object-cover transition-all" />
-                      <a href={selectedUser.passportPhoto.fileUrl} target="_blank" rel="noreferrer" className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-indigo-600 shadow-md"><i className="fa-solid fa-expand"></i></a>
+                      <SignedImage storedUrl={selectedUser.passportPhoto.fileUrl} className="w-full h-full object-cover transition-all" alt="Passport photo" />
+                      <SignedLink storedUrl={selectedUser.passportPhoto.fileUrl} className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-indigo-600 shadow-md"><i className="fa-solid fa-expand"></i></SignedLink>
                     </>
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3"><i className="fa-solid fa-camera text-4xl"></i><span className="text-xs font-bold uppercase">Not Provided</span></div>
@@ -158,8 +159,8 @@ export const VerificationQueue: React.FC<VerificationQueueProps> = ({ users, onU
                 <div className="h-48 aspect-video mx-auto bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border-2 border-slate-50 dark:border-slate-700 shadow-inner group relative">
                   {selectedUser.idProof?.fileUrl ? (
                     <>
-                      <img src={selectedUser.idProof.fileUrl} className="w-full h-full object-cover transition-all" />
-                      <a href={selectedUser.idProof.fileUrl} target="_blank" rel="noreferrer" className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-violet-600 shadow-md"><i className="fa-solid fa-expand"></i></a>
+                      <SignedImage storedUrl={selectedUser.idProof.fileUrl} className="w-full h-full object-cover transition-all" alt="ID proof" />
+                      <SignedLink storedUrl={selectedUser.idProof.fileUrl} className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-violet-600 shadow-md"><i className="fa-solid fa-expand"></i></SignedLink>
                     </>
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3"><i className="fa-solid fa-id-card text-4xl"></i><span className="text-xs font-bold uppercase">Not Provided</span></div>

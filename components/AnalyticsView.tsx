@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { SignedLink } from './SignedMedia';
 import { TravelRequest, User, UserRole, PNCStatus, ApprovalStatus, Priority, PolicyConfig } from '../types';
 import Card from './Card';
 import StatCard from './StatCard';
@@ -1168,7 +1169,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{r.from} → {r.to}</td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(r.dateOfTravel).toLocaleDateString()}</td>
                       <td className="px-6 py-4"><StatusBadge type="pnc" value={r.pncStatus} /></td>
-                      <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<a href={r.invoiceUrl || r.ticketUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1">View <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>) : <span className="text-slate-300">—</span>}</td>
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">{(r.invoiceUrl || r.ticketUrl) ? (<SignedLink storedUrl={r.invoiceUrl || r.ticketUrl} className="text-indigo-600 hover:underline flex items-center gap-1" fallback={<span className="text-slate-300">—</span>}>View <i className="fa-solid fa-arrow-up-right-from-square text-xs"></i></SignedLink>) : <span className="text-slate-300">—</span>}</td>
                     </tr>
                   ))}
                   {paginatedTravelData.length === 0 && (

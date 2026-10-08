@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SignedImage, SignedLink } from './SignedMedia';
 import { User, TravelRequest, ChatThread, ChatMessage, ChatThreadType, UserRole } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
@@ -778,11 +779,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                         {msg.attachmentUrl && (
                           <div className="mt-2 mb-1">
                             {msg.attachmentType?.startsWith('image/') ? (
-                              <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block max-w-sm">
-                                <img src={msg.attachmentUrl} alt="attachment" className="max-w-full max-h-64 rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-pointer hover:opacity-90 transition-opacity shadow-sm" />
-                              </a>
+                              <SignedLink storedUrl={msg.attachmentUrl} className="block max-w-sm">
+                                <SignedImage storedUrl={msg.attachmentUrl} alt="attachment" className="max-w-full max-h-64 rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-pointer hover:opacity-90 transition-opacity shadow-sm" />
+                              </SignedLink>
                             ) : (
-                              <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors shadow-sm group/file max-w-sm w-full">
+                              <SignedLink storedUrl={msg.attachmentUrl} className="inline-flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors shadow-sm group/file max-w-sm w-full">
                                 <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-lg flex items-center justify-center text-lg">
                                   <i className="fa-solid fa-file-lines"></i>
                                 </div>
@@ -791,7 +792,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, requests, onViewReques
                                   <p className="text-2xs text-slate-500 uppercase tracking-widest font-black mt-0.5">Attachment</p>
                                 </div>
                                 <i className="fa-solid fa-download text-slate-400 group-hover/file:text-indigo-600 transition-colors mr-2"></i>
-                              </a>
+                              </SignedLink>
                             )}
                           </div>
                         )}

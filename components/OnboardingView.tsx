@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { SignedImage } from './SignedMedia';
 import { User, PolicyConfig, VerificationStatus, IdProofType, UserDocument, Department } from '../types';
 import Card from './Card';
 import Input from './Input';
@@ -373,7 +374,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                   </div>
                 ) : formData.passportPhoto?.fileUrl ? (
                   <div className="relative group/preview">
-                    <img src={formData.passportPhoto.fileUrl} className="w-28 h-28 rounded-lg object-cover shadow-md border-2 border-white dark:border-slate-800" />
+                    <SignedImage storedUrl={formData.passportPhoto.fileUrl} alt="Passport photo" className="w-28 h-28 rounded-lg object-cover shadow-md border-2 border-white dark:border-slate-800" />
                     <div className="absolute inset-0 bg-slate-900/40 rounded-lg opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
                       <i className="fa-solid fa-eye text-white text-xl"></i>
                     </div>

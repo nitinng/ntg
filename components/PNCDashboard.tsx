@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 import { checkPolicyViolation, getEffectiveBookingSlaHours } from '../utils/policyUtils';
 import { MermaidDiagram } from './MermaidDiagram';
 import { PageBanner } from './PageBanner';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface PNCDashboardProps {
   requests: TravelRequest[];
@@ -56,7 +57,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
 
         setStatusHistory(historyData || []);
       } catch (err) {
-        console.error("Failed to load SLA/History database data:", err);
+        reportSos('DATA_LOAD_FAILED', err, { screen: 'pnc_dashboard', dataset: 'sla_history' });
       } finally {
         setSlaLoading(false);
       }

@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.8.0 (2026-10-10)](#v280---2026-10-10)
+* [Current Release — v2.9.0 (2026-10-10)](#v290---2026-10-10)
+* [v2.8.0 (2026-10-10)](#v280---2026-10-10)
 * [v2.7.1 (2026-10-09)](#v271---2026-10-09)
 * [v2.7.0 (2026-10-09)](#v270---2026-10-09)
 * [v2.6.0 (2026-10-01)](#v260---2026-10-01)
@@ -26,6 +27,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.9.0] - 2026-10-10
+
+### 🚨 SOS Alerting — No Silent Failures
+
+> **Observability** — Added an SOS subsystem that records every detectable failure in the database and pushes it to the `#alert-team-automation` Slack channel, with a new admin console for triage. Failures that previously ended at a dismissed toast or a console line — an SMTP account auto-promoted mid-flight, an advance deduction that did not post, a booking that failed to record, a scheduled job that stopped running — now raise an alert nobody has to be watching the screen to see.
+
+#### 🚨 SOS Alerting
+* **Slack Channel Alerts**: Failures are pushed to `#alert-team-automation` through the channel's email address, with severity, what it means, the first thing to check, and the failure's own context.
+* **Durable Record**: Every alert is written to `sos_alerts` whether or not it was delivered. Alerts suppressed by a threshold, folded into a repeat, or lost because the email transport was itself the failure are all still visible.
+* **Failure Catalogue**: Added `utils/sos/catalog.ts` — a single registry of every monitored failure across email transport and delivery, request workflow, finance, sign-in, documents, data loading, configuration, scheduled jobs and the browser. The console renders this catalogue directly, so the reference cannot drift from the code.
+* **SMTP Failover Alerting**: The dual-account promotion path now reports itself — a slot rejecting sends, the backup carrying a rescued mail, the automatic promotion after a run of failures, both accounts at their daily quota, and a fallback to a secondary provider.
+* **Noise Control**: Repeats fold into the alert they repeat and count up instead of re-paging; a severity floor, per-area mutes, a daily push cap, a per-account rate limit and a per-tab throttle keep a loop from flooding the channel.
+* **Webhook Delivery**: An optional Slack incoming webhook is posted directly from the database via `pg_net`, bypassing the email queue entirely — the delivery path that survives an email outage — falling back to the channel address when it is unavailable.
+* **Deep Links**: Alert mail links straight to the SOS console, and the app now honours a `?tab=` parameter so a reader in Slack lands on the record.
+
+#### 🛡️ Admin & Navigation
+* **New SOS Screen**: Added an **SOS** item to the Admin and PNC Admin sidebars, badged with the count of unresolved critical alerts.
+* **Triage**: Admin and PNC Admin can acknowledge, resolve with a note, and reopen alerts. Staff (including PNC and Finance) can read the feed.
+* **Alerting Settings**: Channel address, optional Slack webhook, severity floor, repeat window, daily cap and muted areas are all editable in the console, with a Send Test Alert button that exercises the real delivery path.
+
+#### 🗄️ Database & Infrastructure
+* **New Tables**: `sos_alerts` and `sos_settings`, with staff-read and admin-triage row-level security. Alerts can only be written through `raise_sos_alert()`, so dedupe, rate limiting and notification rules cannot be bypassed.
+* **Hourly Health Sweep**: `scan_sos_health()` (pg_cron `sos-health-sweep`, hourly at :17) detects a stuck or backlogged email queue, rows stranded in Processing, a run of abandoned sends, exhausted SMTP quota, failed or missing pg_cron jobs, and an auto-close sweep that has stopped running.
+* **No Alert Loops**: A failure to deliver an alert marks that alert undelivered and is recorded once, rather than queueing another alert that would fail the same way.
+* **Recipient Guard Exemption**: The `email_queue` recipient guard now recognises SOS dispatch and pins the recipients to the configured channel, so an alert raised from an employee's browser is delivered without widening what anyone can address mail to.
+
+#### 📝 Commits in this Release
+* `pending` — `feat(sos): record and push every detectable failure to Slack` — Nitin — 2026-10-10
 
 ---
 

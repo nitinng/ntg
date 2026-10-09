@@ -10,6 +10,7 @@ import { TravelEvent, EmailAudience, EmailContextKey, TravelRequest, User } from
 import { getEmailRoutingConfig } from './emailTriggers';
 import { resolveTemplateVariables } from './emailQueueUtils';
 import { istDayStartIso, SmtpSlot } from './email/smtpSlotRouter';
+import { reportSos } from './sos/raiseSos';
 
 export interface SendNotificationOptions {
   event?: TravelEvent;
@@ -76,7 +77,7 @@ export const triggerEmailWorker = async (options: { provider?: string; testToken
     if (error) throw error;
     return data ?? {};
   } catch (err: any) {
-    console.warn('Worker invocation notice:', err.message);
+    reportSos('EMAIL_WORKER_UNREACHABLE', err, { trigger: 'notification_service' });
     return { success: false, error: err.message };
   }
 };
@@ -224,7 +225,12 @@ export const sendNotification = async (
       status: 'Queued'
     };
   } catch (err: any) {
-    console.error('sendNotification failed:', err);
+    reportSos('EMAIL_ENQUEUE_FAILED', err, {
+      event: options.event,
+      audience: options.audience,
+      ticketId: options.ticketId,
+      templateKey: options.templateKey
+    });
     return {
       success: false,
       status: 'Failed',
@@ -355,7 +361,7 @@ export const logEmailAuditAction = async (
       created_at: new Date().toISOString()
     });
   } catch (err) {
-    console.warn('Could not record email audit log:', err);
+    reportSos('EMAIL_AUDIT_LOG_FAILED', err, { table: 'email_audit_logs' });
   }
 };
 

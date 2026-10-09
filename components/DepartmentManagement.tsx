@@ -5,6 +5,7 @@ import Input from './Input';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { PageBanner } from './PageBanner';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface DepartmentManagementProps {
   departments: Department[];
@@ -58,7 +59,7 @@ export const DepartmentManagement = ({ departments, setDepartments, currentUser 
       setIsAddModalOpen(false);
       toast.success(`Department "${data.name}" added successfully`);
     } catch (err: any) {
-      console.error(err);
+      reportSos('SETTINGS_SAVE_FAILED', err, { screen: 'departments', action: 'add' });
       toast.error(err.message || 'Failed to add department');
     } finally {
       setIsSubmitting(false);
@@ -85,7 +86,7 @@ export const DepartmentManagement = ({ departments, setDepartments, currentUser 
       setDepartments(prev => prev.filter(d => d.id !== id));
       toast.success(`Department "${name}" deleted`);
     } catch (err: any) {
-      console.error(err);
+      reportSos('SETTINGS_SAVE_FAILED', err, { screen: 'departments', action: 'delete' });
       toast.error(err.message || 'Failed to delete department');
     }
   };

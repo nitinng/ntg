@@ -27,6 +27,7 @@ import {
 } from '../utils/emailNotificationService';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface EmailNotificationCenterProps {
   currentUser?: User | null;
@@ -327,7 +328,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
         });
       }
     } catch (err) {
-      console.warn('Metrics query notice:', err);
+      reportSos('ANALYTICS_LOAD_FAILED', err, { screen: 'email_center', dataset: 'metrics' });
     }
   };
 
@@ -459,7 +460,7 @@ export const EmailNotificationCenter: React.FC<EmailNotificationCenterProps> = (
 
       setAuditLogs(data || []);
     } catch (err) {
-      console.warn('Audit logs fetch notice:', err);
+      reportSos('DATA_LOAD_FAILED', err, { screen: 'email_center', dataset: 'audit_logs' });
     } finally {
       setLoadingAudit(false);
     }

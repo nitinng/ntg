@@ -23,6 +23,8 @@ import { calculateProfileCompleteness, isUserVerified, isAppLockedForUser } from
 import { calculateDynamicUrgency } from './utils/policyUtils';
 import { requireWrittenRow } from './utils/supabaseWriteResult';
 import { getVisibleRolesForBaseRole } from './utils/workflow';
+import { installGlobalSosHandlers, raiseSos, reportSos } from './utils/sos/raiseSos';
+import { fetchSosSummary } from './utils/sos/sosService';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -58,6 +60,7 @@ const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'
 const LocationCalendar = React.lazy(() => import('./components/LocationCalendar'));
 const RequestDetailOverlay = React.lazy(() => import('./components/RequestDetailOverlay'));
 const EmployeeGuideView = React.lazy(() => import('./components/EmployeeGuideView'));
+const SOSView = React.lazy(() => import('./components/SOSView').then(module => ({ default: module.SOSView })));
 
 import { mapDbRequest } from './services/requestMapper';
 import { checkPolicyViolation } from './utils/policyUtils';
@@ -89,9 +92,54 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('activeTab') || 'dashboard');
 
+  // Unresolved critical alerts, shown as a badge on the SOS nav item so a
+  // failure is visible from whichever screen the desk happens to be on.
+  const [sosOpenCritical, setSosOpenCritical] = useState(0);
+
   useEffect(() => {
     sessionStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
+
+  // Deep link from an alert: the SOS mail posted into Slack links to
+  // /?tab=sos, so a reader lands on the console rather than the dashboard.
+  // The parameter is consumed once and stripped, so a refresh does not keep
+  // dragging the user back to it.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (!requested) return;
+    setActiveTab(requested);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('tab');
+    window.history.replaceState({}, '', url.toString());
+  }, []);
+
+  // Anything that escapes every try/catch in the app still gets reported.
+  useEffect(() => installGlobalSosHandlers(), []);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role === UserRole.EMPLOYEE) {
+      setSosOpenCritical(0);
+      return;
+    }
+
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const summary = await fetchSosSummary();
+        if (!cancelled) setSosOpenCritical(summary.openCritical);
+      } catch {
+        // The badge is a convenience; a failure to read it is not itself an
+        // incident, and reporting it would only add noise to the feed.
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(refresh, 120_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [currentUser?.id, currentUser?.role, activeTab]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
@@ -538,7 +586,7 @@ const App: React.FC = () => {
       if (error) throw error;
       toast.success('Settings updated successfully');
     } catch (err: any) {
-      console.error('Failed to update policy in settings:', err);
+      reportSos('SETTINGS_SAVE_FAILED', err, { table: 'meetup_settings', key: 'policy_config' });
       toast.error('Failed to save settings: ' + (err.message || 'Unknown error'));
     }
   };
@@ -803,6 +851,11 @@ const App: React.FC = () => {
       case 'changelog':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;
+      case 'sos':
+        // Alert context can quote another traveller's request, so the feed is
+        // staff-only -- Admin and PNC Admin can also acknowledge and resolve.
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <SOSView currentUser={currentUser} />;
       case 'requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         // Filter out rejected and closed requests from queue
@@ -941,7 +994,9 @@ const App: React.FC = () => {
                     finalStatus = PNCStatus.PROCESSING;
                     finalTimeline = processingTimeline;
                   } else {
-                    console.warn('Auto-advance to Processing failed:', procError.message);
+                    // The approval saved but the request is now parked in a
+                    // state the desk queue does not pick up.
+                    reportSos('AUTO_ADVANCE_FAILED', procError, { ticketId: updatedReq.id });
                   }
                 }
 
@@ -1180,6 +1235,7 @@ const App: React.FC = () => {
                   {currentUser.role === UserRole.PNC_ADMIN && <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />}
                   <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                   <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                  <SidebarLink icon="fa-tower-broadcast" label="SOS" active={activeTab === 'sos'} onClick={() => handleTabChange('sos')} badge={sosOpenCritical > 0 ? sosOpenCritical : null} badgeColor="bg-rose-500 text-white" />
                 </div>
 
               </>
@@ -1210,6 +1266,7 @@ const App: React.FC = () => {
                   <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                   <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                   <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                  <SidebarLink icon="fa-tower-broadcast" label="SOS" active={activeTab === 'sos'} onClick={() => handleTabChange('sos')} badge={sosOpenCritical > 0 ? sosOpenCritical : null} badgeColor="bg-rose-500 text-white" />
                   <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
                 </div>
 
@@ -1592,7 +1649,11 @@ const App: React.FC = () => {
                 }
 
               } catch (error: any) {
-                console.error('Error updating request:', error);
+                reportSos(
+                  error?.name === 'WriteBlockedError' ? 'STATUS_TRANSITION_BLOCKED' : 'REQUEST_UPDATE_FAILED',
+                  error,
+                  { ticketId: selectedRequest?.id, fromStatus: selectedRequest?.pncStatus }
+                );
                 toast.error("Failed to update request: " + error.message);
               }
             }}
@@ -1704,7 +1765,9 @@ const App: React.FC = () => {
               ]);
 
             } catch (err: any) {
-              console.error(err);
+              // The vendor may already hold this booking while the desk has no
+              // record of it. Nothing else in the system would ever say so.
+              reportSos('BOOKING_RECORD_FAILED', err, { stage: 'self_booking_record' });
               toast.error("Failed to record booking: " + err.message);
             }
           }}

@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { PageBanner } from './PageBanner';
 import { calculateDynamicUrgency, getEffectiveBookingSlaHours, getDaysRemaining } from '../utils/policyUtils';
+import { reportSos } from '../utils/sos/raiseSos';
 
 // --- Chart Components (CSS/SVG based) ---
 export const DonutChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
@@ -190,7 +191,8 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
         if (cancelError) throw cancelError;
         setCancellations(cancelData || []);
       } catch (err) {
-        console.error('Error loading data for analytics:', err);
+        // The screen still renders, with numbers that are quietly wrong.
+        reportSos('ANALYTICS_LOAD_FAILED', err, { screen: 'analytics' });
       } finally {
         setLoadingData(false);
       }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import Input from './Input';
+import { reportSos } from '../utils/sos/raiseSos';
 
 type AuthMode = 'login' | 'forgot' | 'reset';
 
@@ -81,7 +82,9 @@ const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = 
             });
             if (error) throw error;
         } catch (err: any) {
-            console.error("Google Auth Error:", err);
+            // One failure is a user's problem; a run of them is an outage
+            // nobody can report, because nobody can sign in to report it.
+            reportSos('AUTH_PROVIDER_FAILED', err, { provider: 'google' });
             setError(err.message || "Failed to connect to Google.");
             toast.error("Google login failed");
             setIsSocialLoading(false);
@@ -99,7 +102,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = 
             });
             if (error) throw error;
         } catch (err: any) {
-            console.error("Email Auth Error:", err);
+            reportSos('AUTH_PROVIDER_FAILED', err, { provider: 'email_password' });
             setError(err.message || "Invalid credentials.");
             toast.error("Login failed");
         } finally {
@@ -127,7 +130,7 @@ const AuthView = ({ initialMode = 'login', onFinishReset, isEmailLoginEnabled = 
                 setMode('login');
             }
         } catch (err: any) {
-            console.error("Supabase Auth Error:", err);
+            reportSos('AUTH_PROVIDER_FAILED', err, { provider: 'supabase_auth', mode });
             setError(err.message || "An error occurred");
             toast.error(err.message || "Authentication failed");
         } finally {

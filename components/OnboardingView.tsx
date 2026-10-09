@@ -9,6 +9,7 @@ import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { areBookingEmailsIdentical } from '../utils/bookingValidation';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface SectionProps {
   title: string;
@@ -155,7 +156,9 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
       }
       toast.success(`${field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')} uploaded!`);
     } catch (err: any) {
-      console.error("Upload fail:", err);
+      // Verification and reimbursement both block on a file that is not
+      // there, and the employee cannot escalate what nobody recorded.
+      reportSos('DOCUMENT_UPLOAD_FAILED', err, { field, bucket: 'user-documents' });
       toast.error("Upload failed: " + (err.message || "Please check if 'user-documents' bucket exists."));
     } finally {
       setIsUploading(null);

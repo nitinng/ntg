@@ -1061,6 +1061,58 @@ const shiftIstIso = (now: Date, days: number): string => {
 const istDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 0);
 const istNextDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 1);
 
+// =============================================================================
+// SOS REPORTER
+// =============================================================================
+// This worker is the least observed part of the system: it runs with no user
+// watching, and its failures -- a demoted SMTP account, a spent quota, a crash
+// mid-batch -- used to end at a console line in the edge logs. Every one of
+// them now goes through raise_sos_alert(), which records it and pushes it to
+// the automation Slack channel.
+//
+// Reporting is best-effort and never throws: the worker's job is to deliver
+// mail, and a failure to report a failure must not stop it. See
+// supabase/migrations/20261010090000_sos_alert_system.sql for the rules the
+// RPC applies, and utils/sos/catalog.ts for what each code means.
+
+type SosSeverityName = 'critical' | 'high' | 'warning' | 'info';
+
+interface SosReport {
+  code: string;
+  category: string;
+  severity: SosSeverityName;
+  title: string;
+  message: string;
+  context?: Record<string, any>;
+  /** Extra dedupe identity: an account slot, a queue id, a template key. */
+  dedupeKey?: string;
+}
+
+const createSosReporter = (supabase: any) => {
+  return async (report: SosReport): Promise<void> => {
+    try {
+      console.warn(`[SOS ${report.severity}] ${report.code}: ${report.message}`);
+      const { error } = await supabase.rpc('raise_sos_alert', {
+        p_code: report.code,
+        p_category: report.category,
+        p_severity: report.severity,
+        p_title: report.title,
+        p_message: report.message.slice(0, 2000),
+        p_context: report.context || {},
+        p_source: 'worker',
+        p_dedupe_key: report.dedupeKey || null
+      });
+      if (error) {
+        // Deliberately terminal. Raising an alert about a failed alert is how
+        // an alerting system takes itself down.
+        console.error('[SOS] could not record alert:', error.message);
+      }
+    } catch (err: any) {
+      console.error('[SOS] could not record alert:', err?.message || err);
+    }
+  };
+};
+
 Deno.serve(async (req: Request) => {
   const corsHeaders = buildCorsHeaders(req);
 
@@ -1082,6 +1134,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const sos = createSosReporter(supabase);
     const url = new URL(req.url);
     const reqBody = await req.json().catch(() => ({}));
 
@@ -1139,8 +1192,20 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Could not query dynamic email routing settings:', err);
+      // The worker carries on with defaults, which may point mail at the wrong
+      // transport entirely -- exactly the kind of thing that used to be
+      // invisible until someone noticed the mail had stopped.
+      await sos({
+        code: 'EMAIL_ROUTING_CONFIG_FALLBACK',
+        category: 'email_delivery',
+        severity: 'warning',
+        title: 'Email routing settings unreadable — defaults in use',
+        message: `The worker could not read email_routing_settings and is running on defaults: ${err?.message || err}`,
+        context: { error: String(err?.message || err) },
+        dedupeKey: 'worker-settings'
+      });
     }
 
     // Override from request if explicitly testing a specific provider.
@@ -1392,6 +1457,21 @@ Deno.serve(async (req: Request) => {
     const slotRoutingEnabled =
       requestedProvider === 'smtp' && (slotConfigured.smtp || slotConfigured.smtp2);
 
+    // The account marked active cannot send. Routing silently falls through to
+    // the other slot, so mail still goes out -- as a different identity, which
+    // nobody asked for and nobody would otherwise be told about.
+    if (slotRoutingEnabled && !slotConfigured[activeSmtpSlot]) {
+      await sos({
+        code: 'SMTP_SLOT_UNCONFIGURED',
+        category: 'email_transport',
+        severity: 'high',
+        title: 'Active SMTP account has no usable credentials',
+        message: `Account ${activeSmtpSlot === 'smtp' ? 'A' : 'B'} is marked active but has no username or password configured, so sends are falling through to the backup account.`,
+        context: { activeSlot: activeSmtpSlot, configured: slotConfigured },
+        dedupeKey: activeSmtpSlot
+      });
+    }
+
     // Today's sends per account. Rows predating smtp_slot carry NULL and belong
     // to Account A, which was the only account sending at the time.
     const slotUsage: Record<SmtpSlotName, number> = { smtp: 0, smtp2: 0 };
@@ -1436,7 +1516,20 @@ Deno.serve(async (req: Request) => {
       .order('created_at', { ascending: true })
       .limit(25);
 
-    if (fetchErr) throw fetchErr;
+    if (fetchErr) {
+      // The worker ran and sent nothing at all. Without this the run looks
+      // identical to an empty queue.
+      await sos({
+        code: 'EMAIL_QUEUE_POLL_FAILED',
+        category: 'email_delivery',
+        severity: 'high',
+        title: 'Worker could not read the email queue',
+        message: `Polling email_queue failed, so this run delivered nothing: ${fetchErr.message}`,
+        context: { error: fetchErr.message, code: (fetchErr as any).code },
+        dedupeKey: 'poll'
+      });
+      throw fetchErr;
+    }
 
     const results = {
       processed: 0,
@@ -1473,6 +1566,20 @@ Deno.serve(async (req: Request) => {
         if (ticket.note) {
           console.log(`[email ${item.id}] ticket delivery: ${ticket.note}`);
         }
+        // "no ticket uploaded" is a normal state; a failure to sign or fetch
+        // one that exists means the traveller gets a mail promising a ticket
+        // that is not attached to it.
+        if (ticket.note && /^(could not sign|attachment skipped)/.test(ticket.note)) {
+          await sos({
+            code: 'EMAIL_TICKET_ATTACHMENT_FAILED',
+            category: 'email_delivery',
+            severity: 'warning',
+            title: 'Ticket file could not be attached to a mail',
+            message: `The ticket for this request could not be delivered with its mail: ${ticket.note}`,
+            context: { queueId: item.id, ticketId: item.ticket_id, note: ticket.note },
+            dedupeKey: String(item.ticket_id || item.id)
+          });
+        }
       }
 
       const payload = {
@@ -1502,6 +1609,25 @@ Deno.serve(async (req: Request) => {
         if (!pick.slot) {
           // Both accounts have spent their daily cap. Hold the item until the
           // quota rolls over instead of burning a retry attempt on it.
+          //
+          // Nothing leaves the desk until IST midnight, so this is as loud as
+          // the transport alerts get.
+          await sos({
+            code: 'SMTP_QUOTA_EXHAUSTED',
+            category: 'email_transport',
+            severity: 'critical',
+            title: 'Both SMTP accounts have spent their daily quota',
+            message: `Account A has sent ${slotUsage.smtp} and Account B ${slotUsage.smtp2} against a cap of ${perAccountQuota} each. Queued mail is held until the quota rolls over at IST midnight.`,
+            context: {
+              accountA: slotUsage.smtp,
+              accountB: slotUsage.smtp2,
+              perAccountQuota,
+              heldUntil: istNextDayStartIso(),
+              reason: pick.reason
+            },
+            dedupeKey: 'quota'
+          });
+
           await supabase
             .from('email_queue')
             .update({
@@ -1530,15 +1656,40 @@ Deno.serve(async (req: Request) => {
 
         // Any failure retries once on the other account before giving up.
         if (!sendRes.success) {
+          const failedSlot = usedSlot;
           const backupSlot = otherSlot(usedSlot);
+          let rescuedBy: SmtpSlotName | null = null;
+
           if (slotConfigured[backupSlot] && (slotUsage[backupSlot] || 0) < perAccountQuota) {
             console.warn(`SMTP ${usedSlot} failed (${sendRes.error?.message || 'unknown'}). Retrying on ${backupSlot}...`);
             const backupRes = await slotProvider(backupSlot).send(payload);
             if (backupRes.success) {
               sendRes = backupRes;
               usedSlot = backupSlot;
+              rescuedBy = backupSlot;
             }
           }
+
+          // The warning before a promotion: one account is refusing sends
+          // while the other quietly carries the load.
+          await sos({
+            code: 'SMTP_SLOT_SEND_FAILED',
+            category: 'email_transport',
+            severity: 'high',
+            title: 'SMTP account rejected a send and the backup took over',
+            message: `Account ${failedSlot === 'smtp' ? 'A' : 'B'} rejected a send (${sendRes.error?.message || 'unknown error'}).${rescuedBy ? ` The mail went out on Account ${rescuedBy === 'smtp' ? 'A' : 'B'} instead.` : ' No backup account was available to carry it.'}`,
+            context: {
+              failedSlot,
+              rescuedBy,
+              queueId: item.id,
+              transient: sendRes.error?.isTransient ?? true,
+              errorCode: sendRes.error?.code,
+              error: sendRes.error?.message,
+              consecutiveFailures: failureStreak.count,
+              promotesAfter: failoverAfterFailures
+            },
+            dedupeKey: failedSlot
+          });
         }
 
         if (sendRes.success) {
@@ -1551,6 +1702,7 @@ Deno.serve(async (req: Request) => {
       // Cross-provider last resort: both SMTP accounts are out, try SES/Gmail.
       if (!sendRes.success && quotaSettings?.fallbackProvider && quotaSettings.fallbackProvider !== provider.name) {
         console.warn(`Primary provider ${provider.name} failed. Attempting failover to ${quotaSettings.fallbackProvider}...`);
+        const primaryError = sendRes.error?.message;
         const fallbackProvider = buildProvider(quotaSettings.fallbackProvider);
         const fallbackRes = await fallbackProvider.send(payload);
         if (fallbackRes.success) {
@@ -1558,6 +1710,28 @@ Deno.serve(async (req: Request) => {
           // A different transport carried it, so no SMTP account owns this send.
           usedSlot = null;
         }
+
+        // Either way this is worth knowing: the mail went out as a different
+        // sending identity, or the last transport available also refused it.
+        await sos({
+          code: fallbackRes.success ? 'EMAIL_PROVIDER_FALLBACK' : 'EMAIL_PROVIDER_MISCONFIGURED',
+          category: 'email_transport',
+          severity: fallbackRes.success ? 'high' : 'critical',
+          title: fallbackRes.success
+            ? 'Outbound mail fell back to a secondary provider'
+            : 'Selected email provider is missing its configuration',
+          message: fallbackRes.success
+            ? `Both SMTP accounts refused this send, so it was delivered through ${quotaSettings.fallbackProvider} instead of the usual transport.`
+            : `Every configured transport refused this send. Primary: ${provider.name}; fallback ${quotaSettings.fallbackProvider}: ${fallbackRes.error?.message || 'unknown error'}.`,
+          context: {
+            queueId: item.id,
+            primaryProvider: provider.name,
+            fallbackProvider: quotaSettings.fallbackProvider,
+            primaryError,
+            fallbackError: fallbackRes.error?.message
+          },
+          dedupeKey: String(quotaSettings.fallbackProvider)
+        });
       }
 
       if (sendRes.success) {
@@ -1633,6 +1807,24 @@ Deno.serve(async (req: Request) => {
       if (pendingPromotion && pendingPromotion !== activeSmtpSlot) {
         console.warn(`Promoting SMTP ${pendingPromotion} to active after ${failoverAfterFailures} consecutive failures.`);
 
+        // The sending identity of the whole desk just changed, without a human
+        // deciding it. This is the alert the SOS system was built around.
+        await sos({
+          code: 'SMTP_FAILOVER_PROMOTED',
+          category: 'email_transport',
+          severity: 'critical',
+          title: 'SMTP account auto-promoted after repeated failures',
+          message: `Account ${activeSmtpSlot === 'smtp' ? 'A' : 'B'} failed ${failoverAfterFailures} consecutive non-transient sends, so Account ${pendingPromotion === 'smtp' ? 'A' : 'B'} has been promoted to active. Mail is now going out as the backup identity.`,
+          context: {
+            demoted: activeSmtpSlot,
+            promoted: pendingPromotion,
+            consecutiveFailures: failoverAfterFailures,
+            usageToday: slotUsage,
+            perAccountQuota
+          },
+          dedupeKey: `${activeSmtpSlot}->${pendingPromotion}`
+        });
+
         await supabase.from('email_routing_settings').upsert({
           key: 'active_smtp_slot',
           value: pendingPromotion,
@@ -1685,6 +1877,33 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err: any) {
+    // The run died part-way through. Anything it had claimed is stranded in
+    // Processing until the stale-claim window expires, so this is reported
+    // even though the only caller is usually a background trigger that
+    // discards the response.
+    try {
+      // @ts-ignore: Deno.env
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      // @ts-ignore: Deno.env
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      if (supabaseUrl && serviceRoleKey) {
+        await createSosReporter(createClient(supabaseUrl, serviceRoleKey))({
+          code: 'EMAIL_WORKER_CRASHED',
+          category: 'email_delivery',
+          severity: 'critical',
+          title: 'Email worker crashed mid-run',
+          message: `The queue worker threw before finishing its batch: ${err?.message || err}`,
+          context: {
+            error: String(err?.message || err),
+            stack: typeof err?.stack === 'string' ? err.stack.split('\n').slice(0, 4).join(' | ') : undefined
+          },
+          dedupeKey: String(err?.message || 'crash').slice(0, 120)
+        });
+      }
+    } catch {
+      // Reporting must never replace the error being reported.
+    }
+
     return new Response(JSON.stringify({ success: false, error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

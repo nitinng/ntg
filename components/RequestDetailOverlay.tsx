@@ -9,6 +9,7 @@ import { SignedLink } from './SignedMedia';
 import { assignRequestTo, canClaim, ownerLabel } from '../utils/assignment';
 import { isClosedStatus, employeeStatusLabel, STATUS_GUIDE } from '../utils/statusGuide';
 import EmployeeStatusTimeline from './EmployeeStatusTimeline';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface RequestDetailOverlayProps {
   request: TravelRequest;
@@ -98,7 +99,7 @@ export const RequestDetailOverlay = ({
       onClose();
       window.location.reload();
     } catch (error: any) {
-      console.error(error);
+      reportSos('CANCELLATION_FAILED', error, { ticketId: request?.id, step: 'employee_request' });
       toast.error('Failed to submit cancellation request: ' + error.message);
     } finally {
       setIsUploading(false);
@@ -139,7 +140,7 @@ export const RequestDetailOverlay = ({
       setEmployeeResponseInput('');
       onClose();
     } catch (error: any) {
-      console.error(error);
+      reportSos('REQUEST_UPDATE_FAILED', error, { ticketId: request?.id, step: 'employee_information_response' });
       toast.error('Failed to submit response: ' + error.message);
     } finally {
       setIsUploading(false);
@@ -169,7 +170,9 @@ export const RequestDetailOverlay = ({
       const fetchAdvances = async () => {
         const { data, error } = await supabase.from('advances').select('*');
         if (error) {
-          console.error("Error fetching advances:", error);
+          // The booking screen renders without balances, so the desk may book
+          // against an advance it cannot see.
+          reportSos('ADVANCE_FETCH_FAILED', error, { ticketId: request?.id });
         }
         if (data) {
           // Filter in memory to handle potential nulls in is_settled
@@ -259,7 +262,14 @@ export const RequestDetailOverlay = ({
                 });
                 
                 if (advError) {
-                  console.error("Failed to deduct from advance:", advError);
+                  // The booking stands but the balance does not reflect it:
+                  // settlement will be wrong until someone reconciles it.
+                  reportSos('ADVANCE_DEDUCTION_FAILED', advError, {
+                    ticketId: request?.id,
+                    advanceId: ticket.advanceId,
+                    amount: cost,
+                    leg: `${ticket.fromLocation}-${ticket.toLocation}`
+                  });
                   toast.error(`Failed to deduct from advance for leg ${ticket.fromLocation}-${ticket.toLocation}`);
                 } else {
                   selectedAdv.amount_left = Number(updatedBalance);
@@ -307,7 +317,11 @@ export const RequestDetailOverlay = ({
               });
 
               if (advError) {
-                console.error("Failed to deduct from advance:", advError);
+                reportSos('ADVANCE_DEDUCTION_FAILED', advError, {
+                  ticketId: request?.id,
+                  advanceId: selectedAdv?.id,
+                  amount: cost
+                });
                 toast.error("Failed to deduct from advance.");
               } else {
                 selectedAdv.amount_left = Number(updatedBalance);
@@ -347,7 +361,7 @@ export const RequestDetailOverlay = ({
       setIsUploading(false);
     } catch (error: any) {
       setIsUploading(false);
-      console.error("Update failed:", error);
+      reportSos('REQUEST_UPDATE_FAILED', error, { ticketId: request?.id, step: 'desk_booking_update' });
       toast.error("Failed to update request: " + error.message);
     }
   };

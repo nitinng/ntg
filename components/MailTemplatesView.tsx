@@ -7,6 +7,7 @@ import Input from './Input';
 import TextArea from './TextArea';
 import Select from './Select';
 import fallbackMailTemplates from '../utils/fallbackMailTemplates.json';
+import { reportSos } from '../utils/sos/raiseSos';
 
 const SAMPLE_REQUEST: TravelRequest = {
   id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
@@ -257,7 +258,9 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Error fetching remote templates, using local fallback:', error.message);
+        // Mail still sends, carrying copy nobody edited here -- changes made in
+        // the Email Center are simply not being applied.
+        reportSos('EMAIL_TEMPLATE_FALLBACK', error, { table: 'mail_templates' });
       }
 
       const sourceRows = (data && data.length > 0) ? data : (fallbackMailTemplates as any[]);
@@ -334,7 +337,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
         version: newTemplate?.version || 1
       });
     } catch (err) {
-      console.warn('Failed to record template history log:', err);
+      reportSos('EMAIL_AUDIT_LOG_FAILED', err, { table: 'mail_template_history' });
     }
   };
 

@@ -5,6 +5,7 @@ import Select from './Select';
 import { toast } from 'sonner';
 import { calculateDynamicUrgency, getDaysRemaining } from '../utils/policyUtils';
 import { areBookingEmailsIdentical, validateBookingStep1Data } from '../utils/bookingValidation';
+import { addDaysLocal, earliestBookableDate } from '../utils/utils';
 
 interface NewRequestModalProps {
     onClose: () => void;
@@ -26,16 +27,13 @@ const NewRequestModal = ({ onClose, onSubmit, currentUser, policies, policy, mee
     const [step, setStep] = useState(1);
     const totalSteps = 3;
 
-    // Helper to get YYYY-MM-DD string with offset
-    const getDateWithOffset = (baseDate: string, daysOffset: number) => {
-        const d = new Date(baseDate);
-        d.setDate(d.getDate() + daysOffset);
-        return d.toISOString().split('T')[0];
-    };
+    // Calendar maths stays on the local calendar: toISOString() is UTC, so before
+    // 05:30 IST it named yesterday and "tomorrow" briefly resolved to today,
+    // letting same-day bookings through the minimum that is meant to block them.
+    const getDateWithOffset = (baseDate: string, daysOffset: number) =>
+        addDaysLocal(baseDate, daysOffset);
 
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    const defaultMinDate = d.toISOString().split('T')[0];
+    const defaultMinDate = earliestBookableDate();
 
     const bloodGroupOptions = [
         'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'

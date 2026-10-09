@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import Input from './Input';
 import { toast } from 'sonner';
+import { addDaysLocal, earliestBookableDate } from '../utils/utils';
 
 interface IgathpuriAvailabilityModalProps {
   onClose: () => void;
@@ -26,12 +27,12 @@ export const IgathpuriAvailabilityModal: React.FC<IgathpuriAvailabilityModalProp
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minStartDate = tomorrow.toISOString().split('T')[0];
+  // Local calendar, not UTC -- see utils/utils.ts. The +86400000 form was also
+  // DST-fragile; addDaysLocal shifts the calendar day instead of adding 24h.
+  const minStartDate = earliestBookableDate();
 
   const minEndDate = formData.startDate
-    ? new Date(new Date(formData.startDate).getTime() + 86400000).toISOString().split('T')[0]
+    ? addDaysLocal(formData.startDate, 1)
     : minStartDate;
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SignedImage } from './SignedMedia';
 import { User, UserRole } from '../types';
+import { getVisibleRolesForBaseRole } from '../utils/workflow';
 
 interface NavbarProps {
   currentUser: User;
@@ -38,15 +39,7 @@ export const Navbar = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isRoleDropdownOpen]);
 
-  const getVisibleRoles = () => {
-    if (baseRole === UserRole.ADMIN) return Object.values(UserRole);
-    if (baseRole === UserRole.PNC_ADMIN) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
-    if (baseRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
-    if (baseRole === UserRole.FINANCE) return [UserRole.EMPLOYEE, UserRole.FINANCE];
-    return [];
-  };
-
-  const visibleRoles = getVisibleRoles();
+  const visibleRoles = getVisibleRolesForBaseRole(baseRole);
 
   return (
     <nav className="h-16 app-navbar bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-200">

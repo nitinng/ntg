@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isUserAuthorizedForAction } from '../utils/workflow';
+import { isUserAuthorizedForAction, getVisibleRolesForBaseRole } from '../utils/workflow';
 import { UserRole, PNCStatus, ApprovalStatus, TripType, TravelMode, Priority, TravelRequest } from '../types';
 
 const createMockRequest = (overrides?: Partial<TravelRequest>): TravelRequest => ({
@@ -208,5 +208,75 @@ describe('Role & Authorization Checks: isUserAuthorizedForAction', () => {
     expect(canEditQuota(UserRole.PNC)).toBe(false);
     expect(canEditQuota(UserRole.PNC_ADMIN)).toBe(false);
     expect(canEditQuota(UserRole.ADMIN)).toBe(true);
+  });
+
+  describe('Role Toggle Navigation (getVisibleRolesForBaseRole)', () => {
+    it('1. Base Employee: No role toggle (fixed to Employee)', () => {
+      expect(getVisibleRolesForBaseRole(UserRole.EMPLOYEE)).toEqual([]);
+    });
+
+    it('2. Base PNC: Can toggle between Employee, PNC', () => {
+      expect(getVisibleRolesForBaseRole(UserRole.PNC)).toEqual([UserRole.EMPLOYEE, UserRole.PNC]);
+    });
+
+    it('3. Base Finance: Can toggle between Employee, Finance', () => {
+      expect(getVisibleRolesForBaseRole(UserRole.FINANCE)).toEqual([UserRole.EMPLOYEE, UserRole.FINANCE]);
+    });
+
+    it('4. Base PNC Admin: Can toggle between Employee, PNC Admin', () => {
+      expect(getVisibleRolesForBaseRole(UserRole.PNC_ADMIN)).toEqual([UserRole.EMPLOYEE, UserRole.PNC_ADMIN]);
+    });
+
+    it('5. Base Admin: Can toggle between Employee, PNC, PNC Admin, Finance, Admin', () => {
+      expect(getVisibleRolesForBaseRole(UserRole.ADMIN)).toEqual([
+        UserRole.EMPLOYEE,
+        UserRole.PNC,
+        UserRole.PNC_ADMIN,
+        UserRole.FINANCE,
+        UserRole.ADMIN
+      ]);
+    });
+
+    it('handles null/undefined baseRole with empty array (no toggle)', () => {
+      expect(getVisibleRolesForBaseRole(null)).toEqual([]);
+      expect(getVisibleRolesForBaseRole(undefined)).toEqual([]);
+    });
+  });
+
+  describe('PNC Admin > PNC (PNC Admin = PNC + more)', () => {
+    it('guarantees PNC Admin has every operational authority of PNC', () => {
+      const pncActor = { email: 'pnc@navgurukul.org', role: UserRole.PNC, id: 'pnc-1' };
+      const pncAdminActor = { email: 'pnca@navgurukul.org', role: UserRole.PNC_ADMIN, id: 'pnca-1' };
+
+      const actions = ['process_pnc', 'book_pnc', 'cancel_as_pnc'] as const;
+      actions.forEach(act => {
+        expect(isUserAuthorizedForAction(pncAdminActor, act, request)).toBe(true);
+        expect(isUserAuthorizedForAction(pncAdminActor, act, request)).toBe(
+          isUserAuthorizedForAction(pncActor, act, request)
+        );
+      });
+    });
+
+    it('guarantees PNC Admin has additional supervisory authorities that PNC lacks', () => {
+      // Reassignment authority (taking from colleague)
+      const canReassignColleague = (role: UserRole) => role === UserRole.PNC_ADMIN || role === UserRole.ADMIN;
+      expect(canReassignColleague(UserRole.PNC_ADMIN)).toBe(true);
+      expect(canReassignColleague(UserRole.PNC)).toBe(false);
+
+      // Department editing
+      const canEditDepartments = (role: UserRole) => role === UserRole.PNC_ADMIN || role === UserRole.ADMIN;
+      expect(canEditDepartments(UserRole.PNC_ADMIN)).toBe(true);
+      expect(canEditDepartments(UserRole.PNC)).toBe(false);
+
+      // Mail template editing
+      const canEditTemplates = (role: UserRole) => role === UserRole.PNC_ADMIN || role === UserRole.ADMIN;
+      expect(canEditTemplates(UserRole.PNC_ADMIN)).toBe(true);
+      expect(canEditTemplates(UserRole.PNC)).toBe(false);
+
+      // Role promotion up to PNC Admin
+      const canPromoteToPncAdmin = (callerRole: UserRole) => callerRole === UserRole.PNC_ADMIN || callerRole === UserRole.ADMIN;
+      expect(canPromoteToPncAdmin(UserRole.PNC_ADMIN)).toBe(true);
+      expect(canPromoteToPncAdmin(UserRole.PNC)).toBe(false);
+    });
   });
 });

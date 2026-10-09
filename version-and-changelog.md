@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.7.1 (2026-10-09)](#v271---2026-10-09)
+* [Current Release — v2.8.0 (2026-10-10)](#v280---2026-10-10)
+* [v2.7.1 (2026-10-09)](#v271---2026-10-09)
 * [v2.7.0 (2026-10-09)](#v270---2026-10-09)
 * [v2.6.0 (2026-10-01)](#v260---2026-10-01)
 * [v2.5.0 (2026-09-28)](#v250---2026-09-28)
@@ -25,6 +26,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.8.0] - 2026-10-10
+
+### 🛡️ Role Switching Granularity & PNC Admin Authority Parity
+
+> **Access Control** — Enforced base-role scoped perspective switching across Employee, PNC, Finance, PNC Admin, and Admin, while ensuring PNC Admin functions as a complete operational superset of PNC with supervisory authorities.
+
+#### 👥 Roles & Access Control
+* **Scoped Perspective Switching**: Constrained navbar and session role toggles strictly by base role:
+  * **Employee**: Fixed to Employee with no role toggle.
+  * **PNC**: Toggle between Employee and PNC.
+  * **Finance**: Toggle between Employee and Finance.
+  * **PNC Admin**: Toggle between Employee and PNC Admin.
+  * **Admin**: Unrestricted perspective switching across all five roles.
+* **PNC Admin Authority Parity**: Verified and guaranteed that PNC Admin possesses every operational authority of PNC (claims, booking, cancellations, advance settlements, and testing overrides) along with supervisory permissions (reassignments, policies, department management, and email routing).
+* **Validation & Security**: Added centralized role resolution guard `getVisibleRolesForBaseRole` and unit test coverage.
+
+#### 📝 Commits in this Release
+* `7322532` — `feat(auth): enforce base-role scoped perspective switching and bump version to v2.8.0` — Nitin — 2026-10-10
 
 ---
 

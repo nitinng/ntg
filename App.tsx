@@ -22,6 +22,7 @@ import { claimOnProcessing } from './utils/assignment';
 import { calculateProfileCompleteness, isUserVerified, isAppLockedForUser } from './utils/verificationUtils';
 import { calculateDynamicUrgency } from './utils/policyUtils';
 import { requireWrittenRow } from './utils/supabaseWriteResult';
+import { getVisibleRolesForBaseRole } from './utils/workflow';
 
 import Card from './components/Card';
 import StatCard from './components/StatCard';
@@ -260,6 +261,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!session) {
       setCurrentUser(null);
+      setBaseRole(null);
       setRequests([]);
       setIsLoading(false);
       lastSessionRef.current = null;
@@ -297,13 +299,7 @@ const App: React.FC = () => {
             // Only honour the stored role if it's a valid view-switch for this user's base role
             // e.g. a PNC user may have chosen to "view as Employee" — keep that choice.
             // But if there's no stored role, or it isn't accessible to this user, fall back to DB role.
-            const validRolesForDbRole = (() => {
-              if (dbRole === UserRole.ADMIN) return Object.values(UserRole);
-              if (dbRole === UserRole.PNC_ADMIN) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
-              if (dbRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN, UserRole.FINANCE];
-              if (dbRole === UserRole.FINANCE) return [UserRole.EMPLOYEE, UserRole.FINANCE];
-              return [UserRole.EMPLOYEE];
-            })();
+            const validRolesForDbRole = getVisibleRolesForBaseRole(dbRole);
             if (storedRole && validRolesForDbRole.includes(storedRole)) return storedRole;
             return dbRole;
           })(),
@@ -1094,7 +1090,8 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
       <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
       <Navbar currentUser={currentUser!} baseRole={baseRole} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onToggleRole={(r) => {
-        // Mock role toggle for demo, usually role is static from DB
+        const allowed = getVisibleRolesForBaseRole(baseRole);
+        if (!allowed.includes(r)) return;
         sessionStorage.setItem('currentRole', r);
         setCurrentUser(prev => prev ? { ...prev, role: r } : null);
         handleTabChange('dashboard');

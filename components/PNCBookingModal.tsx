@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { TripType, TravelMode, Priority, User, TravelModePolicy, PNCStatus, ApprovalStatus, Department, TestingSettings, PolicyConfig } from '../types';
+import { TripType, TravelMode, Priority, User, UserRole, TravelModePolicy, PNCStatus, ApprovalStatus, Department, TestingSettings, PolicyConfig } from '../types';
 import Input from './Input';
 import Select from './Select';
 import { toast } from 'sonner';
@@ -114,8 +114,8 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
 
     const validationActive = (() => {
         if (!testingSettings) return true;
-        if (currentUser.role === 'Admin') return testingSettings.admin;
-        if (currentUser.role === 'PNC') return testingSettings.pnc;
+        if (currentUser.role === UserRole.ADMIN) return testingSettings.admin;
+        if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) return testingSettings.pnc;
         return testingSettings.employee;
     })();
 

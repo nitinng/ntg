@@ -171,3 +171,19 @@ export const isUserAuthorizedForAction = (
       return false;
   }
 };
+
+/**
+ * Resolves visible role options that a user can toggle into based on their base role.
+ * 1. Base Employee: No role toggle (fixed to Employee).
+ * 2. Base PNC: Can toggle between Employee, PNC.
+ * 3. Base Finance: Can toggle between Employee, Finance.
+ * 4. Base PNC Admin: Can toggle between Employee, PNC Admin (PNC Admin has everything PNC + more).
+ * 5. Base Admin: Can toggle between Employee, PNC, PNC Admin, Finance, Admin.
+ */
+export const getVisibleRolesForBaseRole = (baseRole?: UserRole | null): UserRole[] => {
+  if (baseRole === UserRole.ADMIN) return Object.values(UserRole);
+  if (baseRole === UserRole.PNC_ADMIN) return [UserRole.EMPLOYEE, UserRole.PNC_ADMIN];
+  if (baseRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC];
+  if (baseRole === UserRole.FINANCE) return [UserRole.EMPLOYEE, UserRole.FINANCE];
+  return [];
+};

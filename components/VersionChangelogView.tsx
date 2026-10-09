@@ -3,212 +3,19 @@ import { User, UserRole } from '../types';
 import Card from './Card';
 import { toast } from 'sonner';
 import { PageBanner } from './PageBanner';
+import { CHANGELOG_MARKDOWN, RELEASES } from '../utils/changelog';
+import type { ChangelogCommit, ChangelogRelease } from '../utils/changelog';
 
-export interface ChangelogCommit {
-  hash: string;
-  date: string;
-  author: string;
-  message: string;
-  type: 'feat' | 'fix' | 'refactor' | 'style' | 'test' | 'merge' | 'docs' | 'chore';
-}
+export type { ChangelogCommit, ChangelogRelease };
 
-export interface ChangelogRelease {
-  version: string;
-  date: string;
-  title: string;
-  badge: string;
-  summary: string;
-  highlights: { category: string; items: string[] }[];
-  commits: ChangelogCommit[];
-}
-
-export const RELEASES_DATA: ChangelogRelease[] = [
-  {
-    version: 'v2.5.0',
-    date: '2026-09-28',
-    title: 'Dark Mode Neutral Palette Alignment, Email Templates & Booking Urgency Settings',
-    badge: 'Latest Release',
-    summary: 'Aligned dark mode to PNC ELC pure neutral palette, fixed invalid Tailwind shade classes, added official NavGurukul brand logo in email templates, aligned navbar active role tab background with header, and added booking urgency and SLA settings.',
-    highlights: [
-      {
-        category: '🎨 Dark Mode Neutral Palette (PNC ELC)',
-        items: [
-          'Remapped slate color scale through CSS variables to resolve to shadcn neutral tones (#0a0a0a, #171717, #262626) in dark mode while keeping light mode pixel-identical.',
-          'Replaced ~240 invalid Tailwind shade classes (e.g. slate-655, slate-350, rose-455) with valid shades across 30+ components.',
-          'Synchronized Mermaid diagrams, custom scrollbars, and SVG tooltips to pure neutral dark mode styling.',
-          'Aligned navbar active role tab background directly to navbar header background (dark:bg-slate-900) and styled theme toggle with warm amber sun.'
-        ]
-      },
-      {
-        category: '✉️ Email Templates & Brand Identity',
-        items: [
-          'Embedded official NavGurukul brand logo header image centered above orange divider (#FF6B35) in all email templates.',
-          'Redirected email call-to-action buttons to https://ng-travel-desk.vercel.app/.',
-          'Added Edit HTML / Live Preview toggle in template editor modal and fixed modals to strict 90vw × 90vh dimensions.',
-          'Added local fallback template bundling and updated Supabase RLS policy for staff access (Admin, PNC, Finance).'
-        ]
-      },
-      {
-        category: '⚡ Dynamic Urgency & Configurable SLAs',
-        items: [
-          'Engineered automatic progression urgency engine: Critical (<2d), High (2-10d), Medium (10-20d), Low (>20d) that scales as travel date nears.',
-          'Configurable generic SLA targets for Manager Approval (24h), PNC Processing (48h), and Ticketing Fulfillment (72h).',
-          'Urgency SLA toggle enabling tier-specific targets (4h / 12h / 24h / 48h) with soft pastel priority badges.'
-        ]
-      },
-      {
-        category: '📊 Analytics "TAT and SLAs" Hub',
-        items: [
-          'Added 4th Analytics sub-tab "TAT and SLAs" with overall compliance %, avg fulfillment TAT, and breach monitoring.',
-          'Built 4-tier urgency performance matrix and lifecycle stage bottleneck diagnostic (Approval → Processing → Ticketing).',
-          'Added Campus SLA Scorecard and filterable/sortable Request SLA Audit Ledger with CSV export.'
-        ]
-      }
-    ],
-    commits: [
-      { hash: '1e30236', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'feat(settings): add booking urgency configuration and wire into request flow and policies', type: 'feat' },
-      { hash: '36c5a64', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'docs(changelog): document v2.5.0 dark mode palette, navbar polish, and email template updates', type: 'docs' },
-      { hash: '13298f7', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'feat(email): embed official brand logo in email templates, redirect CTA to vercel, and add editor live preview', type: 'feat' },
-      { hash: '68bd947', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'fix(navbar): align active role tab background to header and polish dark mode theme toggle', type: 'fix' },
-      { hash: '8baf06b', date: '2026-09-28', author: 'Nitin Sudarshan', message: 'style(theme): align dark mode to PNC ELC neutral palette and fix invalid Tailwind classes', type: 'style' }
-    ]
-  },
-  {
-    version: 'v2.4.0',
-    date: '2026-08-28',
-    title: 'Production-Safe Transactional Email Engine & Template Authoring',
-    badge: 'Email Engine',
-    summary: 'Full end-to-end transactional email integration connecting the travel lifecycle state machine to versioned mail templates, asynchronous queueing, Gmail API / Amazon SES dispatch, and operational delivery observability.',
-    highlights: [
-      {
-        category: '✨ Template Authoring & Versioning',
-        items: [
-          'Introduced Published, Drafts, and Archived status lifecycle for mail templates.',
-          'Built Template Edit History audit drawer tracking changed_by, changed_at, version counters, and subject diffs.',
-          'Added 1-click dynamic variable helper pills for {{request_id}}, {{requester_name}}, {{origin}}, {{destination}}, {{estimated_cost}}, etc.'
-        ]
-      },
-      {
-        category: '📧 Sent Mails & Delivery Tracking',
-        items: [
-          'Real-time outgoing queue monitoring with delivery KPI cards and status badges (Sent, Pending, Processing, Failed).',
-          'Interactive live HTML preview and JSON payload inspector.',
-          'Template-powered test email sender with auto-filled sample data.',
-          'Queue purge ("Clear Queue") and manual worker trigger buttons.'
-        ]
-      },
-      {
-        category: '🔒 Centralized Global CC & Database Migrations',
-        items: [
-          'Central Global Email CC management (travel.team@navgurukul.org, nitin.s@navgurukul.org) with duplicate protection.',
-          'Created public.mail_template_history table with Row Level Security policies.',
-          'Added 95 automated Vitest tests covering all positive/negative lifecycle triggers and provider failure isolation.'
-        ]
-      }
-    ],
-    commits: [
-      { hash: 'f62cde6', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'feat(email): complete end-to-end transactional email system with audit history and global CC', type: 'feat' },
-      { hash: '220f59b', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'fix(edge-function): add CORS response headers to process-email-queue', type: 'fix' },
-      { hash: 'ea6c05a', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'fix(email): resolve template_name schema mismatch and allow standalone test emails in email_queue', type: 'fix' },
-      { hash: '7c33103', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'feat(email): add Clear Queue button to purge old email records', type: 'feat' },
-      { hash: 'd64246f', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'feat(email): add Sent Mails delivery tracking view, test email sender, and queue trigger', type: 'feat' }
-    ]
-  },
-  {
-    version: 'v2.3.0',
-    date: '2026-08-28',
-    title: 'Domain Modularization & Provider Abstraction',
-    badge: 'Architecture',
-    summary: 'Decomposed monolithic App.tsx into specialized domain view modules and established the pluggable email provider strategy architecture.',
-    highlights: [
-      {
-        category: '🏗️ Architecture & Performance',
-        items: [
-          'Modularized App.tsx into dedicated components with dynamic code-splitting (React.lazy + Suspense).',
-          'Created IEmailProvider interface with Gmail API and Amazon SES provider implementations.',
-          'Constructed RFC 2822 MIME builder with base64url encoding for robust cross-client formatting.'
-        ]
-      }
-    ],
-    commits: [
-      { hash: '5cfc119', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'refactor(architecture): modularize App.tsx into dedicated domain view components and services', type: 'refactor' },
-      { hash: 'ab4932e', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'Implement production-safe email architecture with Gmail API and SES provider abstraction', type: 'feat' },
-      { hash: '3cf4dcf', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'Add production-safe test coverage for critical business workflows', type: 'test' },
-      { hash: '6db2d61', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'Improve Supabase local dev networking and remove hardcoded IP pinning', type: 'refactor' },
-      { hash: 'c938031', date: '2026-08-28', author: 'Nitin Sudarshan', message: 'Add env files to .gitignore and untrack .env', type: 'chore' }
-    ]
-  },
-  {
-    version: 'v2.2.0',
-    date: '2026-07-28',
-    title: 'Analytics Overhaul & Design Polish',
-    badge: 'UI & Analytics',
-    summary: 'Enhanced PNC, Finance, and Admin analytics with paginated data views, spend analytics, and project-wide transition optimizations.',
-    highlights: [
-      {
-        category: '📊 Analytics & Guides',
-        items: [
-          'Added comprehensive paginated dashboards for PNC and Finance staff.',
-          'Synchronized dark mode CSS transitions to 200ms project-wide.',
-          'Introduced Employee Travel Guide view with policy rules and FAQ.'
-        ]
-      }
-    ],
-    commits: [
-      { hash: '4961d4c', date: '2026-07-28', author: 'Nitin Sudarshan', message: "Merge branch 'feat/ticket-cancellation-logic'", type: 'merge' },
-      { hash: 'cdefed0', date: '2026-07-28', author: 'Nitin Sudarshan', message: 'Update PNC, Finance, and Admin Analytics with comprehensive paginated dashboards and layout fixes', type: 'feat' },
-      { hash: '1805ce6', date: '2026-07-28', author: 'Nitin Sudarshan', message: 'style: synchronize dark mode transition durations to 200ms project-wide', type: 'style' },
-      { hash: 'd122112', date: '2026-07-27', author: 'Nitin Sudarshan', message: 'feat: add Employee Travel Guide view and update branding to NG Travel Desk', type: 'feat' },
-      { hash: '964ec73', date: '2026-07-26', author: 'Nitin Sudarshan', message: 'Enhance README with new features and documentation', type: 'docs' }
-    ]
-  },
-  {
-    version: 'v2.1.0',
-    date: '2026-07-26',
-    title: 'Multi-Leg Ticket Cancellation & Policy Splits',
-    badge: 'Operations',
-    summary: 'Engineered leg-by-leg cancellation workflows, automatic cost split calculations (Navgurukul vs Employee), and finance advance reconciliation.',
-    highlights: [
-      {
-        category: '🔄 Cancellation & Policies',
-        items: [
-          'Support for partial trip leg cancellations and full itinerary cancellations.',
-          'Dynamic policy split computation based on cancellation initiator (PNC vs Employee).',
-          'Added departments management table and testing settings bypass toggles.'
-        ]
-      }
-    ],
-    commits: [
-      { hash: '0677409', date: '2026-07-26', author: 'Nitin Sudarshan', message: 'Merge pull request #8 from nitinng/feat/ticket-cancellation-logic', type: 'merge' },
-      { hash: '3b17f5c', date: '2026-07-26', author: 'Nitin Sudarshan', message: 'Complete ticket state machine, fix On Hold / resubmission gaps, wire up email queue and history triggers, and add audience to mail templates', type: 'feat' },
-      { hash: 'fdf00d9', date: '2026-07-26', author: 'Nitin Sudarshan', message: 'feat: add testing settings dashboard and conditional form validation bypass', type: 'feat' },
-      { hash: 'f7e0e5b', date: '2026-07-26', author: 'Nitin Sudarshan', message: 'feat: add departments table, management dashboard, and dropdown dropdown integration', type: 'feat' },
-      { hash: 'cd84199', date: '2026-07-25', author: 'Nitin Sudarshan', message: 'feat: ticket cancellation logic, leg-by-leg multi-cancellation, policy split sync, and advance reconciliation', type: 'feat' }
-    ]
-  },
-  {
-    version: 'v2.0.0',
-    date: '2026-07-23',
-    title: 'Ticket State Machine & Interactive Flowchart',
-    badge: 'Core Engine',
-    summary: 'Standardized ticket state machine lifecycle, replaced Sankey diagram with interactive SVG Flowchart, and streamlined bundle footprint.',
-    highlights: [
-      {
-        category: '⚡ State Machine & Visualization',
-        items: [
-          'Full formalization of ticket lifecycle states (Not Started → Approval Pending → Approved → Processing → Booked → Closed).',
-          'Interactive SVG/HTML status transition flowchart in PNC Dashboard.',
-          'Optimized bundle size with chunking and module tree-shaking.'
-        ]
-      }
-    ],
-    commits: [
-      { hash: 'f92dce0', date: '2026-07-25', author: 'Nitin Sudarshan', message: "Merge pull request #7 from nitinng/feat/dashboard-flowchart", type: 'merge' },
-      { hash: '9640e3f', date: '2026-07-24', author: 'Nitin Sudarshan', message: 'feat: Replace Sankey with native Flowchart in PNC Dashboard & migrate SQL endpoints', type: 'feat' },
-      { hash: '8806722', date: '2026-07-23', author: 'Nitin Sudarshan', message: 'refactor: modularize components, add routing, fix types, and optimize bundle size', type: 'refactor' }
-    ]
-  }
-];
+/**
+ * Release history rendered by this view.
+ *
+ * Parsed at build time from `version-and-changelog.md` in the repository root,
+ * which is the single source of truth for the changelog: document a release
+ * there and it shows up here (and in the Settings footer) with no code change.
+ */
+export const RELEASES_DATA: ChangelogRelease[] = RELEASES;
 
 interface VersionChangelogViewProps {
   currentUser?: User | null;
@@ -218,36 +25,14 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVersion, setSelectedVersion] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'interactive' | 'markdown'>('interactive');
-  const [expandedReleases, setExpandedReleases] = useState<Record<string, boolean>>({
-    'v2.5.0': true,
-    'v2.4.0': true,
-    'v2.3.0': true
-  });
+  const [expandedReleases, setExpandedReleases] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(RELEASES.slice(0, 3).map(release => [release.version, true]))
+  );
 
-  const canEdit = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.PNC_ADMIN || currentUser?.role === UserRole.PNC;
+  const releases = RELEASES_DATA;
 
-  const [releases, setReleases] = useState<ChangelogRelease[]>(() => {
-    try {
-      const stored = localStorage.getItem('ntg_custom_changelog_releases');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return [...parsed, ...RELEASES_DATA];
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return RELEASES_DATA;
-  });
-
-  // Modal State for Adding Custom Changelog Entry
-  const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
-  const [newVersion, setNewVersion] = useState('');
-  const [newTitle, setNewTitle] = useState('');
-  const [newBadge, setNewBadge] = useState('Update');
-  const [newSummary, setNewSummary] = useState('');
-  const [newHighlights, setNewHighlights] = useState('');
+  const latestVersion = releases[0]?.version ?? 'v0.0.0';
+  const earliestVersion = releases[releases.length - 1]?.version ?? latestVersion;
 
   // Guard: Not accessible for Employee role
   if (currentUser?.role === UserRole.EMPLOYEE) {
@@ -272,60 +57,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`Copied ${label} to clipboard!`);
-  };
-
-  const handleAddRelease = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canEdit) {
-      toast.error('You do not have permission to edit changelog entries.');
-      return;
-    }
-    if (!newVersion.trim() || !newTitle.trim() || !newSummary.trim()) {
-      toast.error('Version, title, and summary are required.');
-      return;
-    }
-
-    const highlightItems = newHighlights
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
-
-    const newReleaseEntry: ChangelogRelease = {
-      version: newVersion.trim(),
-      date: new Date().toISOString().split('T')[0],
-      title: newTitle.trim(),
-      badge: newBadge.trim() || 'Update',
-      summary: newSummary.trim(),
-      highlights: highlightItems.length > 0
-        ? [{ category: '🚀 Operational Updates', items: highlightItems }]
-        : [{ category: '🚀 Operational Updates', items: ['System updates recorded.'] }],
-      commits: [
-        {
-          hash: Math.random().toString(16).substring(2, 9),
-          date: new Date().toISOString().split('T')[0],
-          author: currentUser?.name || 'Operations',
-          message: newTitle.trim(),
-          type: 'feat'
-        }
-      ]
-    };
-
-    const updated = [newReleaseEntry, ...releases];
-    setReleases(updated);
-    try {
-      const customOnly = updated.filter(r => !RELEASES_DATA.some(rd => rd.version === r.version));
-      localStorage.setItem('ntg_custom_changelog_releases', JSON.stringify(customOnly));
-    } catch {
-      // ignore
-    }
-
-    setExpandedReleases(prev => ({ ...prev, [newReleaseEntry.version]: true }));
-    setIsAddNoteModalOpen(false);
-    setNewVersion('');
-    setNewTitle('');
-    setNewSummary('');
-    setNewHighlights('');
-    toast.success(`Release note ${newReleaseEntry.version} created successfully!`);
   };
 
   const filteredReleases = useMemo(() => {
@@ -407,7 +138,7 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Active Version</p>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1 font-mono">v2.4.0</h3>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1 font-mono">{latestVersion}</h3>
             </div>
             <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl">
               <i className="fa-solid fa-tag"></i>
@@ -422,13 +153,13 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Releases</p>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{RELEASES_DATA.length} Versions</h3>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{releases.length} Versions</h3>
             </div>
             <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl">
               <i className="fa-solid fa-boxes-packing"></i>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mt-3">From v1.0.0 to current release</p>
+          <p className="text-xs text-slate-400 mt-3">From {earliestVersion} to current release</p>
         </Card>
 
         <Card className="p-6">
@@ -467,8 +198,8 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
                 onChange={e => setSelectedVersion(e.target.value)}
                 className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-indigo-500 outline-none"
               >
-                <option value="all">All Releases ({RELEASES_DATA.length})</option>
-                {RELEASES_DATA.map(r => (
+                <option value="all">All Releases ({releases.length})</option>
+                {releases.map(r => (
                   <option key={r.version} value={r.version}>
                     {r.version} ({r.date})
                   </option>
@@ -581,8 +312,12 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-3 text-slate-400 text-[11px] self-end sm:self-auto font-mono">
-                                  <span>{commit.author}</span>
-                                  <span>•</span>
+                                  {commit.author && (
+                                    <>
+                                      <span>{commit.author}</span>
+                                      <span>•</span>
+                                    </>
+                                  )}
                                   <span>{commit.date}</span>
                                   <button
                                     onClick={() => copyToClipboard(commit.hash, 'commit hash')}
@@ -617,159 +352,16 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
               </p>
             </div>
             <button
-              onClick={() => copyToClipboard(`# Navgurukul Travel Desk — Version & Changelog...`, 'changelog markdown')}
+              onClick={() => copyToClipboard(CHANGELOG_MARKDOWN, 'changelog markdown')}
               className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold hover:bg-indigo-100 flex items-center gap-1.5"
             >
               <i className="fa-solid fa-copy"></i> Copy Markdown
             </button>
           </div>
-          <pre className="p-6 bg-slate-950 text-slate-200 rounded-xl overflow-x-auto text-xs font-mono leading-relaxed max-h-[600px] custom-scrollbar">
-{`# Navgurukul Travel Desk — Version & Changelog
-
-All notable changes to the Navgurukul Travel Desk application are documented in this file.
-The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
-
----
-
-## [v2.4.0] - 2026-08-28 (Production-Safe Transactional Email System)
-* Template Authoring Layer with Published/Draft/Archived states and audit logs.
-* Sent Mails delivery tracking, status filtering, live inspector, and test email sender.
-* Global CC configuration in settings (travel.team@navgurukul.org, nitin.s@navgurukul.org).
-* Authoritative mail_sender_routine.md specification.
-* 95 automated Vitest tests passing.
-
-Commits:
-- f62cde6 feat(email): complete end-to-end transactional email system with audit history and global CC
-- 220f59b fix(edge-function): add CORS response headers to process-email-queue
-- ea6c05a fix(email): resolve template_name schema mismatch and allow standalone test emails in email_queue
-- 7c33103 feat(email): add Clear Queue button to purge old email records
-- d64246f feat(email): add Sent Mails delivery tracking view, test email sender, and queue trigger
-
----
-
-## [v2.3.0] - 2026-08-28 (Domain Modularization & Provider Abstraction)
-* Modularized App.tsx into specialized domain view components.
-* Pluggable email provider strategy (Gmail API & Amazon SES).
-* MIME RFC 2822 builder with base64url encoding.
-
-Commits:
-- 5cfc119 refactor(architecture): modularize App.tsx into dedicated domain view components and services
-- ab4932e Implement production-safe email architecture with Gmail API and SES provider abstraction
-- 3cf4dcf Add production-safe test coverage for critical business workflows`}
+          <pre className="p-6 bg-slate-950 text-slate-200 rounded-xl overflow-x-auto whitespace-pre-wrap text-xs font-mono leading-relaxed max-h-[600px] custom-scrollbar">
+            {CHANGELOG_MARKDOWN}
           </pre>
         </Card>
-      )}
-
-      {/* Add Release Note Modal */}
-      {isAddNoteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg">
-                  <i className="fa-solid fa-code-branch"></i>
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Add Release Note</h3>
-                  <p className="text-xs text-slate-500">Record a system release milestone, hotfix, or operational changelog note.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsAddNoteModalOpen(false)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <form onSubmit={handleAddRelease} className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Version Tag <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. v2.6.0"
-                    value={newVersion}
-                    onChange={e => setNewVersion(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Badge Label
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Operations, Security, Policy"
-                    value={newBadge}
-                    onChange={e => setNewBadge(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Release Title <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Role-Based Access Control and Department Management Polish"
-                  value={newTitle}
-                  onChange={e => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Summary Blurb <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Summarize the core impact and scope of changes..."
-                  value={newSummary}
-                  onChange={e => setNewSummary(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Highlights & Bullets (one item per line)
-                </label>
-                <textarea
-                  rows={4}
-                  placeholder="Item 1&#10;Item 2&#10;Item 3"
-                  value={newHighlights}
-                  onChange={e => setNewHighlights(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAddNoteModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md transition-all active:scale-95"
-                >
-                  Save Release Note
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );

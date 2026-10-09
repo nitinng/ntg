@@ -4,6 +4,7 @@ import { PageBanner } from './PageBanner';
 import { PolicyConfig, Priority, User } from '../types';
 import Card from './Card';
 import { toast } from 'sonner';
+import { APP_VERSION } from '../utils/changelog';
 
 interface SettingsViewProps {
   isDarkMode: boolean;
@@ -466,7 +467,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </Card>
 
       <div className="text-center text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">
-        Navgurukul Travel Desk &bull; v2.5.0
+        Navgurukul Travel Desk &bull; {APP_VERSION}
       </div>
     </div>
   );

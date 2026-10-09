@@ -7,6 +7,8 @@ import { checkPolicyViolation } from '../utils/policyUtils';
 import CancellationModal from './CancellationModal';
 import { SignedLink } from './SignedMedia';
 import { assignRequestTo, canClaim, ownerLabel } from '../utils/assignment';
+import { isClosedStatus, employeeStatusLabel, STATUS_GUIDE } from '../utils/statusGuide';
+import EmployeeStatusTimeline from './EmployeeStatusTimeline';
 
 interface RequestDetailOverlayProps {
   request: TravelRequest;
@@ -1008,11 +1010,27 @@ export const RequestDetailOverlay = ({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
-                <StatusBadge type="pnc" value={request.pncStatus} />
-                <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
-              </div>
+              {isClosedStatus(request.pncStatus) ? (
+                // A finished request should say so plainly. Travellers were
+                // left guessing whether a Closed request still needed something
+                // from them.
+                <div className="w-full p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 text-center">
+                  <p className="text-sm font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
+                    <i className="fa-solid fa-circle-check mr-2"></i>
+                    {employeeStatusLabel(request.pncStatus)} — nothing more to do
+                  </p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1.5">
+                    {STATUS_GUIDE[request.pncStatus]?.employeeAction
+                      ?? 'This request is finished and no further action is needed.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
+                  <StatusBadge type="pnc" value={request.pncStatus} audience="employee" />
+                  <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
+                </div>
+              )}
               {request.cancelledReason && (
                 <p className="text-xs text-rose-500 dark:text-rose-400 font-bold mt-1 text-center bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/30">
                   Reason: {request.cancelledReason}
@@ -1023,6 +1041,11 @@ export const RequestDetailOverlay = ({
                   Rejection Reason: {request.statusChangeReason}
                 </p>
               )}
+
+              <div className="w-full mt-5 pt-5 border-t border-slate-200 dark:border-slate-800">
+                <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Progress</p>
+                <EmployeeStatusTimeline ticketId={request.id} />
+              </div>
             </div>
           )}
         </div>

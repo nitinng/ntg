@@ -331,7 +331,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
                         <span className={`text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${theme.badge}`}>Boarding Pass</span>
                         {isMeetup && <span className="text-2xs font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"><i className="fa-solid fa-star mr-1"></i> Meetup</span>}
                       </div>
-                      <StatusBadge type="pnc" value={r.pncStatus} />
+                      <StatusBadge type="pnc" value={r.pncStatus} audience="employee" />
                     </div>
 
                     <div className="flex items-center justify-between mb-6 relative z-10">
@@ -484,7 +484,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
                       </td>
                       <td className="px-4 md:px-6 py-2.5 md:py-3 flex items-center justify-between md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50">
                         <span className="md:hidden text-xs text-slate-400 font-bold uppercase tracking-widest">STATUS</span>
-                        <StatusBadge type="pnc" value={r.pncStatus} />
+                        <StatusBadge type="pnc" value={r.pncStatus} audience="employee" />
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-3.5 block md:table-cell border-t md:border-0 border-slate-100 dark:border-slate-800/50 md:text-right">
                         <button onClick={() => onView(r)} className={`w-full md:w-8 h-8 ${isMeetup ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-600'} rounded-lg transition-all shadow-sm hover:shadow active:scale-95 border border-slate-200 dark:border-slate-700 hover:border-transparent flex items-center justify-center md:ml-auto group/btn`}>

@@ -253,7 +253,15 @@ export const deriveEventFromTransition = (
       return E.RETROACTIVE_BOOKING_RECORDED;
 
     case S.CLOSED:
-      return E.TRIP_COMPLETED;
+      // Closed is reachable from six stages, and five of them are cancellation
+      // or reconciliation tails (Cancelled by System / Employee / PNC,
+      // Reconciled, Booked / Partially Cancelled). Only a booked trip actually
+      // happened, so only a booked trip gets "hope it went well, submit your
+      // expenses" -- the rest close silently rather than prompting a traveller
+      // for the expenses of a journey they never took.
+      return fromStatus === S.BOOKED || fromStatus === S.PARTIALLY_CANCELLED
+        ? E.TRIP_COMPLETED
+        : null;
 
     default:
       return null;
@@ -557,7 +565,11 @@ export const AUDIENCES_FOR_EVENT: Partial<Record<TravelEvent, EmailAudience[]>> 
   [E.REFUND_DISPUTED]: ['finance'],
   [E.REFUND_RECONCILIATION_COMPLETED]: ['employee'],
   [E.NO_REFUND_REQUIRED]: ['employee'],
-  [E.RETROACTIVE_BOOKING_RECORDED]: ['employee']
+  [E.RETROACTIVE_BOOKING_RECORDED]: ['employee'],
+  // Closure of a trip that actually happened. Gated on the transition rather
+  // than on who triggered it, so it fires whether PNC closes the request or a
+  // future automatic close does.
+  [E.TRIP_COMPLETED]: ['employee']
 };
 
 /**
@@ -595,7 +607,6 @@ export const SILENT_EVENTS: TravelEvent[] = [
   E.CANCELLATION_CLOSED_PRE_BOOKING,
   E.SEGMENT_REFUND_PENDING,
   E.TRAVEL_DATE_REACHED,
-  E.TRIP_COMPLETED,
   E.BOOKING_DOCUMENT_UPDATED
 ];
 

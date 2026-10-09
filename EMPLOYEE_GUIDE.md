@@ -14,6 +14,7 @@ Whether you are requesting travel for a team visit, manager meetup, or the Igatp
 5. [Responding to Info Requests (On Hold)](#5-responding-to-info-requests-on-hold)
 6. [Cancellations & Reconciliation](#6-cancellations--reconciliation)
 7. [PNC Support Chat (Beta)](#7-pnc-support-chat-beta)
+8. [What Does This Status Mean?](#8-what-does-this-status-mean)
 
 ---
 
@@ -108,6 +109,10 @@ Once submitted, your travel request moves through several stages. You can track 
 | **Cancelled by Employee** | Ticket cancellation processed. | Reconcile any costs if determined as employee-owned. |
 | **Closed** | Travel date passed and financial reconciliation is complete. | Done. |
 
+> This covers the common path. For every status a request can reach — including
+> the cancellation and refund stages — see
+> [What Does This Status Mean?](#8-what-does-this-status-mean).
+
 ---
 
 ## 4. Handling Rejections & Resubmissions
@@ -189,3 +194,74 @@ Have general travel questions or need to discuss your booking directly with the 
 ---
 
 *Thank you for helping us keep Navgurukul travel efficient and organized. Have a safe journey!* ✈️
+
+---
+
+## 8. What Does This Status Mean?
+
+<!-- STATUS-GUIDE:START -->
+
+Every status a request can be in, grouped by where it sits in the journey. Most trips only pass through four or five of these.
+
+> **"Action Required" is not a separate status.** It is what we call **On Hold** when you look at it — the travel desk has asked you something and your booking is paused until you reply. If you see it, the request is waiting on you and nobody else.
+
+### Submitted
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Submitted**<br/><sub>(internally "Not Started")</sub> | Your request has been received and is being checked against travel policy. | The system, automatically. | If your request meets the advance-notice policy it goes straight to the travel desk. If not, it goes to your manager for approval. | No. |
+
+### Approval
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Waiting for Manager Approval**<br/><sub>(internally "Approval Pending")</sub> | Your request needs your manager to approve it, usually because it was raised at shorter notice than policy allows. | Your manager. | Once they approve, it goes to the travel desk to book. If they reject it, you can edit and resubmit. | Nothing, though a nudge to your manager can help if it is urgent. |
+| **Approved** | Your manager has approved the request. | The travel desk. | It moves to the desk immediately to be booked. | No. |
+| **Rejected by Manager** | Your manager did not approve this request. Their reason is on the request. | You. | Nothing until you act. Editing and resubmitting sends it back for a fresh look. | Yes — read the reason, then edit and resubmit, or leave it if the trip is off. |
+
+### With the desk
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Being Booked**<br/><sub>(internally "Processing")</sub> | The travel desk has your request and is finding and booking tickets. | The travel desk. | You get your ticket by email once it is booked. If they need something from you first, the request moves to Action Required. | No. |
+| **Action Required**<br/><sub>(internally "On Hold")</sub> | The travel desk needs information from you before they can book — a date confirmation, an ID detail, a preference. | You. | Booking is paused until you reply. You will be reminded, and if nobody replies for long enough the request is escalated and eventually closed. | Yes — open the request and answer the question. This is the one status that genuinely waits on you. |
+| **Action Required — Escalated**<br/><sub>(internally "On Hold / Escalated")</sub> | The desk's question has gone unanswered long enough that it has been escalated. | You, with the escalation owner now watching. | Booking is still paused. Without a reply the request will be closed automatically. | Yes — answer the outstanding question now, or cancel the request if the trip is off. |
+| **Rejected by Travel Desk**<br/><sub>(internally "Rejected by PNC")</sub> | The travel desk could not proceed with this request. Their reason is on the request. | You. | Nothing until you act. Editing and resubmitting sends it back to the desk. | Yes — read the reason, then edit and resubmit if you still need to travel. |
+
+### Booked
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Booked** | Your tickets are booked. The booking details and your ticket are on the request. | You — travel. | After the trip the request is closed, and you will be asked to submit any expenses. | Yes — download your ticket and check the details are right. Tell the desk straight away if anything is wrong. |
+
+### Cancellation
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Cancellation Requested** | You or the desk have asked for this trip to be cancelled, and the desk is working through it. | The travel desk. | The desk cancels with the airline or operator and works out whether any money comes back. | No. |
+| **Cancelled by You**<br/><sub>(internally "Cancelled by Employee")</sub> | This trip was cancelled at your request. | The travel desk, if there is money to recover. | If a refund is due the request moves to Pending Refund. If nothing is recoverable it is reconciled and closed. | Possibly — if a cancellation charge falls to you, Finance will contact you. Nothing to do until they do. |
+| **Cancelled by Travel Desk**<br/><sub>(internally "Cancelled by PNC")</sub> | The travel desk cancelled this booking. The reason is on the request. | The travel desk. | Any refund is pursued and the request is closed. A desk cancellation carries no cost to you. | Yes, if you still need to travel — raise a fresh request. |
+| **Closed — No Response**<br/><sub>(internally "Cancelled by System")</sub> | The desk asked for information and heard nothing back in time, so the request was closed automatically. | You, if you still need the trip. | This request stays closed. | Yes, if you still need to travel — raise a fresh request. |
+| **Partly Cancelled**<br/><sub>(internally "Booked / Partially Cancelled")</sub> | Part of this trip has been cancelled — one leg of a return, say — and the rest is still booked. | The travel desk. | The desk recovers what it can on the cancelled part. Your remaining tickets are unaffected. | Yes — check which legs are still booked and travel on those as planned. |
+
+### Refund
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Refund in Progress**<br/><sub>(internally "Pending Refund")</sub> | The booking is cancelled and the desk is chasing the refund with the airline or operator. | The travel desk and the vendor. | Refunds usually take 7–10 working days. You will be emailed when it settles. | No — you do not need to chase this. Finance will contact you separately if any part is yours to settle. |
+| **Partly Refunded**<br/><sub>(internally "Partially Refunded")</sub> | Some of the fare has come back. The rest is either still being chased or was not recoverable. | The travel desk. | The desk pursues the balance, then closes the request. | No. |
+| **Fully Refunded** | The whole refundable amount has been recovered. | The travel desk. | The request is reconciled and closed. | No. |
+| **No Refund Possible**<br/><sub>(internally "Written Off")</sub> | Nothing could be recovered on this booking, so the cost has been written off. | The travel desk. | The request is reconciled and closed. | Possibly — if any share falls to you, Finance will have been in touch. Otherwise nothing. |
+| **Refund Disputed**<br/><sub>(internally "Disputed")</sub> | The desk disagrees with the vendor about what should come back, and Finance is involved. | Finance and the travel desk. | Once settled, the request is reconciled and closed. | No. |
+| **Settled**<br/><sub>(internally "Reconciled")</sub> | The money side of this trip is finished and the books agree. | Nobody. | The request is closed. | No. |
+
+### Closed
+
+| Status | What it means | Who acts next | What happens next | Do you need to do anything? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Closed** | This request is finished. Nothing further will happen on it. | Nobody. | Nothing. The request stays here as a record. | Only if you paid for something yourself on this trip — submit those expenses. |
+| **Closed — Self-Booked**<br/><sub>(internally "Closed / Recorded - (self-booked)")</sub> | You booked this trip yourself and it has been recorded here afterwards for the records. | Nobody. | Nothing. The request stays here as a record. | Only if you are claiming the cost back — submit those expenses. |
+
+_22 statuses in total. This table is generated from `utils/statusGuide.ts` — run `node scripts/generate-status-guide-doc.mjs` after changing it._
+
+<!-- STATUS-GUIDE:END -->

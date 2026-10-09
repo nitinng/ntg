@@ -44,6 +44,9 @@ const templates = [
   template(TravelEvent.INFO_REQUEST_ESCALATED, 'escalation_owner', { cc_rule: 'manager' }),
   template(TravelEvent.REFUND_DISPUTED, 'finance', { cc_rule: 'default' }),
   template(TravelEvent.INFO_PROVIDED, 'pnc', { cc_rule: 'default' }),
+  template(TravelEvent.TRIP_COMPLETED, 'employee', {
+    subject: 'Your Trip is Complete - {{submissionId}}'
+  }),
 
   // The desk is told when work reaches its queue, with a priority variant.
   template(TravelEvent.POLICY_EVALUATION_PASSED, 'employee', {
@@ -512,6 +515,65 @@ describe('per-audience silence', () => {
 
   it('no longer treats the approval handover as wholly silent', () => {
     expect(SILENT_EVENTS).not.toContain(TravelEvent.APPROVAL_COMPLETED);
+  });
+});
+
+describe('closing a request', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOptions.templates = templates;
+    mockOptions.statusHistory = [];
+    invalidateRoutingConfigCache();
+  });
+
+  it('thanks the traveller when a booked trip closes', async () => {
+    const event = deriveEventFromTransition(PNCStatus.BOOKED, PNCStatus.CLOSED);
+    expect(event).toBe(TravelEvent.TRIP_COMPLETED);
+
+    await queueEmailsForEvent(createMockRequest(), event!, {
+      fromStatus: PNCStatus.BOOKED,
+      toStatus: PNCStatus.CLOSED
+    });
+
+    const row = lastInsert();
+    expect(row.audience).toBe('employee');
+    expect(row.subject).toContain('Trip is Complete');
+  });
+
+  it('also fires for a partly cancelled trip, which still happened', () => {
+    expect(deriveEventFromTransition(PNCStatus.PARTIALLY_CANCELLED, PNCStatus.CLOSED))
+      .toBe(TravelEvent.TRIP_COMPLETED);
+  });
+
+  // The whole point of the gate: five of the six routes into Closed are
+  // cancellation tails, and asking for the expenses of a trip that never
+  // happened is worse than the silence this replaced.
+  it.each([
+    ['a desk cancellation', PNCStatus.CANCELLED_BY_PNC],
+    ['an employee cancellation', PNCStatus.CANCELLED_BY_EMPLOYEE],
+    ['an SLA closure', PNCStatus.CANCELLED_BY_SYSTEM],
+    ['a settled refund', PNCStatus.RECONCILED]
+  ])('stays silent when Closed follows %s', (_label, from) => {
+    expect(deriveEventFromTransition(from as PNCStatus, PNCStatus.CLOSED)).toBeNull();
+  });
+
+  it('queues nothing at all on a cancellation close', async () => {
+    const event = deriveEventFromTransition(PNCStatus.CANCELLED_BY_PNC, PNCStatus.CLOSED);
+    expect(event).toBeNull();
+    expect(mocks.insertMock).not.toHaveBeenCalled();
+  });
+
+  it('fires regardless of who triggered the close', async () => {
+    // The automatic-vs-manual question is still open; nothing here depends on
+    // its answer because the mail is raised by the transition.
+    const first = deriveEventFromTransition(PNCStatus.BOOKED, PNCStatus.CLOSED);
+    const second = deriveEventFromTransition(PNCStatus.BOOKED, PNCStatus.CLOSED);
+    expect(first).toBe(second);
+    expect(first).toBe(TravelEvent.TRIP_COMPLETED);
+  });
+
+  it('no longer counts trip completion as deliberate silence', () => {
+    expect(SILENT_EVENTS).not.toContain(TravelEvent.TRIP_COMPLETED);
   });
 });
 

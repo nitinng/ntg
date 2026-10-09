@@ -668,10 +668,92 @@ class EdgeAppsScriptProvider implements EmailProvider {
   }
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+// ---------------------------------------------------------------------------
+// CORS
+// ---------------------------------------------------------------------------
+// This used to be Access-Control-Allow-Origin: '*', which let any website on the
+// internet call this function from a visitor's browser. Echo back only origins
+// we recognise. ALLOWED_ORIGINS is a comma-separated list; it falls back to the
+// deployed portal so a missing variable fails closed rather than open.
+const DEFAULT_ALLOWED_ORIGINS = ['https://ng-travel-desk.vercel.app'];
+
+const allowedOrigins = (): string[] => {
+  // @ts-ignore: Deno.env
+  const configured = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',')
+    .map((o: string) => o.trim())
+    .filter(Boolean);
+  return configured.length > 0 ? configured : DEFAULT_ALLOWED_ORIGINS;
+};
+
+const buildCorsHeaders = (req: Request): Record<string, string> => {
+  const origin = req.headers.get('origin') || '';
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-worker-secret',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    'Vary': 'Origin'
+  };
+  if (origin && allowedOrigins().includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
+};
+
+// ---------------------------------------------------------------------------
+// Authorization
+// ---------------------------------------------------------------------------
+// This function runs with the service role key, so until now anyone who could
+// reach the URL acted with full database privileges. Supabase's default
+// verify_jwt is not a gate here: the anon key is itself a valid JWT and is
+// published in the client bundle, so "has a JWT" means "has read our
+// JavaScript". Resolve a real end user instead, and separately recognise a
+// machine caller holding a shared secret.
+const STAFF_ROLES = ['Admin', 'PNC', 'PNC Admin', 'Finance'];
+
+export interface CallerIdentity {
+  /** A machine caller presenting QUEUE_WORKER_SECRET: cron jobs, provider webhooks. */
+  viaSecret: boolean;
+  /** The signed-in user, when the request carried a user access token. */
+  userId: string | null;
+  role: string | null;
+  /** May supply provider credentials, ping providers, and receive webhooks. */
+  isPrivileged: boolean;
+}
+
+const identifyCaller = async (req: Request, supabase: any): Promise<CallerIdentity> => {
+  // @ts-ignore: Deno.env
+  const workerSecret = Deno.env.get('QUEUE_WORKER_SECRET') || '';
+  const presented = req.headers.get('x-worker-secret') || '';
+  if (workerSecret && presented && presented === workerSecret) {
+    return { viaSecret: true, userId: null, role: null, isPrivileged: true };
+  }
+
+  const authHeader = req.headers.get('Authorization') || '';
+  const token = authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7).trim()
+    : '';
+  if (!token) return { viaSecret: false, userId: null, role: null, isPrivileged: false };
+
+  // getUser() resolves a user access token. An anon or service key is a valid
+  // JWT but carries no user, so this returns null for both -- which is exactly
+  // the distinction we need.
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) {
+    return { viaSecret: false, userId: null, role: null, isPrivileged: false };
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .maybeSingle();
+
+  const role = profile?.role ?? null;
+  return {
+    viaSecret: false,
+    userId: data.user.id,
+    role,
+    isPrivileged: !!role && STAFF_ROLES.includes(role)
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -750,6 +832,8 @@ const istDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 0);
 const istNextDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 1);
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = buildCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -770,6 +854,26 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const url = new URL(req.url);
     const reqBody = await req.json().catch(() => ({}));
+
+    // -------------------------------------------------------------------------
+    // Authorization gate
+    // -------------------------------------------------------------------------
+    // Draining the queue is open to any signed-in user: an employee's own
+    // lifecycle mail is queued from their browser and triggerWorker() nudges
+    // this function straight afterwards, so requiring staff here would leave
+    // their mail sitting unsent. The queue's contents are constrained
+    // separately, by the recipient guard on email_queue.
+    //
+    // Everything else -- supplying provider credentials, pinging a provider,
+    // accepting delivery webhooks -- is privileged and checked below.
+    const caller = await identifyCaller(req, supabase);
+
+    if (!caller.viaSecret && !caller.userId) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'This endpoint requires a signed-in user or a worker secret.'
+      }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // Load active provider and settings dynamically from email_routing_settings
     let activeProviderType = 'smtp';
@@ -809,8 +913,21 @@ Deno.serve(async (req: Request) => {
       console.warn('Could not query dynamic email routing settings:', err);
     }
 
-    // Override from request if explicitly testing a specific provider
-    const rawReqProvider = reqBody?.provider || url.searchParams.get('provider') || activeProviderType;
+    // Override from request if explicitly testing a specific provider.
+    //
+    // Both of these are privileged. An unprivileged caller supplying
+    // providerConfig could point outbound mail at an SMTP server they control
+    // and receive the full contents of the pending queue -- traveller names,
+    // itineraries, emergency contacts -- and could reach arbitrary hosts and
+    // ports from Supabase's network. Ignore anything they send and fall back to
+    // the stored configuration.
+    const requestedOverride = caller.isPrivileged
+      ? (reqBody?.provider || url.searchParams.get('provider'))
+      : null;
+    const requestProviderConfig = caller.isPrivileged ? reqBody?.providerConfig : undefined;
+    const requestSmtpSlot = caller.isPrivileged ? reqBody?.activeSmtpSlot : undefined;
+
+    const rawReqProvider = requestedOverride || activeProviderType;
     const requestedProvider = String(rawReqProvider).replace(/['"]/g, '').trim().toLowerCase();
 
     // Build Provider Instance
@@ -822,7 +939,7 @@ Deno.serve(async (req: Request) => {
         // slotOverride wins so the queue worker can address a specific account
         // (for per-email failover) regardless of which one is currently active.
         const slot: SmtpSlotName = slotOverride
-          || ((reqBody?.activeSmtpSlot || activeSmtpSlot) === 'smtp2' ? 'smtp2' : 'smtp');
+          || ((requestSmtpSlot || activeSmtpSlot) === 'smtp2' ? 'smtp2' : 'smtp');
         cfg = customConfig?.[slot] || (customConfig?.username ? customConfig : undefined) || providerConfig?.[slot] || providerConfig?.smtp || {};
       } else if (cleanType === 'smtp2') {
         cfg = customConfig?.smtp2 || (customConfig?.username ? customConfig : undefined) || providerConfig?.smtp2 || {};
@@ -927,12 +1044,20 @@ Deno.serve(async (req: Request) => {
       };
     };
 
-    let provider = buildProvider(requestedProvider, reqBody?.providerConfig);
+    let provider = buildProvider(requestedProvider, requestProviderConfig);
 
     // -------------------------------------------------------------------------
     // A. Health / Ping Connection Test Endpoint
     // -------------------------------------------------------------------------
     if (url.searchParams.get('ping') === 'true' || reqBody?.action === 'ping' || url.searchParams.get('testToken') === 'true') {
+      // Connection tests dial an arbitrary host and port and report the result,
+      // which is a server-side request forgery primitive in the wrong hands.
+      if (!caller.isPrivileged) {
+        return new Response(JSON.stringify({
+          error: 'Forbidden',
+          message: 'Connection tests are restricted to Admin, PNC and Finance.'
+        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       if (typeof provider.testConnection === 'function') {
         const pingResult = await provider.testConnection();
         return new Response(JSON.stringify({
@@ -954,6 +1079,18 @@ Deno.serve(async (req: Request) => {
     // B. Delivery Status Webhook Endpoint (Idempotent)
     // -------------------------------------------------------------------------
     if (url.pathname.endsWith('/webhook') || reqBody?.action === 'webhook') {
+      // Delivery notifications rewrite queue rows by provider_message_id and
+      // carry no proof of origin, so anyone able to reach this branch could mark
+      // mail Delivered, Bounced or Failed at will. Require the shared secret
+      // that the provider's webhook is configured with. If QUEUE_WORKER_SECRET
+      // is unset the branch is closed entirely rather than left open.
+      if (!caller.viaSecret) {
+        return new Response(JSON.stringify({
+          error: 'Forbidden',
+          message: 'Delivery webhooks must present the worker secret.'
+        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       const { messageId, eventType, timestamp, details } = reqBody;
       if (messageId) {
         let newStatus: string | null = null;

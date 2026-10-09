@@ -56,23 +56,25 @@ export interface ProviderHealthStatus {
   quotaDaily: number;
 }
 
-const EDGE_FUNCTION_URL = 'https://bzjzgykbfqfbbqibxexw.supabase.co/functions/v1/process-email-queue';
-
 /**
  * Triggers the background worker to drain pending items in email_queue immediately.
+ *
+ * This used to be a bare fetch() to a hardcoded project URL with no
+ * Authorization header, which only worked because the edge function accepted
+ * anonymous callers. It now requires a signed-in user, so go through
+ * supabase.functions.invoke(), which attaches the session's access token.
  */
 export const triggerEmailWorker = async (options: { provider?: string; testToken?: boolean } = {}): Promise<any> => {
   try {
-    const url = new URL(EDGE_FUNCTION_URL);
-    if (options.provider) url.searchParams.set('provider', options.provider);
-    if (options.testToken) url.searchParams.set('testToken', 'true');
-
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+    const { data, error } = await supabase.functions.invoke('process-email-queue', {
+      body: {
+        ...(options.provider ? { provider: options.provider } : {}),
+        ...(options.testToken ? { action: 'ping' } : {})
+      }
     });
 
-    return await response.json().catch(() => ({}));
+    if (error) throw error;
+    return data ?? {};
   } catch (err: any) {
     console.warn('Worker invocation notice:', err.message);
     return { success: false, error: err.message };
@@ -87,18 +89,16 @@ export const pingProviderConnection = async (
   customConfig?: any
 ): Promise<{ ok: boolean; latencyMs: number; message: string; provider: string }> => {
   try {
-    const response = await fetch(`${EDGE_FUNCTION_URL}?ping=true${provider ? `&provider=${provider}` : ''}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'ping',
-        provider,
-        providerConfig: customConfig
-      })
-    });
+    // Connection tests are restricted to Admin/PNC/Finance by the edge function,
+    // and invoke() attaches the caller's access token so it can tell who this is.
+    const { data: invokeData, error: invokeError } = await supabase.functions.invoke(
+      'process-email-queue',
+      { body: { action: 'ping', provider, providerConfig: customConfig } }
+    );
+    if (invokeError) throw invokeError;
 
-    const data = await response.json().catch(() => ({}));
-    if (response.ok && data.success) {
+    const data = invokeData ?? {};
+    if (data.success) {
       return {
         ok: true,
         latencyMs: data.latencyMs || 0,
@@ -110,7 +110,7 @@ export const pingProviderConnection = async (
     return {
       ok: false,
       latencyMs: data.latencyMs || 0,
-      message: data.message || data.error || `Provider connection test failed (HTTP ${response.status})`,
+      message: data.message || data.error || 'Provider connection test failed',
       provider: data.provider || provider || 'unknown'
     };
   } catch (err: any) {

@@ -96,6 +96,24 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
   const insertMock = vi.fn().mockResolvedValue({ error: options.insertError ?? null });
   const invokeMock = vi.fn().mockResolvedValue({ data: null, error: null });
 
+  /**
+   * RPCs the trigger layer calls.
+   *
+   * get_my_last_rejection_status replaced a direct read of
+   * ticket_status_history, which is staff-only now, so the resubmission context
+   * is derived through a SECURITY DEFINER function. It is answered from the same
+   * `statusHistory` fixture the old table read used, so suites set up one way.
+   */
+  const rpcMock = vi.fn((name: string, _args?: Record<string, unknown>) => {
+    if (name === 'get_my_last_rejection_status') {
+      const rejections = statusHistory().filter(row =>
+        ['Rejected by Manager', 'Rejected by PNC'].includes(row.to_status)
+      );
+      return Promise.resolve({ data: rejections[0]?.to_status ?? null, error: null });
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
+
   const from = vi.fn((table: string) => {
     if (table === 'mail_templates') {
       // .select(...).eq('event', e).eq('audience', a)  -> awaited
@@ -172,9 +190,10 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
   });
 
   return {
-    supabase: { from, functions: { invoke: invokeMock } },
+    supabase: { from, rpc: rpcMock, functions: { invoke: invokeMock } },
     insertMock,
     invokeMock,
+    rpcMock,
     from,
     profilesRoleFilters
   };

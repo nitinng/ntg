@@ -305,15 +305,15 @@ const deriveResubmissionContext = async (
   if (!request.resubmissionCount) return undefined;
 
   try {
-    const { data } = await supabase
-      .from('ticket_status_history')
-      .select('to_status, created_at')
-      .eq('ticket_id', request.id)
-      .in('to_status', [S.REJECTED_BY_MANAGER, S.REJECTED_BY_PNC])
-      .order('created_at', { ascending: false })
-      .limit(1);
+    // Through an RPC rather than the table: ticket_status_history is staff-only
+    // (20261009150000), because its `reason` column carries the desk's internal
+    // notes. This call runs in the employee's browser, so a direct read would
+    // return nothing and silently give every resubmission first-submission copy.
+    const { data } = await supabase.rpc('get_my_last_rejection_status', {
+      p_ticket_id: request.id
+    });
 
-    const last = data?.[0]?.to_status;
+    const last = typeof data === 'string' ? data : data?.[0]?.to_status;
     if (last === S.REJECTED_BY_MANAGER) return 'resubmit_after_manager_rejection';
     if (last === S.REJECTED_BY_PNC) return 'resubmit_after_pnc_rejection';
   } catch (err) {

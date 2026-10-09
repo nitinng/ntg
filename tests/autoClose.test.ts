@@ -88,17 +88,17 @@ describe('the sweep is scheduled overnight in IST, not UTC', () => {
     return match[1];
   };
 
-  it('runs at 02:00 IST', () => {
-    // pg_cron runs on the server clock, which is UTC on Supabase. '0 2 * * *'
-    // would be 07:30 IST -- the start of the working morning, when a batch of
-    // closure mail is least welcome. 20:30 UTC the night before is 02:00 IST.
+  it('runs at 03:00 IST', () => {
+    // pg_cron runs on the server clock, which is UTC on Supabase. '0 3 * * *'
+    // would be 08:30 IST -- well into the working morning, when a batch of
+    // closure mail is least welcome. 21:30 UTC the night before is 03:00 IST.
     const [minute, hour] = cronExpression().split(' ');
 
     const utcHour = Number(hour);
     const utcMinute = Number(minute);
     const istTotalMinutes = (utcHour * 60 + utcMinute + 5 * 60 + 30) % (24 * 60);
 
-    expect(istTotalMinutes).toBe(2 * 60);
+    expect(istTotalMinutes).toBe(3 * 60);
   });
 
   it('is a daily schedule', () => {

@@ -27,7 +27,7 @@ export const IgathpuriMeetupView: React.FC<IgathpuriMeetupViewProps> = ({
   requests,
   onView
 }) => {
-  if (currentUser?.role === UserRole.PNC) {
+  if (currentUser?.role === UserRole.PNC || currentUser?.role === UserRole.PNC_ADMIN) {
     const pending = availabilityRequests.filter(r => r.status === 'Pending');
     const approved = availabilityRequests.filter(r => r.status === 'Approved');
     const rejected = availabilityRequests.filter(r => r.status === 'Rejected');

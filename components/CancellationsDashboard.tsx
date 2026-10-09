@@ -5,6 +5,13 @@ import Card from './Card';
 import PageBanner from './PageBanner';
 import { toast } from 'sonner';
 import { calculateCancellationSplit, applyRefundToAdvance } from '../utils/cancellation';
+import {
+  SETTLEMENT_OPTIONS,
+  settlementStatusToPncStatus,
+  planSettlementTransition
+} from '../utils/settlement';
+import { queueEmailsForTransition } from '../utils/emailQueueUtils';
+import { mapDbRequest } from '../services/requestMapper';
 
 interface CancellationsDashboardProps {
   currentUser: User | null;
@@ -46,6 +53,77 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
     setLoading(false);
   };
 
+  /**
+   * Walks the linked ticket to the settled stage, raising the normal mail for
+   * each hop.
+   *
+   * Deliberately goes through queueEmailsForTransition rather than writing
+   * pnc_status directly: that is the path the rest of the app uses, and writing
+   * the column straight here is exactly how the refund mails went missing.
+   *
+   * Returns a message when the ticket could not be moved. A settlement is a
+   * financial record and must not be rolled back because a notification failed,
+   * so the record keeps its update either way and the caller surfaces this.
+   */
+  const moveTicketToSettlement = async (vendorRefund: number): Promise<string | null> => {
+    const targetStatus = settlementStatusToPncStatus(settleStatus);
+    if (!targetStatus) return `Unrecognised settlement status "${settleStatus}"; the ticket was left unchanged.`;
+
+    const ticketId = settlingRecord.travel_request_id;
+    if (!ticketId) return 'This cancellation is not linked to a request, so no ticket was updated.';
+
+    const { data: row, error: loadError } = await supabase
+      .from('travel_requests')
+      .select('*')
+      .eq('id', ticketId)
+      .single();
+
+    if (loadError || !row) {
+      return 'Could not load the linked request, so its status was not updated.';
+    }
+
+    let request = mapDbRequest(row);
+    const plan = planSettlementTransition(request.pncStatus, targetStatus, {
+      vendorRefund,
+      originalFare: Number(settlingRecord.original_fare) || 0
+    });
+
+    if (plan.blockedReason) return plan.blockedReason;
+    if (plan.path.length === 0) return null; // already there
+
+    for (const nextStatus of plan.path) {
+      const fromStatus = request.pncStatus;
+      const timeline = [
+        ...(request.timeline || []),
+        {
+          id: `${Date.now()}-${nextStatus}`,
+          timestamp: new Date().toISOString(),
+          actor: currentUser?.name || 'PNC',
+          event: `Status changed to: ${nextStatus}`,
+          details: notes || `Cancellation settled as ${settleStatus}.`
+        }
+      ];
+
+      const { error: moveError } = await supabase
+        .from('travel_requests')
+        .update({
+          pnc_status: nextStatus,
+          status_change_reason: `Cancellation settled as ${settleStatus}`,
+          timeline
+        })
+        .eq('id', ticketId);
+
+      if (moveError) {
+        return `The settlement was saved, but the request could not be moved to "${nextStatus}": ${moveError.message}`;
+      }
+
+      request = { ...request, pncStatus: nextStatus, timeline };
+      await queueEmailsForTransition(request, fromStatus, nextStatus);
+    }
+
+    return null;
+  };
+
   const handleSettle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settlingRecord) return;
@@ -84,7 +162,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
         if (refundError) throw refundError;
       }
 
-      // 4. Apply refund to advance
+      // 4. Apply refund to advance (unchanged)
       const advId = settlingRecord.advance_id || settlingRecord.travel_requests?.advance_id;
       if (advId && totalRecovered > 0) {
         await applyRefundToAdvance(
@@ -96,7 +174,16 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
         );
       }
 
+      // 5. Move the linked ticket to match.
+      //
+      // Settling previously wrote cancellation_records.status alone, so the
+      // ticket never left its stage. Because the mail pipeline keys on ticket
+      // transitions, that made the Fully Refunded / Partially Refunded /
+      // Written Off mails unreachable no matter how a record was settled.
+      const settlementNotice = await moveTicketToSettlement(vRefund);
+
       toast.success('Cancellation settled successfully!');
+      if (settlementNotice) toast.warning(settlementNotice);
       setSettlingRecord(null);
       setVendorRefund('');
       setEmployeePayment('');
@@ -312,10 +399,9 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
                     value={settleStatus}
                     onChange={e => setSettleStatus(e.target.value)}
                   >
-                    <option value="Reconciled">Reconciled (Settled)</option>
-                    <option value="Fully Refunded">Fully Refunded</option>
-                    <option value="Written Off">Written Off</option>
-                    <option value="Pending Refund">Pending Refund (Keep Active)</option>
+                    {SETTLEMENT_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </div>
 

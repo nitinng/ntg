@@ -12,6 +12,14 @@ export interface EmailMessage {
   replyTo?: string;
   idempotencyKey?: string;
   headers?: Record<string, string>;
+  attachments?: EmailAttachment[];
+}
+
+/** A file sent with the mail. `content` is base64, without a data: prefix. */
+export interface EmailAttachment {
+  filename: string;
+  content: string;
+  contentType: string;
 }
 
 /**

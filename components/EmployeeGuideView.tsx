@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MermaidDiagram } from './MermaidDiagram';
 import { PNCStatus, Priority, ApprovalStatus, VerificationStatus, TravelModePolicy, TravelMode } from '../types';
+import { STATUS_GUIDE, STATUS_STAGES, statusesInStage } from '../utils/statusGuide';
 
 interface EmployeeGuideViewProps {
   onTabChange?: (tab: string) => void;
@@ -21,6 +22,7 @@ const sections: Section[] = [
   { id: 'dashboard', label: 'Your Dashboard', icon: 'fa-gauge-high', sub: "Navigating your home screen widgets, metrics, and active trips." },
   { id: 'submit', label: 'Submit a Request', icon: 'fa-ticket', sub: "Step-by-step walk-through of the travel booking form." },
   { id: 'lifecycle', label: 'Request Lifecycle', icon: 'fa-diagram-project', sub: "Understanding the 12 request states and booking flows." },
+  { id: 'statuses', label: 'What does this status mean?', icon: 'fa-list-check', sub: "Every status your request can be in, what it means, and whether you need to do anything." },
   { id: 'detail', label: 'Request Detail View', icon: 'fa-layer-group', sub: "Reading your single source of truth for travel details and timeline." },
   { id: 'onhold', label: 'On Hold Responses', icon: 'fa-circle-question', sub: "How to respond to PNC information requests directly." },
   { id: 'rejections', label: 'Edit & Resubmit', icon: 'fa-pen-to-square', sub: "Correcting rejected requests and handling resubmission caps." },
@@ -433,6 +435,75 @@ export const EmployeeGuideView: React.FC<EmployeeGuideViewProps> = ({ onTabChang
             </p>
           </div>
         );
+
+      case 'statuses': {
+        return (
+          <div className="space-y-6">
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
+              Every status your request can be in, grouped by where it sits in the journey. Most trips only pass through four or five of these.
+            </p>
+
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-4 rounded-xl">
+              <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-200 leading-relaxed">
+                <strong className="font-bold">"Action Required" is not a separate status.</strong> It is what we call
+                <strong className="font-bold"> On Hold</strong> when you look at it — the travel desk has asked you
+                something and your booking is paused until you reply. If you see it, the request is waiting on you and
+                nobody else.
+              </p>
+            </div>
+
+            {STATUS_STAGES.map(stage => {
+              const entries = statusesInStage(stage);
+              if (entries.length === 0) return null;
+              return (
+                <div key={stage} className="space-y-3">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {stage}
+                  </h3>
+                  {entries.map(entry => (
+                    <div
+                      key={entry.status}
+                      className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <span className="text-sm font-black text-slate-800 dark:text-white">{entry.label}</span>
+                        {entry.label !== entry.status && (
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            (shown internally as "{entry.status}")
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {entry.meaning}
+                      </p>
+                      <dl className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1">
+                        <div>
+                          <dt className="font-bold text-slate-500 dark:text-slate-400 inline">Who acts next: </dt>
+                          <dd className="inline text-slate-600 dark:text-slate-300">{entry.whoActsNext}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-bold text-slate-500 dark:text-slate-400 inline">What happens next: </dt>
+                          <dd className="inline text-slate-600 dark:text-slate-300">{entry.whatHappensNext}</dd>
+                        </div>
+                      </dl>
+                      <p
+                        className={`text-xs font-semibold px-3 py-2 rounded-lg ${
+                          entry.employeeAction
+                            ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300'
+                            : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300'
+                        }`}
+                      >
+                        <i className={`fa-solid ${entry.employeeAction ? 'fa-circle-exclamation' : 'fa-circle-check'} mr-1.5`}></i>
+                        {entry.employeeAction ?? 'Nothing needed from you.'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
 
       case 'lifecycle': {
         const normalPathChart = `flowchart TD

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { TravelRequest, PNCStatus, TravelModePolicy } from '../types';
+import { TravelRequest, PNCStatus, TravelModePolicy, User } from '../types';
 import StatusBadge from './StatusBadge';
 import { checkPolicyViolation } from '../utils/policyUtils';
+import { ownerLabel } from '../utils/assignment';
 import PageBanner from './PageBanner';
 
 interface AdminQueueViewProps {
@@ -9,24 +10,31 @@ interface AdminQueueViewProps {
   onView: (request: TravelRequest) => void;
   showAll?: boolean;
   policies?: TravelModePolicy[];
+  /** Desk members, for resolving an owner id to a name. */
+  users?: User[];
 }
 
 export const AdminQueueView: React.FC<AdminQueueViewProps> = ({
   requests,
   onView,
   showAll = false,
-  policies = []
+  policies = [],
+  users = []
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<PNCStatus | 'all'>('all');
+  // Separate from the stage filter: "who is on this" is a different question
+  // from "what stage is it at", and the desk needs to ask both at once.
+  const [showUnassignedOnly, setShowUnassignedOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
-  // Filter requests based on selected stage
+  // Filter requests based on selected stage, then on ownership
   const filteredRequests = (selectedFilter === 'all'
     ? requests
     : requests.filter((r: TravelRequest) => r.pncStatus === selectedFilter)
-  ).sort((a, b) => {
+  ).filter((r: TravelRequest) => (showUnassignedOnly ? !r.assignedPncId : true))
+   .sort((a, b) => {
     const dateA = new Date(a.timestamp).getTime();
     const dateB = new Date(b.timestamp).getTime();
     return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
@@ -42,6 +50,13 @@ export const AdminQueueView: React.FC<AdminQueueViewProps> = ({
   // Reset to page 1 when filter changes
   const handleFilterChange = (filter: PNCStatus | 'all') => {
     setSelectedFilter(filter);
+    setCurrentPage(1);
+  };
+
+  const unassignedCount = requests.filter((r: TravelRequest) => !r.assignedPncId).length;
+
+  const toggleUnassigned = () => {
+    setShowUnassignedOnly(prev => !prev);
     setCurrentPage(1);
   };
 
@@ -126,6 +141,19 @@ export const AdminQueueView: React.FC<AdminQueueViewProps> = ({
             </div>
           )}
 
+          {/* Ownership filter */}
+          <button
+            onClick={toggleUnassigned}
+            aria-pressed={showUnassignedOnly}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${showUnassignedOnly
+              ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+          >
+            <i className="fa-solid fa-user-slash mr-1.5"></i>
+            Unassigned ({unassignedCount})
+          </button>
+
           {/* Sort Buttons */}
           <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
             <button
@@ -159,13 +187,14 @@ export const AdminQueueView: React.FC<AdminQueueViewProps> = ({
               <th className="px-6 py-5">Request ID</th>
               <th className="px-6 py-5">Traveler</th>
               <th className="px-6 py-5">Route</th>
+              <th className="px-6 py-5">Owner</th>
               <th className="px-6 py-5">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y dark:divide-slate-800 transition-colors duration-300">
             {paginatedRequests.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-16 text-center text-slate-400 font-medium">
+                <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-medium">
                   No requests found for this filter.
                 </td>
               </tr>
@@ -177,6 +206,15 @@ export const AdminQueueView: React.FC<AdminQueueViewProps> = ({
                     <td className="px-6 py-4 font-mono text-xs font-bold text-indigo-600 transition-colors duration-300">{r.submissionId || r.id}</td>
                     <td className="px-6 py-4 font-bold text-slate-800 dark:text-white transition-colors duration-300">{r.requesterName}</td>
                     <td className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors duration-300">{r.from} → {r.to}</td>
+                    <td className="px-6 py-4 text-sm transition-colors duration-300">
+                      {r.assignedPncId ? (
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{ownerLabel(r, users)}</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50">
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 transition-colors duration-300 flex items-center gap-2">
                       <StatusBadge type="pnc" value={r.pncStatus} />
                       {isViolated && (

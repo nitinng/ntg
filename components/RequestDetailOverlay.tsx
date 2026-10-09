@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry } from '../types';
+import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry, User } from '../types';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { checkPolicyViolation } from '../utils/policyUtils';
 import CancellationModal from './CancellationModal';
 import { SignedLink } from './SignedMedia';
+import { assignRequestTo, canClaim, ownerLabel } from '../utils/assignment';
+import { isClosedStatus, employeeStatusLabel, STATUS_GUIDE } from '../utils/statusGuide';
+import EmployeeStatusTimeline from './EmployeeStatusTimeline';
 
 interface RequestDetailOverlayProps {
   request: TravelRequest;
@@ -14,6 +17,10 @@ interface RequestDetailOverlayProps {
   onUpdate: (updatedRequest: TravelRequest) => Promise<void>;
   policies?: any[];
   onEdit?: (request: TravelRequest) => void;
+  /** Signed-in user, for the claim action. Absent for read-only renders. */
+  currentUser?: User | null;
+  /** Desk members, for resolving an owner id to a name. */
+  users?: User[];
 }
 
 export const RequestDetailOverlay = ({
@@ -22,7 +29,9 @@ export const RequestDetailOverlay = ({
   onClose,
   onUpdate,
   policies = [],
-  onEdit
+  onEdit,
+  currentUser = null,
+  users = []
 }: RequestDetailOverlayProps) => {
   const isPolicyViolated = request.hasViolation || (policies.length > 0 ? checkPolicyViolation(request, policies) : false);
   const [status, setStatus] = useState(request.pncStatus);
@@ -32,6 +41,29 @@ export const RequestDetailOverlay = ({
   const [showCancellationForm, setShowCancellationForm] = useState(false);
   const [infoRequestedInput, setInfoRequestedInput] = useState(request.infoRequested || '');
   const [employeeResponseInput, setEmployeeResponseInput] = useState('');
+  const [isClaiming, setIsClaiming] = useState(false);
+
+  // Ownership is a desk concern. Employees are shown nothing about it: who on
+  // the team holds their request is not information they can act on.
+  const isDeskUser = role === UserRole.PNC || role === UserRole.PNC_ADMIN || role === UserRole.ADMIN;
+
+  const handleClaim = async () => {
+    if (!currentUser) return;
+    setIsClaiming(true);
+    try {
+      const { request: updated, error } = await assignRequestTo(request, currentUser, currentUser);
+      if (error) {
+        toast.error('Could not claim this request: ' + error);
+        return;
+      }
+      await onUpdate(updated);
+      toast.success(
+        request.assignedPncId ? 'Request reassigned to you.' : 'Request claimed.'
+      );
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   const handleEmployeeRequestCancel = async () => {
     setIsUploading(true);
@@ -561,8 +593,27 @@ export const RequestDetailOverlay = ({
 
         {/* Actions Area */}
         <div className="mt-8 pt-8 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800">
-            {role === UserRole.PNC || role === UserRole.PNC_ADMIN || role === UserRole.ADMIN ? (
+            {isDeskUser ? (
             <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 p-3 mb-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+                <div>
+                  <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Owner</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-white mt-0.5">
+                    {request.assignedPncId ? ownerLabel(request, users) : 'Unassigned'}
+                  </p>
+                </div>
+                {canClaim(request, currentUser) && (
+                  <button
+                    type="button"
+                    onClick={handleClaim}
+                    disabled={isClaiming}
+                    className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  >
+                    {request.assignedPncId ? 'Reassign to me' : 'Claim'}
+                  </button>
+                )}
+              </div>
+
               <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
 
               <div className="relative">
@@ -959,11 +1010,27 @@ export const RequestDetailOverlay = ({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
-                <StatusBadge type="pnc" value={request.pncStatus} />
-                <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
-              </div>
+              {isClosedStatus(request.pncStatus) ? (
+                // A finished request should say so plainly. Travellers were
+                // left guessing whether a Closed request still needed something
+                // from them.
+                <div className="w-full p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 text-center">
+                  <p className="text-sm font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
+                    <i className="fa-solid fa-circle-check mr-2"></i>
+                    {employeeStatusLabel(request.pncStatus)} — nothing more to do
+                  </p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1.5">
+                    {STATUS_GUIDE[request.pncStatus]?.employeeAction
+                      ?? 'This request is finished and no further action is needed.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 italic">This request is currently in the </span>
+                  <StatusBadge type="pnc" value={request.pncStatus} audience="employee" />
+                  <span className="text-xs font-bold text-slate-400 italic"> stage.</span>
+                </div>
+              )}
               {request.cancelledReason && (
                 <p className="text-xs text-rose-500 dark:text-rose-400 font-bold mt-1 text-center bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/30">
                   Reason: {request.cancelledReason}
@@ -974,6 +1041,11 @@ export const RequestDetailOverlay = ({
                   Rejection Reason: {request.statusChangeReason}
                 </p>
               )}
+
+              <div className="w-full mt-5 pt-5 border-t border-slate-200 dark:border-slate-800">
+                <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Progress</p>
+                <EmployeeStatusTimeline ticketId={request.id} />
+              </div>
             </div>
           )}
         </div>

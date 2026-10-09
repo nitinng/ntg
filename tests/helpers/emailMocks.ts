@@ -60,6 +60,8 @@ export interface MockOptions {
   statusHistory?: { to_status: string; created_at: string }[];
   /** Makes email_queue.insert report a unique violation, as a duplicate would. */
   insertError?: { code?: string; message: string } | null;
+  /** policy_config row, which the PNC priority mail reads its SLA target from. */
+  policyConfig?: Record<string, unknown> | null;
 }
 
 export const DEFAULT_ROUTING_SETTINGS = [
@@ -77,13 +79,19 @@ export const DEFAULT_ROUTING_SETTINGS = [
 ];
 
 export const createSupabaseMock = (options: MockOptions = {}) => {
-  const templates = options.templates ?? [];
   const routingSettings = options.routingSettings ?? DEFAULT_ROUTING_SETTINGS;
   const pncEmails = options.pncEmails ?? ['pnc1@navgurukul.org', 'admin1@navgurukul.org'];
 
-  // Read lazily: a suite that varies the history between cases assigns to it after
+  // Read lazily: a suite that varies these between cases assigns to them after
   // the mock is built, so capturing the value here would freeze the first state.
+  // `templates` used to be captured, which silently made every
+  // `mockOptions.templates = ...` in a test a no-op -- the suite still passed
+  // because the base fixture happened to satisfy most assertions.
+  const templates = () => options.templates ?? [];
   const statusHistory = () => options.statusHistory ?? [];
+
+  /** Every role list passed to profiles.select().in('role', ...), in call order. */
+  const profilesRoleFilters: string[][] = [];
 
   const insertMock = vi.fn().mockResolvedValue({ error: options.insertError ?? null });
   const invokeMock = vi.fn().mockResolvedValue({ data: null, error: null });
@@ -96,7 +104,7 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
           eq: vi.fn((_col: string, event: string) => ({
             eq: vi.fn((_col2: string, audience: string) =>
               Promise.resolve({
-                data: templates.filter(t => t.event === event && t.audience === audience),
+                data: templates().filter(t => t.event === event && t.audience === audience),
                 error: null
               })
             )
@@ -114,9 +122,30 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
     if (table === 'profiles') {
       return {
         select: vi.fn(() => ({
-          in: vi.fn(() =>
-            Promise.resolve({ data: pncEmails.map(email => ({ email })), error: null })
-          )
+          // The role list is recorded rather than ignored: which roles count as
+          // "the PNC desk" is exactly the kind of thing that silently drifts
+          // (PNC Admin was missing here), so tests need to assert on it.
+          in: vi.fn((_col: string, roles: string[]) => {
+            profilesRoleFilters.push(roles);
+            return Promise.resolve({ data: pncEmails.map(email => ({ email })), error: null });
+          })
+        }))
+      };
+    }
+
+    if (table === 'meetup_settings') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(() =>
+              Promise.resolve({
+                data: options.policyConfig === undefined
+                  ? null
+                  : { setting_value: options.policyConfig },
+                error: null
+              })
+            )
+          }))
         }))
       };
     }
@@ -146,7 +175,8 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
     supabase: { from, functions: { invoke: invokeMock } },
     insertMock,
     invokeMock,
-    from
+    from,
+    profilesRoleFilters
   };
 };
 

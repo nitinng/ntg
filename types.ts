@@ -208,7 +208,13 @@ export type EmailContextKey =
   | 'resubmit_after_manager_rejection'
   | 'resubmit_after_pnc_rejection'
   | 'after_partial_refund'
-  | 'after_write_off';
+  | 'after_write_off'
+  // Reconciliation reached from a desk-initiated cancellation rather than an
+  // employee-initiated one. Same event, same audience, different blame.
+  | 'pnc_cancellation'
+  // Work arriving in the PNC queue for a request whose travel date is inside
+  // the Critical urgency threshold. Desk-facing only.
+  | 'priority_critical';
 
 /** How a template's CC list is assembled from the routing settings. */
 export type EmailCcRule =
@@ -329,6 +335,9 @@ export interface TravelRequest {
   travelLegs?: TravelLeg[];
   invoiceUrl?: string;
   bookedBy?: string; // 'PNC' or 'SELF'
+  /** PNC / PNC Admin who owns this request in the desk queue. */
+  assignedPncId?: string | null;
+  assignedAt?: string | null;
   paymentSource?: 'Advance' | 'Direct' | 'Not Yet Entered';
   bookingStatus?: 'Booked' | 'Cancelled' | 'Partially Cancelled' | 'Reconciled';
 }

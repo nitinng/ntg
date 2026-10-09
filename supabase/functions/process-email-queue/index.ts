@@ -14,6 +14,14 @@ export interface EmailMessage {
   replyTo?: string;
   idempotencyKey?: string;
   headers?: Record<string, string>;
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  filename: string;
+  /** Base64-encoded file content, without a data: prefix. */
+  content: string;
+  contentType: string;
 }
 
 export interface EmailSendResult {
@@ -65,21 +73,236 @@ const buildRfc2822MimeMessage = (
 
   const encodedSubject = `=?UTF-8?B?${toBase64(message.subject)}?=`;
 
+  const attachments = message.attachments || [];
+  const hasAttachments = attachments.length > 0;
+
+  // A boundary must not occur in the body. Random + fixed prefix is what every
+  // mail library does; base64 payloads cannot contain the '=_' sequence.
+  const boundary = `=_NGTD_${crypto.randomUUID().replace(/-/g, '')}`;
+
   const headers: string[] = [
     `From: ${fromHeader}`,
     `To: ${toHeader}`,
     `Subject: ${encodedSubject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`
+    `MIME-Version: 1.0`
   ];
+
+  if (hasAttachments) {
+    headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  } else {
+    headers.push(`Content-Type: text/html; charset="UTF-8"`);
+    headers.push(`Content-Transfer-Encoding: base64`);
+  }
 
   if (ccHeader) headers.push(`Cc: ${ccHeader}`);
   if (bccHeader) headers.push(`Bcc: ${bccHeader}`);
   if (message.replyTo) headers.push(`Reply-To: ${message.replyTo}`);
 
   const base64Body = toBase64(message.html || message.text || '');
-  return `${headers.join('\r\n')}\r\n\r\n${base64Body}`;
+
+  if (!hasAttachments) {
+    return `${headers.join('\r\n')}\r\n\r\n${base64Body}`;
+  }
+
+  const parts: string[] = [
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    // Wrapped for the same reason as the attachment below: RFC 2045 caps
+    // encoded lines at 76 characters, and RFC 5322 makes 998 octets a hard
+    // limit that a long HTML body can breach on a single unwrapped line.
+    base64Body.replace(/(.{76})/g, '$1\r\n')
+  ];
+
+  for (const attachment of attachments) {
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      '',
+      // RFC 2045 caps encoded lines at 76 characters. Some strict MTAs reject
+      // or silently truncate longer ones, which corrupts the attachment.
+      attachment.content.replace(/(.{76})/g, '$1\r\n')
+    );
+  }
+
+  parts.push(`--${boundary}--`, '');
+
+  return `${headers.join('\r\n')}\r\n\r\n${parts.join('\r\n')}`;
+};
+
+// ---------------------------------------------------------------------------
+// Ticket delivery: signed link, then the file itself
+// ---------------------------------------------------------------------------
+//
+// The storage buckets became private on 8 Oct (20261008100200), so the stored
+// invoice_url -- a getPublicUrl() result persisted back when the bucket was
+// public -- now 404s. A link has to be signed, and signing has to happen HERE
+// rather than when the mail is queued: a queued row can sit through retries,
+// quota holds and an overnight backoff, so a URL minted at queue time could
+// easily expire before the mail is ever sent. Signing at send time means the
+// clock starts when the mail actually leaves.
+
+/** How long a ticket link stays valid. */
+//
+// Seven days. The link has to outlive the gap between booking and travel for a
+// trip booked a few days out, and travellers routinely open these on a phone
+// days later. Shorter (hours) would break the ordinary case of opening the mail
+// the next morning; much longer leaves a bearer URL alive in an inbox well past
+// the trip, and the in-app download is the permanent route anyway. The
+// attachment below means the link is a fallback for most recipients.
+const TICKET_LINK_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * Largest ticket we will attach, before base64.
+ *
+ * Base64 inflates by ~37%, so 7 MB becomes ~9.6 MB on the wire -- comfortably
+ * inside the ~25 MB that Gmail, SES and Resend each accept, with room for the
+ * HTML body. Anything larger falls back to the link rather than bouncing.
+ */
+const MAX_TICKET_ATTACHMENT_BYTES = 7 * 1024 * 1024;
+
+const PUBLIC_MARKER = '/storage/v1/object/public/';
+const SIGNED_MARKER = '/storage/v1/object/sign/';
+
+/** Pull {bucket, path} out of a stored storage URL. Mirrors utils/storageUrls.ts. */
+const parseStorageUrl = (url: string | null | undefined): { bucket: string; path: string } | null => {
+  if (!url) return null;
+  const marker = url.includes(PUBLIC_MARKER)
+    ? PUBLIC_MARKER
+    : url.includes(SIGNED_MARKER) ? SIGNED_MARKER : null;
+  if (!marker) return null;
+
+  const tail = url.split(marker)[1];
+  if (!tail) return null;
+
+  const clean = tail.split('?')[0];
+  const slash = clean.indexOf('/');
+  if (slash <= 0) return null;
+
+  const bucket = clean.slice(0, slash);
+  const path = decodeURIComponent(clean.slice(slash + 1));
+  if (!bucket || !path) return null;
+
+  return { bucket, path };
+};
+
+const contentTypeFor = (filename: string): string => {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  return 'application/octet-stream';
+};
+
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  const chunk = 0x8000; // chunked to avoid blowing the argument limit on apply()
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+};
+
+export interface TicketDelivery {
+  url: string | null;
+  attachment: EmailAttachment | null;
+  /** Why the file is not attached, when it is not. For the queue row's log. */
+  note?: string;
+}
+
+/**
+ * Resolves the ticket for a queued mail: a freshly signed link, and the file
+ * itself when it is small enough to attach.
+ *
+ * Never throws. A ticket that cannot be resolved must not stop the booking
+ * confirmation going out -- the mail still carries the booking details, and the
+ * traveller can always download from the portal.
+ */
+const resolveTicketDelivery = async (
+  supabase: any,
+  ticketId: string | null | undefined
+): Promise<TicketDelivery> => {
+  if (!ticketId) return { url: null, attachment: null, note: 'no ticket id on the queue row' };
+
+  try {
+    const { data: request, error } = await supabase
+      .from('travel_requests')
+      .select('invoice_url, submission_id')
+      .eq('id', ticketId)
+      .single();
+
+    if (error || !request?.invoice_url) {
+      return { url: null, attachment: null, note: 'no ticket uploaded for this request' };
+    }
+
+    const ref = parseStorageUrl(request.invoice_url);
+    if (!ref) {
+      // An externally hosted link is already usable as-is.
+      return { url: request.invoice_url, attachment: null, note: 'ticket is an external link' };
+    }
+
+    // The function runs with the service role, so signing bypasses RLS. The
+    // recipient list is derived from the ticket, so the link only reaches
+    // people the mail was already addressed to.
+    const { data: signed, error: signError } = await supabase.storage
+      .from(ref.bucket)
+      .createSignedUrl(ref.path, TICKET_LINK_TTL_SECONDS);
+
+    const url = signError ? null : (signed?.signedUrl ?? null);
+    if (!url) return { url: null, attachment: null, note: `could not sign ticket url: ${signError?.message || 'unknown'}` };
+
+    // Now try to attach the file itself, falling back to the link on any problem.
+    const { data: blob, error: dlError } = await supabase.storage
+      .from(ref.bucket)
+      .download(ref.path);
+
+    if (dlError || !blob) {
+      return { url, attachment: null, note: `attachment skipped: ${dlError?.message || 'download failed'}` };
+    }
+
+    const size = typeof blob.size === 'number' ? blob.size : 0;
+    if (size > MAX_TICKET_ATTACHMENT_BYTES) {
+      return {
+        url,
+        attachment: null,
+        note: `attachment skipped: ${size} bytes exceeds the ${MAX_TICKET_ATTACHMENT_BYTES} byte limit`
+      };
+    }
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const baseName = ref.path.split('/').pop() || 'ticket';
+    const extension = baseName.includes('.') ? baseName.slice(baseName.lastIndexOf('.')) : '';
+    const filename = `Ticket-${request.submission_id || 'travel'}${extension}`;
+
+    return {
+      url,
+      attachment: {
+        filename,
+        content: bytesToBase64(bytes),
+        contentType: contentTypeFor(baseName)
+      }
+    };
+  } catch (err: any) {
+    return { url: null, attachment: null, note: `ticket lookup failed: ${err?.message || err}` };
+  }
+};
+
+/** Placeholder a template uses to ask for the signed ticket link. */
+const TICKET_URL_PLACEHOLDER = '{{ticket_download_url}}';
+
+/**
+ * Substitutes the signed link into a rendered body.
+ *
+ * When there is no ticket the whole anchor is replaced with a plain sentence
+ * rather than a dead link to nowhere.
+ */
+const applyTicketUrl = (html: string, url: string | null): string => {
+  if (!html.includes(TICKET_URL_PLACEHOLDER)) return html;
+  if (url) return html.split(TICKET_URL_PLACEHOLDER).join(url);
+  return html.split(TICKET_URL_PLACEHOLDER).join('#no-ticket');
 };
 
 // ---------------------------------------------------------------------------
@@ -408,7 +631,14 @@ class EdgeResendProvider implements EmailProvider {
           subject: message.subject,
           html: message.html,
           text: message.text,
-          reply_to: message.replyTo
+          reply_to: message.replyTo,
+          attachments: message.attachments?.length
+            ? message.attachments.map(a => ({
+                filename: a.filename,
+                content: a.content,
+                content_type: a.contentType
+              }))
+            : undefined
         })
       });
 
@@ -1233,13 +1463,29 @@ Deno.serve(async (req: Request) => {
       }
 
       const attempt = (item.attempt_count || item.retry_count || 0) + 1;
+
+      // Resolve the ticket only for mails that ask for it. Template-driven
+      // rather than keyed on the event, so a future mail can carry the ticket
+      // by adding the placeholder to its body and nothing else.
+      let ticket: TicketDelivery = { url: null, attachment: null };
+      if (typeof item.body === 'string' && item.body.includes(TICKET_URL_PLACEHOLDER)) {
+        ticket = await resolveTicketDelivery(supabase, item.ticket_id);
+        if (ticket.note) {
+          console.log(`[email ${item.id}] ticket delivery: ${ticket.note}`);
+        }
+      }
+
       const payload = {
         to: item.recipients || [],
         cc: item.cc || [],
         bcc: item.bcc || [],
         subject: item.subject,
-        html: item.body,
-        idempotencyKey: item.idempotency_key
+        html: applyTicketUrl(item.body, ticket.url),
+        idempotencyKey: item.idempotency_key,
+        // The link stays in the body even when the file is attached: a
+        // recipient whose client strips attachments still has a way through,
+        // and a forwarded mail keeps working.
+        attachments: ticket.attachment ? [ticket.attachment] : undefined
       };
 
       let usedSlot: SmtpSlotName | null = null;

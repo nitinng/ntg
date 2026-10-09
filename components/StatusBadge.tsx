@@ -1,13 +1,20 @@
 
 import React from 'react';
 import { PNCStatus, Priority, ApprovalStatus, VerificationStatus } from '../types';
+import { employeeStatusLabel } from '../utils/statusGuide';
 
 interface BadgeProps {
   type: 'pnc' | 'priority' | 'approval' | 'status';
   value: string;
+  /**
+   * Render the traveller-facing name instead of the internal one. "On Hold"
+   * reads as "Action Required" to the person who has to act on it; the desk
+   * keeps the internal vocabulary its workflow is built on.
+   */
+  audience?: 'staff' | 'employee';
 }
 
-const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
+const StatusBadge: React.FC<BadgeProps> = ({ type, value, audience = 'staff' }) => {
   const getStyles = () => {
     if (type === 'priority') {
       switch (value) {
@@ -74,10 +81,15 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value }) => {
     return null;
   };
 
+  // Colour and icon still key on the real status, so a relabelled badge keeps
+  // the same visual weight as everywhere else.
+  const displayValue =
+    type === 'pnc' && audience === 'employee' ? employeeStatusLabel(value) : value;
+
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs uppercase font-bold border transition-colors ${getStyles()}`}>
       {getIcon()}
-      {value}
+      {displayValue}
     </span>
   );
 };

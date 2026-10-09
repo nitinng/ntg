@@ -60,6 +60,8 @@ export interface MockOptions {
   statusHistory?: { to_status: string; created_at: string }[];
   /** Makes email_queue.insert report a unique violation, as a duplicate would. */
   insertError?: { code?: string; message: string } | null;
+  /** policy_config row, which the PNC priority mail reads its SLA target from. */
+  policyConfig?: Record<string, unknown> | null;
 }
 
 export const DEFAULT_ROUTING_SETTINGS = [
@@ -127,6 +129,23 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
             profilesRoleFilters.push(roles);
             return Promise.resolve({ data: pncEmails.map(email => ({ email })), error: null });
           })
+        }))
+      };
+    }
+
+    if (table === 'meetup_settings') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(() =>
+              Promise.resolve({
+                data: options.policyConfig === undefined
+                  ? null
+                  : { setting_value: options.policyConfig },
+                error: null
+              })
+            )
+          }))
         }))
       };
     }

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PNCStatus, TravelEvent } from '../types';
+import { PNCStatus, Priority, TravelEvent } from '../types';
 import {
   createSupabaseMock,
   createMockRequest,
@@ -45,6 +45,25 @@ const templates = [
   template(TravelEvent.REFUND_DISPUTED, 'finance', { cc_rule: 'default' }),
   template(TravelEvent.INFO_PROVIDED, 'pnc', { cc_rule: 'default' }),
 
+  // The desk is told when work reaches its queue, with a priority variant.
+  template(TravelEvent.POLICY_EVALUATION_PASSED, 'employee', {
+    subject: 'Your Travel Request is Being Processed - {{submissionId}}'
+  }),
+  template(TravelEvent.POLICY_EVALUATION_PASSED, 'pnc', {
+    subject: 'New Travel Request to Book - {{submissionId}}'
+  }),
+  template(TravelEvent.POLICY_EVALUATION_PASSED, 'pnc', {
+    context_key: 'priority_critical',
+    subject: '[PRIORITY] Travel on {{departure_date}} - book within {{sla_target_hours}}h'
+  }),
+  template(TravelEvent.APPROVAL_COMPLETED, 'pnc', {
+    subject: 'Manager-Approved Request to Book - {{submissionId}}'
+  }),
+  template(TravelEvent.APPROVAL_COMPLETED, 'pnc', {
+    context_key: 'priority_critical',
+    subject: '[PRIORITY] Approved - book within {{sla_target_hours}}h'
+  }),
+
   // Refund path: Pending Refund now mails the traveller, and reconciliation
   // after a desk cancellation needs copy that does not imply they cancelled.
   template(TravelEvent.REFUND_PROCESS_STARTED, 'employee', { cc_rule: 'default_finance' }),
@@ -69,7 +88,8 @@ const templates = [
 const mockOptions = {
   templates,
   routingSettings: DEFAULT_ROUTING_SETTINGS,
-  statusHistory: [] as { to_status: string; created_at: string }[]
+  statusHistory: [] as { to_status: string; created_at: string }[],
+  policyConfig: { urgencySlaHours: { critical: 4, high: 12, medium: 24, low: 48 } } as any
 };
 
 const mocks = createSupabaseMock(mockOptions);
@@ -82,6 +102,10 @@ const {
   resolveCc,
   invalidateRoutingConfigCache,
   SILENT_EVENTS,
+  ALL_AUDIENCES,
+  AUDIENCES_FOR_EVENT,
+  silentAudiencesFor,
+  isSilent,
   DEFAULT_ROUTING_CONFIG
 } = await import('../utils/emailTriggers');
 
@@ -344,6 +368,150 @@ describe('refund path', () => {
   it('no longer counts the refund start as deliberate silence', () => {
     // The sheet left this silent; the decision recorded in Phase 2 reverses it.
     expect(SILENT_EVENTS).not.toContain(TravelEvent.REFUND_PROCESS_STARTED);
+  });
+});
+
+describe('new work reaching the PNC queue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOptions.templates = templates;
+    mockOptions.statusHistory = [];
+    invalidateRoutingConfigCache();
+  });
+
+  const insertsFor = (audience: string) =>
+    mocks.insertMock.mock.calls.map(c => c[0]).filter(r => r.audience === audience);
+
+  it('tells the desk when a request clears policy, and still tells the employee', async () => {
+    await queueEmailsForEvent(createMockRequest(), TravelEvent.POLICY_EVALUATION_PASSED, {
+      fromStatus: PNCStatus.NOT_STARTED,
+      toStatus: PNCStatus.PROCESSING
+    });
+
+    expect(insertsFor('employee')).toHaveLength(1);
+    expect(insertsFor('pnc')).toHaveLength(1);
+  });
+
+  it('tells the desk when a manager approval lands', async () => {
+    const event = deriveEventFromTransition(PNCStatus.APPROVED, PNCStatus.PROCESSING);
+    expect(event).toBe(TravelEvent.APPROVAL_COMPLETED);
+
+    await queueEmailsForEvent(createMockRequest(), event!, {
+      fromStatus: PNCStatus.APPROVED,
+      toStatus: PNCStatus.PROCESSING
+    });
+
+    // Silent to the employee and manager, who were both just told the approval
+    // landed; the desk is told because the request is now theirs.
+    expect(insertsFor('pnc')).toHaveLength(1);
+    expect(insertsFor('employee')).toHaveLength(0);
+    expect(insertsFor('manager')).toHaveLength(0);
+  });
+
+  it('flags a Critical request without sending a second mail', async () => {
+    await queueEmailsForEvent(
+      createMockRequest({ priority: Priority.CRITICAL }),
+      TravelEvent.POLICY_EVALUATION_PASSED,
+      { fromStatus: PNCStatus.NOT_STARTED, toStatus: PNCStatus.PROCESSING }
+    );
+
+    const pnc = insertsFor('pnc');
+    // One template per (event, audience) is the whole reason priority is a
+    // variant rather than its own event.
+    expect(pnc).toHaveLength(1);
+    expect(pnc[0].context_key).toBe('priority_critical');
+    expect(pnc[0].subject).toContain('[PRIORITY]');
+  });
+
+  it('quotes the Critical SLA target from the policy config', async () => {
+    await queueEmailsForEvent(
+      createMockRequest({ priority: Priority.CRITICAL }),
+      TravelEvent.POLICY_EVALUATION_PASSED,
+      { fromStatus: PNCStatus.NOT_STARTED, toStatus: PNCStatus.PROCESSING }
+    );
+
+    expect(insertsFor('pnc')[0].subject).toContain('within 4h');
+  });
+
+  it('uses the ordinary queue mail for a non-Critical request', async () => {
+    await queueEmailsForEvent(
+      createMockRequest({ priority: Priority.HIGH }),
+      TravelEvent.POLICY_EVALUATION_PASSED,
+      { fromStatus: PNCStatus.NOT_STARTED, toStatus: PNCStatus.PROCESSING }
+    );
+
+    const pnc = insertsFor('pnc');
+    expect(pnc).toHaveLength(1);
+    expect(pnc[0].context_key).toBeNull();
+  });
+
+  it('falls back to the ordinary queue mail when no priority variant is seeded', async () => {
+    mockOptions.templates = templates.filter(t => t.context_key !== 'priority_critical');
+
+    await queueEmailsForEvent(
+      createMockRequest({ priority: Priority.CRITICAL }),
+      TravelEvent.POLICY_EVALUATION_PASSED,
+      { fromStatus: PNCStatus.NOT_STARTED, toStatus: PNCStatus.PROCESSING }
+    );
+
+    // A desk that never seeded the variant still gets told about the work.
+    expect(insertsFor('pnc')).toHaveLength(1);
+    expect(insertsFor('pnc')[0].context_key).toBeNull();
+  });
+
+  it('keeps the employee on resubmission copy while the desk sees priority', async () => {
+    // The collision that makes per-audience context necessary: a Critical
+    // resubmission is both "round again" and "urgent" at once.
+    mockOptions.statusHistory = [
+      { to_status: PNCStatus.REJECTED_BY_PNC, created_at: '2026-10-01T00:00:00Z' }
+    ];
+    mockOptions.templates = [
+      ...templates,
+      template(TravelEvent.POLICY_EVALUATION_PASSED, 'employee', {
+        context_key: 'resubmit_after_pnc_rejection',
+        subject: 'Update: Your Travel Request is Being Processed'
+      })
+    ];
+
+    await queueEmailsForEvent(
+      createMockRequest({ priority: Priority.CRITICAL, resubmissionCount: 1 }),
+      TravelEvent.POLICY_EVALUATION_PASSED,
+      { fromStatus: PNCStatus.NOT_STARTED, toStatus: PNCStatus.PROCESSING }
+    );
+
+    expect(insertsFor('employee')[0].context_key).toBe('resubmit_after_pnc_rejection');
+    expect(insertsFor('pnc')[0].context_key).toBe('priority_critical');
+  });
+});
+
+describe('per-audience silence', () => {
+  it('keeps SILENT_EVENTS and AUDIENCES_FOR_EVENT consistent by construction', () => {
+    // These are two views of one decision. They used to be maintained by hand,
+    // which is how APPROVAL_COMPLETED could be listed as silent while needing
+    // to mail the desk.
+    for (const event of Object.values(TravelEvent)) {
+      const mailed = AUDIENCES_FOR_EVENT[event] || [];
+      expect(SILENT_EVENTS.includes(event)).toBe(mailed.length === 0);
+    }
+  });
+
+  it('reports silence per audience for a partly silent event', () => {
+    expect(isSilent(TravelEvent.APPROVAL_COMPLETED)).toBe(false);
+    expect(isSilent(TravelEvent.APPROVAL_COMPLETED, 'pnc')).toBe(false);
+    expect(isSilent(TravelEvent.APPROVAL_COMPLETED, 'employee')).toBe(true);
+    expect(isSilent(TravelEvent.APPROVAL_COMPLETED, 'manager')).toBe(true);
+
+    expect(silentAudiencesFor(TravelEvent.APPROVAL_COMPLETED)).toContain('employee');
+    expect(silentAudiencesFor(TravelEvent.APPROVAL_COMPLETED)).not.toContain('pnc');
+  });
+
+  it('reports every audience as silent for a wholly silent event', () => {
+    expect(isSilent(TravelEvent.PNC_STARTED_PROCESSING)).toBe(true);
+    expect(silentAudiencesFor(TravelEvent.PNC_STARTED_PROCESSING)).toEqual(ALL_AUDIENCES);
+  });
+
+  it('no longer treats the approval handover as wholly silent', () => {
+    expect(SILENT_EVENTS).not.toContain(TravelEvent.APPROVAL_COMPLETED);
   });
 });
 

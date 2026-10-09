@@ -22,6 +22,8 @@ import { supabase } from '../supabaseClient';
 import {
   TravelRequest,
   PNCStatus,
+  Priority,
+  PolicyConfig,
   TravelEvent,
   EmailAudience,
   EmailContextKey,
@@ -29,6 +31,10 @@ import {
   EmailRoutingConfig
 } from '../types';
 import { resolveTemplateVariables } from './emailQueueUtils';
+import { getDaysRemaining } from './policyUtils';
+
+/** Matches getEffectiveBookingSlaHours' own fallback for the Critical tier. */
+const DEFAULT_CRITICAL_SLA_HOURS = 4;
 
 // ---------------------------------------------------------------------------
 // Routing configuration
@@ -111,6 +117,39 @@ export const getEmailRoutingConfig = async (
 /** Drops the cached routing config so the next read sees fresh settings. */
 export const invalidateRoutingConfigCache = () => {
   routingCache = null;
+  policyCache = null;
+};
+
+let policyCache: { value: Partial<PolicyConfig>; at: number } | null = null;
+
+/**
+ * Reads the policy config the priority mail quotes its SLA target from.
+ *
+ * Kept separate from the routing config because it lives in `meetup_settings`
+ * under `policy_config` (the same row App.tsx and CancellationModal read) and
+ * is only needed for the one mail. Failure is non-fatal: the mail still goes
+ * out, quoting the documented default rather than nothing.
+ */
+export const getPolicyConfig = async (): Promise<Partial<PolicyConfig>> => {
+  if (policyCache && Date.now() - policyCache.at < ROUTING_CACHE_MS) {
+    return policyCache.value;
+  }
+
+  let value: Partial<PolicyConfig> = {};
+  try {
+    const { data } = await supabase
+      .from('meetup_settings')
+      .select('setting_value')
+      .eq('setting_key', 'policy_config')
+      .single();
+    const raw = (data as any)?.setting_value;
+    if (raw && typeof raw === 'object') value = raw as Partial<PolicyConfig>;
+  } catch (err) {
+    console.warn('Could not read policy config for priority mail; using defaults:', err);
+  }
+
+  policyCache = { value, at: Date.now() };
+  return value;
 };
 
 // ---------------------------------------------------------------------------
@@ -225,6 +264,17 @@ export const deriveEventFromTransition = (
 // Context derivation
 // ---------------------------------------------------------------------------
 
+/**
+ * Events that land a request in the PNC work queue.
+ *
+ * Shared by the audience routing and the priority-context derivation so the two
+ * cannot disagree about what counts as "new work for the desk".
+ */
+export const PNC_QUEUE_EVENTS: TravelEvent[] = [
+  E.POLICY_EVALUATION_PASSED,
+  E.APPROVAL_COMPLETED
+];
+
 const hasBooking = (request: TravelRequest): boolean =>
   Boolean(
     request.bookingReference ||
@@ -264,11 +314,30 @@ const deriveResubmissionContext = async (
   return undefined;
 };
 
+/**
+ * Context is derived per *audience*, not per event.
+ *
+ * The desk and the traveller read the same event for different reasons: a
+ * resubmitted request is "here it is again" to the employee and "this one has
+ * been round before" to PNC, and a Critical request needs flagging to the desk
+ * but not to the traveller, who cannot act on an SLA. A single context per
+ * event cannot express that -- and would collide outright, since a Critical
+ * resubmission is both at once.
+ */
 export const deriveContextKey = async (
   event: TravelEvent,
   request: TravelRequest,
-  fromStatus: PNCStatus | null
+  fromStatus: PNCStatus | null,
+  audience?: EmailAudience
 ): Promise<EmailContextKey | undefined> => {
+  // Work arriving in the PNC queue is flagged by priority. Resolution falls
+  // back to the context-less template, so a desk that has not seeded the
+  // priority variant still gets the ordinary queue mail rather than silence.
+  if (audience === 'pnc' && PNC_QUEUE_EVENTS.includes(event)) {
+    if (request.priority === Priority.CRITICAL) return 'priority_critical';
+    return undefined;
+  }
+
   switch (event) {
     case E.POLICY_VIOLATION_DETECTED:
     case E.POLICY_EVALUATION_PASSED:
@@ -453,9 +522,14 @@ export const resolveTemplate = async (
 };
 
 /** Audiences to consider for an event, in the order the sheet lists them. */
-const AUDIENCES_FOR_EVENT: Partial<Record<TravelEvent, EmailAudience[]>> = {
+export const AUDIENCES_FOR_EVENT: Partial<Record<TravelEvent, EmailAudience[]>> = {
   [E.POLICY_VIOLATION_DETECTED]: ['employee', 'manager'],
-  [E.POLICY_EVALUATION_PASSED]: ['employee'],
+  // The desk is told when work reaches its queue. The employee mail is
+  // unchanged; 'pnc' resolves through getPncEmails, the shared routing list.
+  [E.POLICY_EVALUATION_PASSED]: ['employee', 'pnc'],
+  // Silent to the employee and the manager, who have both just been told the
+  // approval landed -- but this is the moment the request becomes the desk's.
+  [E.APPROVAL_COMPLETED]: ['pnc'],
   [E.MANAGER_APPROVED]: ['employee'],
   [E.MANAGER_REJECTED]: ['employee'],
   [E.EMPLOYEE_CANCELLED_PRE_APPROVAL]: ['employee', 'manager'],
@@ -486,12 +560,34 @@ const AUDIENCES_FOR_EVENT: Partial<Record<TravelEvent, EmailAudience[]>> = {
   [E.RETROACTIVE_BOOKING_RECORDED]: ['employee']
 };
 
-/** Events the sheet deliberately keeps silent. Listed so the silence is testable. */
+/**
+ * Every audience a mail can be addressed to. Ordered as the sheet lists them.
+ */
+export const ALL_AUDIENCES: EmailAudience[] = [
+  'employee',
+  'manager',
+  'pnc',
+  'finance',
+  'escalation_owner'
+];
+
+/**
+ * Events that send nothing to anyone.
+ *
+ * Silence used to be expressible only at this granularity, which stopped being
+ * true once an event could be silent to one audience and not another:
+ * APPROVAL_COMPLETED still tells the employee and the manager nothing -- they
+ * were both just told the approval landed -- but it is the moment the request
+ * becomes the desk's, so PNC is now mailed.
+ *
+ * This list and AUDIENCES_FOR_EVENT are two views of one decision, so they are
+ * kept consistent by construction rather than by hand: an event belongs here
+ * exactly when it has no audiences, and a test asserts that.
+ */
 export const SILENT_EVENTS: TravelEvent[] = [
   E.REQUEST_SUBMITTED,
   E.REQUEST_EDIT_STARTED,
   E.REQUEST_RESUBMITTED,
-  E.APPROVAL_COMPLETED,
   E.PNC_STARTED_PROCESSING,
   E.TICKET_DOCUMENT_REPLACED,
   E.BOOKING_DETAIL_EDITED,
@@ -502,6 +598,27 @@ export const SILENT_EVENTS: TravelEvent[] = [
   E.TRIP_COMPLETED,
   E.BOOKING_DOCUMENT_UPDATED
 ];
+
+/**
+ * Audiences this event deliberately does not mail.
+ *
+ * For a wholly silent event that is every audience; for a partly silent one it
+ * is whatever AUDIENCES_FOR_EVENT leaves out. Stating it positively lets a test
+ * assert intended silence instead of inferring it from an absent template,
+ * which is how a missing template and a deliberate omission came to look alike.
+ */
+export const silentAudiencesFor = (event: TravelEvent): EmailAudience[] => {
+  const mailed = AUDIENCES_FOR_EVENT[event] || [];
+  return ALL_AUDIENCES.filter(audience => !mailed.includes(audience));
+};
+
+/**
+ * Whether this event mails nothing at all, or nothing to a given audience.
+ */
+export const isSilent = (event: TravelEvent, audience?: EmailAudience): boolean => {
+  const mailed = AUDIENCES_FOR_EVENT[event] || [];
+  return audience ? !mailed.includes(audience) : mailed.length === 0;
+};
 
 // ---------------------------------------------------------------------------
 // Queueing
@@ -531,6 +648,35 @@ export interface QueueEventResult {
 }
 
 /**
+ * Variables the desk's priority mail quotes.
+ *
+ * Only computed when a PNC queue mail is actually going out, so the ordinary
+ * paths do not pay for a settings read. The SLA target falls back to the
+ * documented default rather than rendering blank when the policy is unset.
+ */
+const priorityContext = async (
+  request: TravelRequest,
+  event: TravelEvent,
+  audiences: EmailAudience[]
+): Promise<Record<string, string>> => {
+  if (!audiences.includes('pnc') || !PNC_QUEUE_EVENTS.includes(event)) return {};
+
+  const policy = await getPolicyConfig();
+  const slaHours =
+    policy.urgencySlaHours?.[
+      (request.priority || Priority.MEDIUM).toLowerCase() as 'critical' | 'high' | 'medium' | 'low'
+    ];
+
+  const daysRemaining = getDaysRemaining(request.dateOfTravel);
+
+  return {
+    '{{priority}}': request.priority || '',
+    '{{sla_target_hours}}': String(slaHours ?? DEFAULT_CRITICAL_SLA_HOURS),
+    '{{days_remaining}}': daysRemaining === null ? '' : String(daysRemaining)
+  };
+};
+
+/**
  * Queues every mail the sheet attaches to `event` for this request.
  *
  * Never throws: a failure to mail must not roll back the workflow transition that
@@ -553,16 +699,20 @@ export const queueEmailsForEvent = async (
 
     const config = await getEmailRoutingConfig();
     const fromStatus = options.fromStatus ?? null;
-    const contextKey =
-      options.contextKey ?? (await deriveContextKey(event, request, fromStatus));
 
     const extraContext = {
       '{{support_email}}': config.supportEmail,
       '{{portal_url}}': config.portalUrl,
+      ...(await priorityContext(request, event, audiences)),
       ...(options.extraContext || {})
     };
 
     for (const audience of audiences) {
+      // Derived per audience: the desk and the traveller read the same event
+      // differently, so they can need different copy for it.
+      const contextKey =
+        options.contextKey ?? (await deriveContextKey(event, request, fromStatus, audience));
+
       const template = await resolveTemplate(event, audience, contextKey);
       if (!template) {
         result.skipped.push({ audience, reason: 'no active template' });

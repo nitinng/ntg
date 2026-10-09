@@ -18,6 +18,7 @@ const ChatView = React.lazy(() => import('./components/ChatView'));
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
 import { queueEmailsForTransition } from './utils/emailQueueUtils';
+import { claimOnProcessing } from './utils/assignment';
 import { calculateProfileCompleteness, isUserVerified, isAppLockedForUser } from './utils/verificationUtils';
 import { calculateDynamicUrgency } from './utils/policyUtils';
 import { requireWrittenRow } from './utils/supabaseWriteResult';
@@ -813,10 +814,10 @@ const App: React.FC = () => {
           r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
           r.pncStatus !== PNCStatus.CLOSED
         );
-        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} />;
+        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} users={users} />;
       case 'all-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} />;
+        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} users={users} />;
       case 'advances':
         if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN) {
           return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
@@ -1467,6 +1468,8 @@ const App: React.FC = () => {
             request={selectedRequest}
             role={currentUser.role}
             policies={travelModePolicies}
+            currentUser={currentUser}
+            users={users}
             onClose={() => setSelectedRequest(null)}
             onEdit={(req) => {
               setSelectedRequest(null);
@@ -1544,11 +1547,19 @@ const App: React.FC = () => {
                   }
                 }
 
+                // First desk member to move a request into Processing owns it.
+                // No-op when it already has an owner, so moving a colleague's
+                // request along does not quietly take it from them.
+                let claimed = { ...updated, pncStatus: finalPncStatus, timeline: finalTimeline };
+                if (finalPncStatus === PNCStatus.PROCESSING) {
+                  claimed = await claimOnProcessing(claimed, currentUser);
+                }
+
                 // Update local state
                 const finalUpdated = mapDbRequest({
-                  ...updated,
+                  ...claimed,
                   pncStatus: finalPncStatus,
-                  timeline: finalTimeline
+                  timeline: claimed.timeline ?? finalTimeline
                 });
                 setRequests(prev => prev.map(r => r.id === updated.id ? finalUpdated : r));
                 setSelectedRequest(finalUpdated);

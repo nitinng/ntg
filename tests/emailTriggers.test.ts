@@ -45,6 +45,16 @@ const templates = [
   template(TravelEvent.REFUND_DISPUTED, 'finance', { cc_rule: 'default' }),
   template(TravelEvent.INFO_PROVIDED, 'pnc', { cc_rule: 'default' }),
 
+  // Refund path: Pending Refund now mails the traveller, and reconciliation
+  // after a desk cancellation needs copy that does not imply they cancelled.
+  template(TravelEvent.REFUND_PROCESS_STARTED, 'employee', { cc_rule: 'default_finance' }),
+  template(TravelEvent.NO_REFUND_REQUIRED, 'employee', {
+    subject: 'Travel Settlement Closed: {{submissionId}}'
+  }),
+  template(TravelEvent.NO_REFUND_REQUIRED, 'employee', {
+    context_key: 'pnc_cancellation',
+    subject: 'Travel Settlement Closed: {{submissionId}}'
+  }),
 
   // Draft and archived rows must never be selected.
   template(TravelEvent.BOOKING_UPDATED, 'employee', {
@@ -242,6 +252,98 @@ describe('PNC desk routing', () => {
     const row = lastInsert();
     expect(row.audience).toBe('pnc');
     expect(row.recipients.length).toBeGreaterThan(0);
+  });
+});
+
+describe('refund path', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOptions.templates = templates;
+    mockOptions.statusHistory = [];
+    invalidateRoutingConfigCache();
+  });
+
+  // P13: the employee cancels a booked trip and money is outstanding.
+  it('mails the employee when an employee cancellation enters Pending Refund', async () => {
+    const request = createMockRequest();
+    const result = await queueEmailsForEvent(
+      request,
+      deriveEventFromTransition(PNCStatus.CANCELLED_BY_EMPLOYEE, PNCStatus.PENDING_REFUND)!,
+      { fromStatus: PNCStatus.CANCELLED_BY_EMPLOYEE, toStatus: PNCStatus.PENDING_REFUND }
+    );
+
+    expect(result.event).toBe(TravelEvent.REFUND_PROCESS_STARTED);
+    const row = lastInsert();
+    expect(row.audience).toBe('employee');
+    expect(row.recipients).toEqual([request.requesterEmail]);
+    // Finance is copied through the template's cc_rule, not a second audience,
+    // so the mail keeps one idempotency key.
+    expect(row.cc).toContain('finance@navgurukul.org');
+  });
+
+  // P15: the desk cancels and money is outstanding -- same mail, same audience.
+  it('mails the employee when a desk cancellation enters Pending Refund', async () => {
+    const result = await queueEmailsForEvent(
+      createMockRequest(),
+      deriveEventFromTransition(PNCStatus.CANCELLED_BY_PNC, PNCStatus.PENDING_REFUND)!,
+      { fromStatus: PNCStatus.CANCELLED_BY_PNC, toStatus: PNCStatus.PENDING_REFUND }
+    );
+
+    expect(result.event).toBe(TravelEvent.REFUND_PROCESS_STARTED);
+    expect(lastInsert().audience).toBe('employee');
+    expect(lastInsert().cc).toContain('finance@navgurukul.org');
+  });
+
+  // P14: nothing was recoverable, and the employee cancelled themselves.
+  it('uses the default settlement copy when the employee cancelled', async () => {
+    await queueEmailsForEvent(
+      createMockRequest(),
+      deriveEventFromTransition(PNCStatus.CANCELLED_BY_EMPLOYEE, PNCStatus.RECONCILED)!,
+      { fromStatus: PNCStatus.CANCELLED_BY_EMPLOYEE, toStatus: PNCStatus.RECONCILED }
+    );
+
+    expect(lastInsert().context_key).toBeNull();
+  });
+
+  it('switches to desk-cancellation copy when PNC cancelled', async () => {
+    await queueEmailsForEvent(
+      createMockRequest(),
+      deriveEventFromTransition(PNCStatus.CANCELLED_BY_PNC, PNCStatus.RECONCILED)!,
+      { fromStatus: PNCStatus.CANCELLED_BY_PNC, toStatus: PNCStatus.RECONCILED }
+    );
+
+    const row = lastInsert();
+    expect(row.event).toBe(TravelEvent.NO_REFUND_REQUIRED);
+    expect(row.context_key).toBe('pnc_cancellation');
+  });
+
+  it('falls back to the default copy when the desk variant is absent', async () => {
+    mockOptions.templates = templates.filter(t => t.context_key !== 'pnc_cancellation');
+
+    await queueEmailsForEvent(
+      createMockRequest(),
+      TravelEvent.NO_REFUND_REQUIRED,
+      { fromStatus: PNCStatus.CANCELLED_BY_PNC, toStatus: PNCStatus.RECONCILED }
+    );
+
+    // Degrading to the generic settlement copy beats sending nothing.
+    expect(lastInsert().context_key).toBeNull();
+  });
+
+  it('maps each settlement outcome to its own event', () => {
+    expect(deriveEventFromTransition(PNCStatus.PENDING_REFUND, PNCStatus.FULLY_REFUNDED))
+      .toBe(TravelEvent.REFUND_COMPLETED);
+    expect(deriveEventFromTransition(PNCStatus.PENDING_REFUND, PNCStatus.PARTIALLY_REFUNDED))
+      .toBe(TravelEvent.PARTIAL_REFUND_RECEIVED);
+    expect(deriveEventFromTransition(PNCStatus.PENDING_REFUND, PNCStatus.WRITTEN_OFF))
+      .toBe(TravelEvent.REFUND_WRITTEN_OFF);
+    expect(deriveEventFromTransition(PNCStatus.PENDING_REFUND, PNCStatus.DISPUTED))
+      .toBe(TravelEvent.REFUND_DISPUTED);
+  });
+
+  it('no longer counts the refund start as deliberate silence', () => {
+    // The sheet left this silent; the decision recorded in Phase 2 reverses it.
+    expect(SILENT_EVENTS).not.toContain(TravelEvent.REFUND_PROCESS_STARTED);
   });
 });
 

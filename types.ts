@@ -208,7 +208,10 @@ export type EmailContextKey =
   | 'resubmit_after_manager_rejection'
   | 'resubmit_after_pnc_rejection'
   | 'after_partial_refund'
-  | 'after_write_off';
+  | 'after_write_off'
+  // Reconciliation reached from a desk-initiated cancellation rather than an
+  // employee-initiated one. Same event, same audience, different blame.
+  | 'pnc_cancellation';
 
 /** How a template's CC list is assembled from the routing settings. */
 export type EmailCcRule =

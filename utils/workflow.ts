@@ -89,7 +89,11 @@ export const ALLOWED_TRANSITIONS: Record<PNCStatus, PNCStatus[]> = {
   [PNCStatus.PARTIALLY_REFUNDED]: [
     PNCStatus.FULLY_REFUNDED,
     PNCStatus.WRITTEN_OFF,
-    PNCStatus.DISPUTED
+    PNCStatus.DISPUTED,
+    // A part-refunded ticket whose remainder is settled has nothing left to
+    // chase, so reconciliation must be reachable without a detour through a
+    // full refund or a write-off that did not happen.
+    PNCStatus.RECONCILED
   ],
   [PNCStatus.FULLY_REFUNDED]: [
     PNCStatus.RECONCILED
@@ -100,7 +104,9 @@ export const ALLOWED_TRANSITIONS: Record<PNCStatus, PNCStatus[]> = {
   [PNCStatus.DISPUTED]: [
     PNCStatus.PARTIALLY_REFUNDED,
     PNCStatus.FULLY_REFUNDED,
-    PNCStatus.WRITTEN_OFF
+    PNCStatus.WRITTEN_OFF,
+    // A dispute that is resolved in the org's favour closes directly.
+    PNCStatus.RECONCILED
   ],
   [PNCStatus.RECONCILED]: [
     PNCStatus.CLOSED

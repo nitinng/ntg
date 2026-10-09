@@ -77,12 +77,15 @@ export const DEFAULT_ROUTING_SETTINGS = [
 ];
 
 export const createSupabaseMock = (options: MockOptions = {}) => {
-  const templates = options.templates ?? [];
   const routingSettings = options.routingSettings ?? DEFAULT_ROUTING_SETTINGS;
   const pncEmails = options.pncEmails ?? ['pnc1@navgurukul.org', 'admin1@navgurukul.org'];
 
-  // Read lazily: a suite that varies the history between cases assigns to it after
+  // Read lazily: a suite that varies these between cases assigns to them after
   // the mock is built, so capturing the value here would freeze the first state.
+  // `templates` used to be captured, which silently made every
+  // `mockOptions.templates = ...` in a test a no-op -- the suite still passed
+  // because the base fixture happened to satisfy most assertions.
+  const templates = () => options.templates ?? [];
   const statusHistory = () => options.statusHistory ?? [];
 
   /** Every role list passed to profiles.select().in('role', ...), in call order. */
@@ -99,7 +102,7 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
           eq: vi.fn((_col: string, event: string) => ({
             eq: vi.fn((_col2: string, audience: string) =>
               Promise.resolve({
-                data: templates.filter(t => t.event === event && t.audience === audience),
+                data: templates().filter(t => t.event === event && t.audience === audience),
                 error: null
               })
             )

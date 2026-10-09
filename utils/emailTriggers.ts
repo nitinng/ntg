@@ -282,6 +282,13 @@ export const deriveContextKey = async (
       // them apart - whether a ticket was ever issued is what decides the copy.
       return hasBooking(request) ? 'post_booking' : undefined;
 
+    case E.NO_REFUND_REQUIRED:
+      // Both cancellation routes end here, and the default copy is written for
+      // an employee who cancelled themselves. Telling a traveller whose trip the
+      // desk cancelled that "your cancellation is settled" reads as blame, so
+      // the PNC route gets its own wording.
+      return fromStatus === S.CANCELLED_BY_PNC ? 'pnc_cancellation' : undefined;
+
     case E.REFUND_COMPLETED:
     case E.REFUND_WRITTEN_OFF:
       return fromStatus === S.PARTIALLY_REFUNDED ? 'after_partial_refund' : undefined;
@@ -466,6 +473,10 @@ const AUDIENCES_FOR_EVENT: Partial<Record<TravelEvent, EmailAudience[]>> = {
   [E.PNC_CANCELLATION]: ['employee'],
   [E.PARTIAL_CANCELLATION]: ['employee'],
   [E.SEGMENT_REFUND_COMPLETED]: ['employee'],
+  // A ticket entering Pending Refund now notifies the traveller, whether the
+  // employee cancelled (sheet P13) or PNC did (P15). Finance is copied via the
+  // template's cc_rule rather than a second audience, so the mail stays one mail.
+  [E.REFUND_PROCESS_STARTED]: ['employee'],
   [E.PARTIAL_REFUND_RECEIVED]: ['employee'],
   [E.REFUND_COMPLETED]: ['employee'],
   [E.REFUND_WRITTEN_OFF]: ['employee'],
@@ -486,7 +497,6 @@ export const SILENT_EVENTS: TravelEvent[] = [
   E.BOOKING_DETAIL_EDITED,
   E.CANCELLATION_REQUEST_ASSIGNED,
   E.CANCELLATION_CLOSED_PRE_BOOKING,
-  E.REFUND_PROCESS_STARTED,
   E.SEGMENT_REFUND_PENDING,
   E.TRAVEL_DATE_REACHED,
   E.TRIP_COMPLETED,

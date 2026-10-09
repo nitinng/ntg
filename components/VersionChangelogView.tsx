@@ -29,33 +29,10 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
     Object.fromEntries(RELEASES.slice(0, 3).map(release => [release.version, true]))
   );
 
-  const canEdit = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.PNC_ADMIN || currentUser?.role === UserRole.PNC;
-
-  const [releases, setReleases] = useState<ChangelogRelease[]>(() => {
-    try {
-      const stored = localStorage.getItem('ntg_custom_changelog_releases');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return [...parsed, ...RELEASES_DATA];
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return RELEASES_DATA;
-  });
+  const releases = RELEASES_DATA;
 
   const latestVersion = releases[0]?.version ?? 'v0.0.0';
   const earliestVersion = releases[releases.length - 1]?.version ?? latestVersion;
-
-  // Modal State for Adding Custom Changelog Entry
-  const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
-  const [newVersion, setNewVersion] = useState('');
-  const [newTitle, setNewTitle] = useState('');
-  const [newBadge, setNewBadge] = useState('Update');
-  const [newSummary, setNewSummary] = useState('');
-  const [newHighlights, setNewHighlights] = useState('');
 
   // Guard: Not accessible for Employee role
   if (currentUser?.role === UserRole.EMPLOYEE) {
@@ -80,60 +57,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`Copied ${label} to clipboard!`);
-  };
-
-  const handleAddRelease = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canEdit) {
-      toast.error('You do not have permission to edit changelog entries.');
-      return;
-    }
-    if (!newVersion.trim() || !newTitle.trim() || !newSummary.trim()) {
-      toast.error('Version, title, and summary are required.');
-      return;
-    }
-
-    const highlightItems = newHighlights
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
-
-    const newReleaseEntry: ChangelogRelease = {
-      version: newVersion.trim(),
-      date: new Date().toISOString().split('T')[0],
-      title: newTitle.trim(),
-      badge: newBadge.trim() || 'Update',
-      summary: newSummary.trim(),
-      highlights: highlightItems.length > 0
-        ? [{ category: '🚀 Operational Updates', items: highlightItems }]
-        : [{ category: '🚀 Operational Updates', items: ['System updates recorded.'] }],
-      commits: [
-        {
-          hash: Math.random().toString(16).substring(2, 9),
-          date: new Date().toISOString().split('T')[0],
-          author: currentUser?.name || 'Operations',
-          message: newTitle.trim(),
-          type: 'feat'
-        }
-      ]
-    };
-
-    const updated = [newReleaseEntry, ...releases];
-    setReleases(updated);
-    try {
-      const customOnly = updated.filter(r => !RELEASES_DATA.some(rd => rd.version === r.version));
-      localStorage.setItem('ntg_custom_changelog_releases', JSON.stringify(customOnly));
-    } catch {
-      // ignore
-    }
-
-    setExpandedReleases(prev => ({ ...prev, [newReleaseEntry.version]: true }));
-    setIsAddNoteModalOpen(false);
-    setNewVersion('');
-    setNewTitle('');
-    setNewSummary('');
-    setNewHighlights('');
-    toast.success(`Release note ${newReleaseEntry.version} created successfully!`);
   };
 
   const filteredReleases = useMemo(() => {
@@ -184,9 +107,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
         icon="fa-code-branch"
       >
         <div className="flex flex-wrap items-center gap-3">
-          <span className="bg-white/20 text-white font-mono text-xs font-bold px-3 py-1.5 rounded-full border border-white/30 backdrop-blur-sm">
-            {latestVersion} Latest
-          </span>
           <div className="flex bg-white/10 backdrop-blur-sm p-1 rounded-lg border border-white/20">
             <button
               onClick={() => setViewMode('interactive')}
@@ -209,15 +129,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
               <i className="fa-brands fa-markdown"></i> Markdown Source
             </button>
           </div>
-          {canEdit && (
-            <button
-              onClick={() => setIsAddNoteModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg text-xs font-black shadow-lg transition-all active:scale-95 whitespace-nowrap"
-            >
-              <i className="fa-solid fa-plus"></i>
-              Add Release Note
-            </button>
-          )}
         </div>
       </PageBanner>
 
@@ -451,120 +362,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
             {CHANGELOG_MARKDOWN}
           </pre>
         </Card>
-      )}
-
-      {/* Add Release Note Modal */}
-      {isAddNoteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg">
-                  <i className="fa-solid fa-code-branch"></i>
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Add Release Note</h3>
-                  <p className="text-xs text-slate-500">
-                    Saved in this browser only. To publish a release to everyone, add it to <span className="font-mono">version-and-changelog.md</span>.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsAddNoteModalOpen(false)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <form onSubmit={handleAddRelease} className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Version Tag <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. v2.6.0"
-                    value={newVersion}
-                    onChange={e => setNewVersion(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Badge Label
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Operations, Security, Policy"
-                    value={newBadge}
-                    onChange={e => setNewBadge(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Release Title <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Role-Based Access Control and Department Management Polish"
-                  value={newTitle}
-                  onChange={e => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Summary Blurb <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Summarize the core impact and scope of changes..."
-                  value={newSummary}
-                  onChange={e => setNewSummary(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Highlights & Bullets (one item per line)
-                </label>
-                <textarea
-                  rows={4}
-                  placeholder="Item 1&#10;Item 2&#10;Item 3"
-                  value={newHighlights}
-                  onChange={e => setNewHighlights(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAddNoteModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md transition-all active:scale-95"
-                >
-                  Save Release Note
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );

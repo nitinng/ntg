@@ -376,9 +376,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
         icon="fa-code-branch"
       >
         <div className="flex flex-wrap items-center gap-3">
-          <span className="bg-white/20 text-white font-mono text-xs font-bold px-3 py-1.5 rounded-full border border-white/30 backdrop-blur-sm">
-            {releases[0]?.version || 'v2.5.0'} Latest
-          </span>
           <div className="flex bg-white/10 backdrop-blur-sm p-1 rounded-lg border border-white/20">
             <button
               onClick={() => setViewMode('interactive')}
@@ -401,15 +398,6 @@ export const VersionChangelogView: React.FC<VersionChangelogViewProps> = ({ curr
               <i className="fa-brands fa-markdown"></i> Markdown Source
             </button>
           </div>
-          {canEdit && (
-            <button
-              onClick={() => setIsAddNoteModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg text-xs font-black shadow-lg transition-all active:scale-95 whitespace-nowrap"
-            >
-              <i className="fa-solid fa-plus"></i>
-              Add Release Note
-            </button>
-          )}
         </div>
       </PageBanner>
 

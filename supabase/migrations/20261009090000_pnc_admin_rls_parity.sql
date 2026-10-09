@@ -109,9 +109,13 @@ DROP POLICY IF EXISTS "Admins manage cancellations" ON public.cancellation_recor
 CREATE POLICY "Admins manage cancellations" ON public.cancellation_records
   FOR ALL USING (public.get_user_role() IN ('Admin', 'PNC', 'PNC Admin', 'Finance'));
 
-DROP POLICY IF EXISTS "Admins manage refunds" ON public.refund_entries;
-CREATE POLICY "Admins manage refunds" ON public.refund_entries
-  FOR ALL USING (public.get_user_role() IN ('Admin', 'PNC', 'PNC Admin', 'Finance'));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'refund_entries') THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Admins manage refunds" ON public.refund_entries';
+    EXECUTE 'CREATE POLICY "Admins manage refunds" ON public.refund_entries FOR ALL USING (public.get_user_role() IN (''Admin'', ''PNC'', ''PNC Admin'', ''Finance''))';
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- departments
@@ -196,26 +200,24 @@ CREATE POLICY "Admins manage template history"
 -- SLA configs -- Rule B: the Policies tab is PNC-Admin-only (App.tsx:1180) and
 -- PolicyManagement.tsx:419 renders its editor, but writes were Admin-only.
 -- ---------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Admins can manage SLA configs" ON public.sla_configs;
-CREATE POLICY "Admins can manage SLA configs" ON public.sla_configs
-  FOR ALL TO authenticated USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('Admin', 'PNC Admin'))
-  );
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'sla_configs') THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Admins can manage SLA configs" ON public.sla_configs';
+    EXECUTE 'CREATE POLICY "Admins can manage SLA configs" ON public.sla_configs FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''Admin'', ''PNC Admin'')))';
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Meetup approvers
 -- ---------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Admins and PNC can manage meetup approvers" ON public.meetup_approvers;
-CREATE POLICY "Admins and PNC can manage meetup approvers"
-  ON public.meetup_approvers FOR ALL
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role IN ('Admin', 'PNC', 'PNC Admin')
-    )
-  );
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'meetup_approvers') THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Admins and PNC can manage meetup approvers" ON public.meetup_approvers';
+    EXECUTE 'CREATE POLICY "Admins and PNC can manage meetup approvers" ON public.meetup_approvers FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN (''Admin'', ''PNC'', ''PNC Admin'')))';
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Ticket state-machine tables

@@ -60,14 +60,26 @@ export const buildRfc2822MimeMessage = (
   // Encode subject to UTF-8 Quoted-Printable or Base64 MIME header format if needed
   const encodedSubject = `=?UTF-8?B?${toBase64(message.subject)}?=`;
 
+  const attachments = message.attachments || [];
+  const hasAttachments = attachments.length > 0;
+
+  // A boundary must not occur anywhere in the body. Base64 payloads cannot
+  // contain the '=_' sequence, so this prefix is safe by construction.
+  const boundary = `=_NGTD_${randomBoundarySuffix()}`;
+
   const headers: string[] = [
     `From: ${fromHeader}`,
     `To: ${toHeader}`,
     `Subject: ${encodedSubject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`
+    `MIME-Version: 1.0`
   ];
+
+  if (hasAttachments) {
+    headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  } else {
+    headers.push(`Content-Type: text/html; charset="UTF-8"`);
+    headers.push(`Content-Transfer-Encoding: base64`);
+  }
 
   if (ccHeader) headers.push(`Cc: ${ccHeader}`);
   if (bccHeader) headers.push(`Bcc: ${bccHeader}`);
@@ -81,7 +93,48 @@ export const buildRfc2822MimeMessage = (
 
   const base64Body = toBase64(message.html || message.text || '');
 
-  return `${headers.join('\r\n')}\r\n\r\n${base64Body}`;
+  if (!hasAttachments) {
+    return `${headers.join('\r\n')}\r\n\r\n${base64Body}`;
+  }
+
+  const parts: string[] = [
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    // Wrapped for the same reason as the attachment below: RFC 2045 caps
+    // encoded lines at 76 characters, and RFC 5322 makes 998 octets a hard
+    // limit that a long HTML body can breach on a single unwrapped line.
+    wrapBase64(base64Body)
+  ];
+
+  for (const attachment of attachments) {
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      '',
+      // RFC 2045 caps encoded lines at 76 characters. Strict MTAs reject or
+      // silently truncate longer ones, which corrupts the attachment.
+      wrapBase64(attachment.content)
+    );
+  }
+
+  parts.push(`--${boundary}--`, '');
+
+  return `${headers.join('\r\n')}\r\n\r\n${parts.join('\r\n')}`;
+};
+
+/** Splits a base64 string into RFC 2045 compliant 76-character lines. */
+export const wrapBase64 = (content: string): string =>
+  content.replace(/(.{76})/g, '$1\r\n');
+
+const randomBoundarySuffix = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '');
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 };
 
 /**

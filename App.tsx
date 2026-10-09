@@ -60,6 +60,7 @@ const EmployeeGuideView = React.lazy(() => import('./components/EmployeeGuideVie
 
 import { mapDbRequest } from './services/requestMapper';
 import { checkPolicyViolation } from './utils/policyUtils';
+import { APP_VERSION } from './utils/changelog';
 
 import IgathpuriAvailabilityModal from './components/IgathpuriAvailabilityModal';
 import LoadingView from './components/LoadingView';
@@ -1216,6 +1217,10 @@ const App: React.FC = () => {
 
             </>
           )}
+
+          <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest font-mono transition-colors duration-300">
+            {APP_VERSION}
+          </div>
         </aside>
 
         <main className="app-main flex-1 p-8 overflow-auto transition-colors duration-300 bg-slate-50/50 dark:bg-slate-950">

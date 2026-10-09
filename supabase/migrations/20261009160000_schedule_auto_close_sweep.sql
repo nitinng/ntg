@@ -4,9 +4,9 @@
 -- 20261009140000 added scan_auto_close_trips(). It does nothing until something
 -- calls it; this schedules it.
 --
--- ON THE TIME: 02:00 IST, which is 20:30 UTC the previous day. pg_cron runs on
--- the server clock, which is UTC on Supabase, so '0 2 * * *' would have meant
--- 07:30 IST -- the start of the working morning, when the desk is live and a
+-- ON THE TIME: 03:00 IST, which is 21:30 UTC the previous day. pg_cron runs on
+-- the server clock, which is UTC on Supabase, so '0 3 * * *' would have meant
+-- 08:30 IST -- well into the working morning, when the desk is live and a
 -- batch of closure mail is least welcome. The point of an overnight sweep is
 -- that it lands before anyone is looking.
 --
@@ -14,8 +14,9 @@
 -- and recreated by name, so this migration is re-runnable and editing it in
 -- place is how you change the time.
 --
---   02:00 IST  ->  '30 20 * * *'   (20:30 UTC, the night before)
---   02:00 UTC  ->  '0 2 * * *'
+--   03:00 IST  ->  '30 21 * * *'   (21:30 UTC, the night before)
+--   02:00 IST  ->  '30 20 * * *'
+--   03:00 UTC  ->  '0 3 * * *'
 --
 -- GUARDED on pg_cron being available. Supabase ships it but it is off until
 -- enabled under Database > Extensions. If it is missing this migration says so
@@ -41,10 +42,10 @@ BEGIN
 
   PERFORM cron.schedule(
     'auto-close-trips',
-    '30 20 * * *',
+    '30 21 * * *',
     'SELECT public.scan_auto_close_trips();'
   );
 
-  RAISE NOTICE 'Auto-close sweep scheduled: 20:30 UTC daily (02:00 IST).';
+  RAISE NOTICE 'Auto-close sweep scheduled: 21:30 UTC daily (03:00 IST).';
 END;
 $schedule_auto_close$;

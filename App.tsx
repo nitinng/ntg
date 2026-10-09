@@ -1101,125 +1101,141 @@ const App: React.FC = () => {
       }} onOpenProfile={() => handleTabChange('profile')} />
 
       <div className="flex-1 flex flex-col md:flex-row transition-colors duration-300">
-        <aside className={`app-sidebar ${isSidebarOpen ? 'sidebar-open' : ''} w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 p-6 flex flex-col space-y-6 transition-colors duration-300 md:sticky md:top-16 md:h-[calc(100vh-4rem)] overflow-y-auto custom-scrollbar`}>
-          {currentUser.role === UserRole.EMPLOYEE && (
-            <>
-              <div className="space-y-1">
-                <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
-                <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
-                <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
-                {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
-                {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
-                {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+        <aside className={`app-sidebar ${isSidebarOpen ? 'sidebar-open' : ''} w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 flex flex-col transition-colors duration-300 md:sticky md:top-16 md:h-[calc(100vh-4rem)]`}>
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            {currentUser.role === UserRole.EMPLOYEE && (
+              <>
+                <div className="space-y-1">
+                  <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  <SidebarLink icon="fa-user" label="Profile" active={activeTab === 'profile'} onClick={() => handleTabChange('profile')} />
+                  <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
+                  {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
+                  {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
+                  {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+                    <SidebarLink
+                      icon="fa-file-signature"
+                      label="Approvals"
+                      active={activeTab === 'approvals'}
+                      onClick={() => handleTabChange('approvals')}
+                      badge={requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                    />
+                  )}
+                  {isMeetupApprover && isIgatpuriEnabled && (
+                    <SidebarLink
+                      icon="fa-calendar-check"
+                      label="Meetup Approvals"
+                      active={activeTab === 'meetup-approvals'}
+                      onClick={() => handleTabChange('meetup-approvals')}
+                      badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
+                    />
+                  )}
+                  <SidebarLink icon="fa-book" label="Employee Guide" active={activeTab === 'guide'} onClick={() => handleTabChange('guide')} />
+                </div>
+
+              </>
+            )}
+
+            {(currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) && (
+              <>
+                <div className="space-y-1">
+                  <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
+                  <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
                   <SidebarLink
-                    icon="fa-file-signature"
-                    label="Approvals"
-                    active={activeTab === 'approvals'}
-                    onClick={() => handleTabChange('approvals')}
-                    badge={requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                    icon="fa-calendar-plus"
+                    label="Self Booking"
+                    active={false}
+                    onClick={() => setIsPNCBookingModalOpen(true)}
+                    badge={<i className="fa-solid fa-plus text-xs"></i>}
+                    badgeColor="bg-blue-600 w-5 h-5 flex items-center justify-center !p-0"
                   />
-                )}
-                {isMeetupApprover && isIgatpuriEnabled && (
+                  <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
+                  <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                  <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
+                  <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                   <SidebarLink
-                    icon="fa-calendar-check"
-                    label="Meetup Approvals"
-                    active={activeTab === 'meetup-approvals'}
-                    onClick={() => handleTabChange('meetup-approvals')}
-                    badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
+                    icon="fa-circle-exclamation"
+                    label="Cancel Queue"
+                    active={activeTab === 'cancellation-requests'}
+                    onClick={() => handleTabChange('cancellation-requests')}
+                    badge={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED).length || null}
+                    badgeColor="bg-rose-600 px-1.5 py-0.5"
                   />
-                )}
-                <SidebarLink icon="fa-book" label="Employee Guide" active={activeTab === 'guide'} onClick={() => handleTabChange('guide')} />
-              </div>
+                  {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
+                  <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
+                </div>
+                <div className="space-y-1">
+                  <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">EVENTS</p>
+                  {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
+                  {isMeetupApprover && isIgatpuriEnabled && (
+                    <SidebarLink
+                      icon="fa-calendar-check"
+                      label="Meetup Approvals"
+                      active={activeTab === 'meetup-approvals'}
+                      onClick={() => handleTabChange('meetup-approvals')}
+                      badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
+                    />
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
+                  <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
+                  <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
+                  {currentUser.role === UserRole.PNC_ADMIN && <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />}
+                  <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                  <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                </div>
 
-            </>
-          )}
+              </>
+            )}
 
-          {(currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) && (
-            <>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
-                <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
-                <SidebarLink
-                  icon="fa-calendar-plus"
-                  label="Self Booking"
-                  active={false}
-                  onClick={() => setIsPNCBookingModalOpen(true)}
-                  badge={<i className="fa-solid fa-plus text-xs"></i>}
-                  badgeColor="bg-blue-600 w-5 h-5 flex items-center justify-center !p-0"
-                />
-                <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
-                <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
-                <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
-                <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
-                <SidebarLink
-                  icon="fa-circle-exclamation"
-                  label="Cancel Queue"
-                  active={activeTab === 'cancellation-requests'}
-                  onClick={() => handleTabChange('cancellation-requests')}
-                  badge={requests.filter(r => r.pncStatus === PNCStatus.CANCELLATION_REQUESTED).length || null}
-                  badgeColor="bg-rose-600 px-1.5 py-0.5"
-                />
-                {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
-                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
-              </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">EVENTS</p>
-                {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
-                {isMeetupApprover && isIgatpuriEnabled && (
-                  <SidebarLink
-                    icon="fa-calendar-check"
-                    label="Meetup Approvals"
-                    active={activeTab === 'meetup-approvals'}
-                    onClick={() => handleTabChange('meetup-approvals')}
-                    badge={meetupAvailabilityRequests.filter(r => r.status === 'Pending').length || null}
-                  />
-                )}
-              </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
-                <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
-                <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
-                {currentUser.role === UserRole.PNC_ADMIN && <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />}
-                <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
-                <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
-              </div>
+            {currentUser.role === UserRole.FINANCE && (
+              <>
+                <div className="space-y-1">
+                  <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
+                  <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
+                  <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                </div>
 
-            </>
-          )}
+              </>
+            )}
 
-          {currentUser.role === UserRole.FINANCE && (
-            <>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
-                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
-                <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
-              </div>
+            {currentUser.role === UserRole.ADMIN && (
+              <>
+                <div className="space-y-1">
+                  <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
+                  <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
+                </div>
+                <div className="space-y-1">
+                  <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
+                  <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
+                  <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
+                  <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
+                  <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
+                  <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
+                  <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
+                </div>
 
-            </>
-          )}
+              </>
+            )}
+          </div>
 
-          {currentUser.role === UserRole.ADMIN && (
-            <>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
-                <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
-                <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
-              </div>
-              <div className="space-y-1">
-                <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">CONFIGURATION</p>
-                <SidebarLink icon="fa-envelope" label="Email Center" active={['email-center', 'mail-templates', 'sent-mails', 'email-routing'].includes(activeTab)} onClick={() => handleTabChange('email-center')} />
-                <SidebarLink icon="fa-id-card-clip" label="Verification" active={activeTab === 'verification'} onClick={() => handleTabChange('verification')} badge={users.filter(u => u.passportPhoto?.status === VerificationStatus.PENDING || u.idProof?.status === VerificationStatus.PENDING).length || null} />
-                <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
-                <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
-                <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
-                <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
-              </div>
-
-            </>
-          )}
-
-          <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest font-mono transition-colors duration-300">
-            {APP_VERSION}
+          <div className="sticky bottom-0 z-10 flex-shrink-0 px-6 py-3.5 border-t border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors duration-300">
+            <button
+              type="button"
+              onClick={() => {
+                if (currentUser.role !== UserRole.EMPLOYEE) {
+                  handleTabChange('changelog');
+                }
+              }}
+              className={`flex items-center gap-2 text-xs font-mono font-medium text-slate-600 dark:text-slate-400 ${
+                currentUser.role !== UserRole.EMPLOYEE ? 'hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer' : 'cursor-default'
+              } transition-colors`}
+              title={currentUser.role !== UserRole.EMPLOYEE ? 'View Changelog' : `Version ${APP_VERSION}`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+              <span>{APP_VERSION}</span>
+            </button>
           </div>
         </aside>
 

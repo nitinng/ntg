@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.7.0 (2026-10-09)](#v270---2026-10-09)
+* [Current Release — v2.7.1 (2026-10-09)](#v271---2026-10-09)
+* [v2.7.0 (2026-10-09)](#v270---2026-10-09)
 * [v2.6.0 (2026-10-01)](#v260---2026-10-01)
 * [v2.5.0 (2026-09-28)](#v250---2026-09-28)
 * [v2.4.0 (2026-08-28)](#v240---2026-08-28)
@@ -24,6 +25,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.7.1] - 2026-10-09
+
+### 🎨 Sidenav Footer Polish & Changelog Cleanup
+
+> **UI Polish** — Pinned the version footer to the bottom of the sidebar across desktop and mobile, updated the version display with a status indicator dot and monospace font, and cleaned up changelog header controls.
+
+#### 🎨 User Interface & Navigation
+* Made the application version in the sidenav footer sticky to the bottom.
+* Redesigned the version footer with a status indicator dot and monospace typography.
+* Removed the manual "Add Release Note" action and redundant version badge from the Changelog header.
+
+#### 📝 Commits in this Release
+* `f069976` — `feat(nav): show the app version in the sidebar footer` — Nitin — 2026-10-09
+* `772c251` — `style(changelog): remove Add Release Note button and Latest version badge` — Nitin — 2026-10-09
 
 ---
 

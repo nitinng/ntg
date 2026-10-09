@@ -17,6 +17,9 @@ import { deriveEventFromTransition } from '../utils/emailTriggers';
 const MIGRATION = 'supabase/migrations/20261009140000_auto_close_completed_trips.sql';
 const sql = readFileSync(MIGRATION, 'utf8');
 
+const SCHEDULE_MIGRATION = 'supabase/migrations/20261009160000_schedule_auto_close_sweep.sql';
+const scheduleSql = readFileSync(SCHEDULE_MIGRATION, 'utf8');
+
 /** The stages the scan's WHERE clause sweeps. */
 const sweptStatuses = (): string[] => {
   const match = /pnc_status IN \(([^)]*)\)/.exec(sql);
@@ -74,5 +77,47 @@ describe('the scan waits for the traveller to be back', () => {
 
   it('bounds one run so a backlog cannot fire unlimited mail', () => {
     expect(sql).toMatch(/LIMIT \d+/);
+  });
+});
+
+describe('the sweep is scheduled overnight in IST, not UTC', () => {
+  /** The cron expression the migration actually registers. */
+  const cronExpression = (): string => {
+    const match = /PERFORM cron\.schedule\(\s*'auto-close-trips',\s*'([^']+)'/.exec(scheduleSql);
+    if (!match) throw new Error('could not find the cron expression in ' + SCHEDULE_MIGRATION);
+    return match[1];
+  };
+
+  it('runs at 02:00 IST', () => {
+    // pg_cron runs on the server clock, which is UTC on Supabase. '0 2 * * *'
+    // would be 07:30 IST -- the start of the working morning, when a batch of
+    // closure mail is least welcome. 20:30 UTC the night before is 02:00 IST.
+    const [minute, hour] = cronExpression().split(' ');
+
+    const utcHour = Number(hour);
+    const utcMinute = Number(minute);
+    const istTotalMinutes = (utcHour * 60 + utcMinute + 5 * 60 + 30) % (24 * 60);
+
+    expect(istTotalMinutes).toBe(2 * 60);
+  });
+
+  it('is a daily schedule', () => {
+    const [, , dayOfMonth, month, dayOfWeek] = cronExpression().split(' ');
+    expect([dayOfMonth, month, dayOfWeek]).toEqual(['*', '*', '*']);
+  });
+
+  it('replaces rather than duplicates the job when re-run', () => {
+    // Without the unschedule, every re-run would add another job and the sweep
+    // would fire several times a night.
+    expect(scheduleSql).toContain('cron.unschedule');
+    expect(scheduleSql).toMatch(/IF EXISTS \(SELECT 1 FROM cron\.job WHERE jobname/);
+  });
+
+  it('degrades to a notice when pg_cron is absent, rather than failing', () => {
+    // It ships alongside other migrations in one transaction; raising here
+    // would roll back everything applied with it.
+    expect(scheduleSql).toContain("to_regproc('cron.schedule') IS NULL");
+    expect(scheduleSql).toContain('RAISE NOTICE');
+    expect(scheduleSql).not.toContain('RAISE EXCEPTION');
   });
 });

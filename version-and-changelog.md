@@ -57,7 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **Recipient Guard Exemption**: The `email_queue` recipient guard now recognises SOS dispatch and pins the recipients to the configured channel, so an alert raised from an employee's browser is delivered without widening what anyone can address mail to.
 
 #### 📝 Commits in this Release
-* `pending` — `feat(sos): record and push every detectable failure to Slack` — Nitin — 2026-10-10
+* `360515d` — `feat(sos): record and push every detectable failure to Slack` — Nitin — 2026-10-10
 
 ---
 

@@ -775,7 +775,7 @@ const App: React.FC = () => {
         return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
-        return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} />;
+        return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} users={users} />;
       }
       return null;
     };
@@ -785,7 +785,7 @@ const App: React.FC = () => {
         return renderDashboard();
       case 'analytics':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} />;
+        return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} users={users} />;
       case 'past-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <PastRequestsView requests={requests.filter(r => r.requesterId === currentUser.id)} onView={setSelectedRequest} />;

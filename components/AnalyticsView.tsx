@@ -119,7 +119,85 @@ export const PieChartInteractive = ({ data, isFinancial }: { data: { label: stri
   );
 };
 
-export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: User; policy?: PolicyConfig }> = ({ requests, currentUser, policy }) => {
+// --- PNC Stage & Handover Tracking Types ---
+export interface StageSegment {
+  id: string;
+  stageName: string;
+  actorName: string;
+  actorRole?: string;
+  actorAvatar?: string;
+  startTime: number;
+  endTime: number;
+  durationHours: number;
+  isHandover: boolean;
+  previousActorName?: string;
+  status: 'Completed' | 'In Progress' | 'On Hold';
+  details?: string;
+}
+
+export interface RequestStageJourney {
+  id: string;
+  submissionId: string;
+  requesterName: string;
+  requesterCampus: string;
+  requesterDepartment: string;
+  from?: string;
+  to?: string;
+  dateOfTravel: string;
+  priority: Priority;
+  dynamicPriority: Priority;
+  pncStatus: PNCStatus;
+  approvalStatus: ApprovalStatus;
+  actualTatHours: number;
+  targetSlaHours: number;
+  approvalHours: number;
+  processingHours: number;
+  isBreached: boolean;
+  isAtRisk: boolean;
+  isClosedOrBooked: boolean;
+  daysRemaining: number;
+  slaStatus: 'Met' | 'On Track' | 'At Risk' | 'Breached';
+  assignedUserName: string;
+  initialHandlerName: string;
+  currentHandlerName: string;
+  hasHandover: boolean;
+  handoverSummary?: string;
+  stages: StageSegment[];
+  handovers: {
+    fromActor: string;
+    toActor: string;
+    timestamp: number;
+    reason?: string;
+  }[];
+  timestamp?: string;
+}
+
+export interface PncStaffMetrics {
+  userId?: string;
+  name: string;
+  email?: string;
+  role: string;
+  avatar?: string;
+  pickedUpCount: number;
+  totalRequestsTouched: number;
+  completedCount: number;
+  inProgressCount: number;
+  handoversInitiated: number;
+  handoversReceived: number;
+  totalStageHours: number;
+  stagesCount: number;
+  avgStageTatHours: number;
+  onTimeCount: number;
+  breachedCount: number;
+  compliancePct: number;
+}
+
+export const AnalyticsView: React.FC<{
+  requests: TravelRequest[];
+  currentUser: User;
+  policy?: PolicyConfig;
+  users?: User[];
+}> = ({ requests, currentUser, policy, users = [] }) => {
   const [filters, setFilters] = useState<{
     campuses: string[];
     departments: string[];
@@ -152,6 +230,12 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const [advances, setAdvances] = useState<any[]>([]);
   const [cancellations, setCancellations] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+
+  // Sub-view within TAT & SLA: 'staff' | 'pipeline' | 'ledger'
+  const isPncOrAdmin = currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN;
+  const [slaSubView, setSlaSubView] = useState<'staff' | 'pipeline' | 'ledger'>(isPncOrAdmin ? 'staff' : 'pipeline');
+  const [slaPncFilter, setSlaPncFilter] = useState<string>('all');
+  const [selectedJourneyRequest, setSelectedJourneyRequest] = useState<RequestStageJourney | null>(null);
 
   // Pagination states
   const [travelPage, setTravelPage] = useState(1);
@@ -461,9 +545,28 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
   const tatBookingTarget = policy?.tatBookingHours || 72;
   const enableUrgencySla = policy?.enableUrgencySla === true;
 
+  // Helper to resolve user from id or actor string
+  const resolveUser = (userId?: string | null, actorString?: string | null) => {
+    if (userId) {
+      const u = users.find(x => x.id === userId);
+      if (u) return u;
+    }
+    if (actorString) {
+      const normalized = actorString.trim().toLowerCase();
+      const u = users.find(x =>
+        (x.name && x.name.toLowerCase() === normalized) ||
+        (x.email && x.email.toLowerCase() === normalized)
+      );
+      if (u) return u;
+    }
+    return null;
+  };
+
   const slaData = useMemo(() => {
     return filteredData.map(r => {
-      const timeline = r.timeline || [];
+      const timeline = (r.timeline || []).slice().sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
       const createdAt = new Date(r.timestamp || Date.now()).getTime();
 
       // 1. Manager Approval TAT
@@ -478,9 +581,96 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
             ? 12
             : Math.max(0.1, (Date.now() - createdAt) / (1000 * 60 * 60)));
 
-      // 2. PNC Processing TAT
-      const processingEvent = timeline.find(e => e.event.toLowerCase().includes('processing'));
-      const processingTime = processingEvent ? new Date(processingEvent.timestamp).getTime() : (approvalTime || createdAt);
+      // 2. Desk claim & assignment parsing
+      const assignedUser = resolveUser(r.assignedPncId);
+      const assignedUserName = assignedUser?.name || assignedUser?.email || (r.assignedPncId ? 'Assigned Desk Staff' : 'Unassigned');
+
+      // Find desk events (claim, assign, processing, hold, booked)
+      const deskEvents = timeline.filter(e => {
+        const ev = e.event.toLowerCase();
+        return ev.includes('claim') ||
+          ev.includes('assign') ||
+          ev.includes('processing') ||
+          ev.includes('on hold') ||
+          ev.includes('hold') ||
+          ev.includes('booked') ||
+          ev.includes('closed') ||
+          ev.includes('ticket');
+      });
+
+      // Find first desk claim/pickup event
+      const firstClaimEvent = timeline.find(e =>
+        e.event.toLowerCase().includes('claimed by') ||
+        e.event.toLowerCase().includes('assigned to') ||
+        e.event.toLowerCase().includes('processing')
+      );
+
+      // Extract initial actor name
+      let initialActorName = 'Unassigned';
+      if (firstClaimEvent) {
+        if (firstClaimEvent.event.toLowerCase().includes('claimed by')) {
+          initialActorName = firstClaimEvent.event.replace(/claimed by/i, '').trim();
+        } else if (firstClaimEvent.event.toLowerCase().includes('assigned to')) {
+          initialActorName = firstClaimEvent.event.replace(/assigned to/i, '').trim();
+        } else {
+          initialActorName = firstClaimEvent.actor || 'PNC Desk';
+        }
+      } else if (assignedUser) {
+        initialActorName = assignedUser.name || assignedUser.email;
+      }
+
+      // Detect handovers: scan events for handover transitions
+      const handoverEvents: { fromActor: string; toActor: string; timestamp: number; reason?: string }[] = [];
+      let lastDeskActor = initialActorName;
+      let lastDeskTime = firstClaimEvent ? new Date(firstClaimEvent.timestamp).getTime() : createdAt;
+
+      deskEvents.forEach(e => {
+        const ev = e.event.toLowerCase();
+        const evTime = new Date(e.timestamp).getTime();
+
+        let newActor = '';
+        if (ev.includes('claimed by')) {
+          newActor = e.event.replace(/claimed by/i, '').trim();
+        } else if (ev.includes('assigned to')) {
+          newActor = e.event.replace(/assigned to/i, '').trim();
+        } else if (e.actor && e.actor !== r.requesterName && !e.actor.toLowerCase().includes('system') && !e.actor.toLowerCase().includes('employee')) {
+          newActor = e.actor;
+        }
+
+        if (newActor && lastDeskActor !== 'Unassigned' && newActor !== lastDeskActor && (ev.includes('reassigned') || ev.includes('claim') || ev.includes('assign') || ev.includes('processing') || ev.includes('booked') || e.details?.toLowerCase().includes('reassigned'))) {
+          handoverEvents.push({
+            fromActor: lastDeskActor,
+            toActor: newActor,
+            timestamp: evTime,
+            reason: e.details || e.event
+          });
+          lastDeskActor = newActor;
+          lastDeskTime = evTime;
+        }
+      });
+
+      // If assignedPncId differs from initial actor and no handover was logged yet
+      if (assignedUser && lastDeskActor !== 'Unassigned' && (assignedUser.name || assignedUser.email) !== initialActorName && handoverEvents.length === 0) {
+        handoverEvents.push({
+          fromActor: initialActorName,
+          toActor: assignedUser.name || assignedUser.email,
+          timestamp: r.assignedAt ? new Date(r.assignedAt).getTime() : (lastDeskTime + 3600000),
+          reason: 'Reassigned desk ownership'
+        });
+        lastDeskActor = assignedUser.name || assignedUser.email;
+      }
+
+      const hasHandover = handoverEvents.length > 0;
+      const currentHandlerName = lastDeskActor !== 'Unassigned'
+        ? lastDeskActor
+        : (assignedUserName !== 'Unassigned' ? assignedUserName : 'Unassigned');
+
+      const handoverSummary = hasHandover
+        ? handoverEvents.map(h => `${h.fromActor} ➔ ${h.toActor}`).join(' • ')
+        : undefined;
+
+      // Completion & Processing TAT
+      const processingTime = firstClaimEvent ? new Date(firstClaimEvent.timestamp).getTime() : (approvalTime || createdAt);
       const isClosedOrBooked = r.pncStatus === PNCStatus.BOOKED || r.pncStatus === PNCStatus.CLOSED;
 
       const bookedEvent = timeline.find(e =>
@@ -494,7 +684,6 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
         ? Math.max(0.1, (bookedTime - processingTime) / (1000 * 60 * 60))
         : Math.max(0.1, (Date.now() - processingTime) / (1000 * 60 * 60));
 
-      // 3. Overall Ticketing / Fulfillment TAT
       const completionTime = bookedTime
         ? bookedTime
         : (isClosedOrBooked ? createdAt + (36 * 3600 * 1000) : Date.now());
@@ -521,6 +710,105 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
         slaStatus = 'At Risk';
       }
 
+      // Build Stage Segments
+      const stages: StageSegment[] = [];
+
+      // Stage 1: Manager Approval
+      stages.push({
+        id: `${r.id}-approval`,
+        stageName: 'Manager Approval',
+        actorName: approvedEvent?.actor || 'Department Manager',
+        actorRole: 'Manager',
+        startTime: createdAt,
+        endTime: approvalTime || (r.approvalStatus === ApprovalStatus.APPROVED ? createdAt + (12 * 3600000) : Date.now()),
+        durationHours: Math.round(approvalHours * 10) / 10,
+        isHandover: false,
+        status: r.approvalStatus === ApprovalStatus.APPROVED ? 'Completed' : 'In Progress',
+        details: approvedEvent?.details || `Status: ${r.approvalStatus}`
+      });
+
+      // Stage 2: Queue Intake Wait (if approval happened before first desk pickup)
+      if (firstClaimEvent && approvalTime && processingTime > approvalTime + 60000) {
+        const queueWaitHours = Math.max(0.1, (processingTime - approvalTime) / 3600000);
+        stages.push({
+          id: `${r.id}-queue-intake`,
+          stageName: 'Queue Intake Wait',
+          actorName: 'PNC Desk Queue',
+          actorRole: 'Queue',
+          startTime: approvalTime,
+          endTime: processingTime,
+          durationHours: Math.round(queueWaitHours * 10) / 10,
+          isHandover: false,
+          status: 'Completed',
+          details: 'Waiting in queue for desk pickup'
+        });
+      }
+
+      // Stage 3 & 4: Desk Stages & Handovers
+      if (!hasHandover) {
+        // Single desk handler end-to-end
+        const deskActorUser = resolveUser(null, initialActorName) || assignedUser;
+        stages.push({
+          id: `${r.id}-desk-fulfilment`,
+          stageName: isClosedOrBooked ? 'Desk Fulfillment & Booking' : 'Desk Processing',
+          actorName: initialActorName,
+          actorRole: deskActorUser?.role || 'PNC',
+          actorAvatar: deskActorUser?.avatar,
+          startTime: processingTime,
+          endTime: completionTime,
+          durationHours: Math.round(processingHours * 10) / 10,
+          isHandover: false,
+          status: isClosedOrBooked ? 'Completed' : (r.pncStatus === PNCStatus.ON_HOLD ? 'On Hold' : 'In Progress'),
+          details: isClosedOrBooked ? 'Ticket fulfilled and booking issued' : `Currently in ${r.pncStatus}`
+        });
+      } else {
+        // Multi-stage with handover(s)
+        let segStartTime = processingTime;
+        let currentActor = initialActorName;
+
+        handoverEvents.forEach((h, hIdx) => {
+          const segEndTime = Math.min(completionTime, Math.max(segStartTime, h.timestamp));
+          const segHours = Math.max(0.1, (segEndTime - segStartTime) / 3600000);
+          const u = resolveUser(null, currentActor);
+
+          stages.push({
+            id: `${r.id}-desk-seg-${hIdx}`,
+            stageName: hIdx === 0 ? `Initial Desk Handling (${currentActor})` : `Intermediate Processing (${currentActor})`,
+            actorName: currentActor,
+            actorRole: u?.role || 'PNC',
+            actorAvatar: u?.avatar,
+            startTime: segStartTime,
+            endTime: segEndTime,
+            durationHours: Math.round(segHours * 10) / 10,
+            isHandover: hIdx > 0,
+            previousActorName: hIdx > 0 ? stages[stages.length - 1]?.actorName : undefined,
+            status: 'Completed',
+            details: `Handed over to ${h.toActor}: ${h.reason || 'Mid-way queue handover'}`
+          });
+
+          segStartTime = segEndTime;
+          currentActor = h.toActor;
+        });
+
+        // Final continuation segment
+        const finalHours = Math.max(0.1, (completionTime - segStartTime) / 3600000);
+        const finalU = resolveUser(null, currentActor);
+        stages.push({
+          id: `${r.id}-desk-final`,
+          stageName: `Mid-Way Continuation & Fulfillment (${currentActor})`,
+          actorName: currentActor,
+          actorRole: finalU?.role || 'PNC',
+          actorAvatar: finalU?.avatar,
+          startTime: segStartTime,
+          endTime: completionTime,
+          durationHours: Math.round(finalHours * 10) / 10,
+          isHandover: true,
+          previousActorName: handoverEvents[handoverEvents.length - 1]?.fromActor,
+          status: isClosedOrBooked ? 'Completed' : (r.pncStatus === PNCStatus.ON_HOLD ? 'On Hold' : 'In Progress'),
+          details: isClosedOrBooked ? 'Continued mid-way and completed booking' : `Active continuation in ${r.pncStatus}`
+        });
+      }
+
       return {
         ...r,
         dynamicPriority,
@@ -532,10 +820,17 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
         isBreached,
         isAtRisk,
         slaStatus,
-        isClosedOrBooked
-      };
+        isClosedOrBooked,
+        assignedUserName,
+        initialHandlerName: initialActorName,
+        currentHandlerName,
+        hasHandover,
+        handoverSummary,
+        stages,
+        handovers: handoverEvents
+      } as RequestStageJourney & typeof r;
     });
-  }, [filteredData, policy]);
+  }, [filteredData, policy, users]);
 
   // Executive SLA KPIs
   const totalSlaRequests = slaData.length;
@@ -624,6 +919,191 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
     })).sort((a, b) => b.compliance - a.compliance);
   }, [slaData]);
 
+  // --- User-Specific PNC Staff Metrics & Handover Aggregation ---
+  const pncStaffMetrics = useMemo(() => {
+    const deskUsers = (users || []).filter(u =>
+      u.role === UserRole.PNC || u.role === UserRole.PNC_ADMIN || u.role === UserRole.ADMIN
+    );
+
+    const map: Record<string, PncStaffMetrics> = {};
+
+    deskUsers.forEach(u => {
+      const key = u.name || u.email;
+      map[key] = {
+        userId: u.id,
+        name: u.name || u.email,
+        email: u.email,
+        role: u.role,
+        avatar: u.avatar,
+        pickedUpCount: 0,
+        totalRequestsTouched: 0,
+        completedCount: 0,
+        inProgressCount: 0,
+        handoversInitiated: 0,
+        handoversReceived: 0,
+        totalStageHours: 0,
+        stagesCount: 0,
+        avgStageTatHours: 0,
+        onTimeCount: 0,
+        breachedCount: 0,
+        compliancePct: 100
+      };
+    });
+
+    slaData.forEach(r => {
+      const actorsInRequest = new Set<string>();
+
+      // Initial claim / pickup
+      if (r.initialHandlerName && r.initialHandlerName !== 'Unassigned' && r.initialHandlerName !== 'PNC Desk Queue') {
+        if (!map[r.initialHandlerName]) {
+          map[r.initialHandlerName] = {
+            name: r.initialHandlerName,
+            role: UserRole.PNC,
+            pickedUpCount: 0,
+            totalRequestsTouched: 0,
+            completedCount: 0,
+            inProgressCount: 0,
+            handoversInitiated: 0,
+            handoversReceived: 0,
+            totalStageHours: 0,
+            stagesCount: 0,
+            avgStageTatHours: 0,
+            onTimeCount: 0,
+            breachedCount: 0,
+            compliancePct: 100
+          };
+        }
+        map[r.initialHandlerName].pickedUpCount++;
+        actorsInRequest.add(r.initialHandlerName);
+      }
+
+      // Handover events
+      if (r.hasHandover && r.handovers && r.handovers.length > 0) {
+        r.handovers.forEach(h => {
+          if (h.fromActor && map[h.fromActor]) {
+            map[h.fromActor].handoversInitiated++;
+          }
+          if (h.toActor) {
+            if (!map[h.toActor]) {
+              map[h.toActor] = {
+                name: h.toActor,
+                role: UserRole.PNC,
+                pickedUpCount: 0,
+                totalRequestsTouched: 0,
+                completedCount: 0,
+                inProgressCount: 0,
+                handoversInitiated: 0,
+                handoversReceived: 0,
+                totalStageHours: 0,
+                stagesCount: 0,
+                avgStageTatHours: 0,
+                onTimeCount: 0,
+                breachedCount: 0,
+                compliancePct: 100
+              };
+            }
+            map[h.toActor].handoversReceived++;
+            actorsInRequest.add(h.toActor);
+          }
+        });
+      }
+
+      // Current owner / fulfillment
+      const finalActor = r.currentHandlerName || r.initialHandlerName;
+      if (finalActor && finalActor !== 'Unassigned') {
+        if (!map[finalActor]) {
+          map[finalActor] = {
+            name: finalActor,
+            role: UserRole.PNC,
+            pickedUpCount: 0,
+            totalRequestsTouched: 0,
+            completedCount: 0,
+            inProgressCount: 0,
+            handoversInitiated: 0,
+            handoversReceived: 0,
+            totalStageHours: 0,
+            stagesCount: 0,
+            avgStageTatHours: 0,
+            onTimeCount: 0,
+            breachedCount: 0,
+            compliancePct: 100
+          };
+        }
+        actorsInRequest.add(finalActor);
+        if (r.isClosedOrBooked) {
+          map[finalActor].completedCount++;
+          if (r.isBreached) {
+            map[finalActor].breachedCount++;
+          } else {
+            map[finalActor].onTimeCount++;
+          }
+        } else {
+          map[finalActor].inProgressCount++;
+          if (r.isBreached) {
+            map[finalActor].breachedCount++;
+          }
+        }
+      }
+
+      // Stage hours attribution
+      r.stages.forEach(st => {
+        if (st.actorName && map[st.actorName] && st.stageName !== 'Manager Approval' && st.stageName !== 'Queue Intake Wait') {
+          map[st.actorName].totalStageHours += st.durationHours;
+          map[st.actorName].stagesCount++;
+        }
+      });
+
+      actorsInRequest.forEach(actor => {
+        if (map[actor]) {
+          map[actor].totalRequestsTouched++;
+        }
+      });
+    });
+
+    return Object.values(map).map(staff => {
+      const avgStageTat = staff.stagesCount > 0
+        ? Math.round((staff.totalStageHours / staff.stagesCount) * 10) / 10
+        : 0;
+      const resolvedTotal = staff.completedCount + staff.breachedCount;
+      const compliancePct = resolvedTotal > 0
+        ? Math.round((staff.onTimeCount / resolvedTotal) * 100)
+        : (staff.breachedCount === 0 ? 100 : 0);
+
+      return {
+        ...staff,
+        avgStageTatHours: avgStageTat,
+        compliancePct
+      };
+    }).sort((a, b) => b.pickedUpCount - a.pickedUpCount || b.completedCount - a.completedCount);
+  }, [users, slaData]);
+
+  // Team-wide Handover & Workload stats
+  const teamHandoverStats = useMemo(() => {
+    const totalPickups = pncStaffMetrics.reduce((sum, s) => sum + s.pickedUpCount, 0);
+    const requestsWithHandover = slaData.filter(d => d.hasHandover).length;
+    const totalHandovers = slaData.reduce((sum, d) => sum + (d.handovers?.length || 0), 0);
+    const handoverRate = totalPickups > 0 ? Math.round((requestsWithHandover / totalPickups) * 100) : 0;
+    const totalCompleted = pncStaffMetrics.reduce((sum, s) => sum + s.completedCount, 0);
+    const totalBreaches = pncStaffMetrics.reduce((sum, s) => sum + s.breachedCount, 0);
+    const teamCompliancePct = (totalCompleted + totalBreaches) > 0
+      ? Math.round((totalCompleted / (totalCompleted + totalBreaches)) * 100)
+      : 100;
+    const allDeskStages = pncStaffMetrics.reduce((sum, s) => sum + s.stagesCount, 0);
+    const allDeskHours = pncStaffMetrics.reduce((sum, s) => sum + s.totalStageHours, 0);
+    const avgStageTatHours = allDeskStages > 0 ? Math.round((allDeskHours / allDeskStages) * 10) / 10 : 0;
+
+    return {
+      totalPickups,
+      requestsWithHandover,
+      totalHandovers,
+      handoverRate,
+      totalCompleted,
+      totalBreaches,
+      teamCompliancePct,
+      avgStageTatHours
+    };
+  }, [pncStaffMetrics, slaData]);
+
   // Filtered & Sorted SLA ledger rows
   const sortedSlaRows = useMemo(() => {
     const filtered = slaData.filter(d => {
@@ -631,23 +1111,40 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
         d.submissionId?.toLowerCase().includes(slaSearch.toLowerCase()) ||
         d.requesterName?.toLowerCase().includes(slaSearch.toLowerCase()) ||
         d.from?.toLowerCase().includes(slaSearch.toLowerCase()) ||
-        d.to?.toLowerCase().includes(slaSearch.toLowerCase());
+        d.to?.toLowerCase().includes(slaSearch.toLowerCase()) ||
+        d.initialHandlerName?.toLowerCase().includes(slaSearch.toLowerCase()) ||
+        d.currentHandlerName?.toLowerCase().includes(slaSearch.toLowerCase());
       const matchPriority = slaPriorityFilter === 'all' || d.dynamicPriority === slaPriorityFilter;
       const matchStatus = slaStatusFilter === 'all' || d.slaStatus === slaStatusFilter;
-      return matchSearch && matchPriority && matchStatus;
+
+      let matchPnc = true;
+      if (slaPncFilter === 'handovers') {
+        matchPnc = d.hasHandover;
+      } else if (slaPncFilter === 'unassigned') {
+        matchPnc = !d.assignedPncId && (d.assignedUserName === 'Unassigned' || d.initialHandlerName === 'Unassigned');
+      } else if (slaPncFilter !== 'all') {
+        matchPnc = d.assignedUserName === slaPncFilter ||
+          d.initialHandlerName === slaPncFilter ||
+          d.currentHandlerName === slaPncFilter ||
+          d.stages.some(st => st.actorName === slaPncFilter);
+      }
+
+      return matchSearch && matchPriority && matchStatus && matchPnc;
     });
 
     return filtered.sort((a, b) => {
       const dir = slaSort.dir === 'asc' ? 1 : -1;
       if (slaSort.col === 'submissionId') return dir * (a.submissionId || '').localeCompare(b.submissionId || '');
       if (slaSort.col === 'requesterName') return dir * (a.requesterName || '').localeCompare(b.requesterName || '');
+      if (slaSort.col === 'pncHandler') return dir * (a.currentHandlerName || '').localeCompare(b.currentHandlerName || '');
       if (slaSort.col === 'actualTatHours') return dir * (a.actualTatHours - b.actualTatHours);
       if (slaSort.col === 'targetSlaHours') return dir * (a.targetSlaHours - b.targetSlaHours);
       if (slaSort.col === 'dateOfTravel') return dir * (new Date(a.dateOfTravel || 0).getTime() - new Date(b.dateOfTravel || 0).getTime());
       if (slaSort.col === 'slaStatus') return dir * a.slaStatus.localeCompare(b.slaStatus);
+      if (slaSort.col === 'handovers') return dir * (Number(b.hasHandover) - Number(a.hasHandover));
       return 0;
     });
-  }, [slaData, slaSearch, slaPriorityFilter, slaStatusFilter, slaSort]);
+  }, [slaData, slaSearch, slaPriorityFilter, slaStatusFilter, slaPncFilter, slaSort]);
 
   const totalSlaPages = Math.ceil(sortedSlaRows.length / itemsPerPage) || 1;
   const paginatedSlaData = useMemo(() => {
@@ -821,7 +1318,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
             } else if (activeSubTab === 'cancellations') {
               csv = [['Cancellation ID', 'Request ID', 'Traveler', 'Cancellation Date', 'Original Fare', 'Net Loss', 'Status', 'Owed By Employee', 'Absorbed By Org'], ...filteredCancellations.map(c => [c.id, c.travel_requests?.submission_id || c.travel_request_id, c.travel_requests?.requester_name || '', new Date(c.cancellation_date).toLocaleDateString(), c.original_fare || c.originalFare, c.net_unrecovered_amount || c.netUnrecoveredAmount, c.status, c.employee_owed_amount || c.employeeOwedAmount, c.org_absorbed_amount || c.orgAbsorbedAmount])].map(e => e.join(',')).join('\n');
             } else {
-              csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Travel Date', 'Urgency Tier', 'Days to Travel', 'Target SLA (Hrs)', 'Actual TAT (Hrs)', 'SLA Status', 'Manager Approval (Hrs)', 'PNC Processing (Hrs)'], ...sortedSlaRows.map(s => [s.submissionId || s.id, s.requesterName, s.requesterDepartment, s.requesterCampus, new Date(s.dateOfTravel).toLocaleDateString(), s.dynamicPriority, s.daysRemaining, s.targetSlaHours, s.actualTatHours.toFixed(1), s.slaStatus, s.approvalHours.toFixed(1), s.processingHours.toFixed(1)])].map(e => e.join(',')).join('\n');
+              csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Travel Date', 'Urgency Tier', 'Days to Travel', 'PNC Handler', 'Initial Pickup', 'Handover', 'Target SLA (Hrs)', 'Actual TAT (Hrs)', 'SLA Status', 'Manager Approval (Hrs)', 'PNC Processing (Hrs)'], ...sortedSlaRows.map(s => [s.submissionId || s.id, `"${s.requesterName || ''}"`, `"${s.requesterDepartment || ''}"`, `"${s.requesterCampus || ''}"`, new Date(s.dateOfTravel).toLocaleDateString(), s.dynamicPriority, s.daysRemaining, `"${s.currentHandlerName || 'Unassigned'}"`, `"${s.initialHandlerName || 'Unassigned'}"`, `"${s.hasHandover ? (s.handoverSummary || 'Yes') : 'No'}"`, s.targetSlaHours, s.actualTatHours.toFixed(1), s.slaStatus, s.approvalHours.toFixed(1), s.processingHours.toFixed(1)])].map(e => e.join(',')).join('\n');
             }
             const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${activeSubTab}_report_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
             toast.success('CSV exported!');
@@ -1479,237 +1976,643 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
       ) : (
         // --- TAT AND SLAS SUB-TAB ---
         <div className="space-y-8 animate-in fade-in duration-300">
-          {/* Executive Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard
-              title="Overall SLA Compliance"
-              value={`${overallCompliancePct}%`}
-              icon={<i className="fa-solid fa-shield-halved text-emerald-500"></i>}
-              description={`${closedOnTime} of ${closedCount || totalSlaRequests} resolved within target`}
-            />
-            <StatCard
-              title="Avg Fulfillment TAT"
-              value={`${avgFulfillmentHours} hrs`}
-              icon={<i className="fa-solid fa-stopwatch text-indigo-500"></i>}
-              description={enableUrgencySla ? 'Urgency-tiered dynamic limits' : `Target: ${tatBookingTarget} hrs`}
-            />
-            <StatCard
-              title="Avg Manager Approval"
-              value={`${avgApprovalHours} hrs`}
-              icon={<i className="fa-solid fa-user-check text-sky-500"></i>}
-              description={`Target: ${tatApprovalTarget} hrs limit`}
-            />
-            <StatCard
-              title="Breached / At Risk"
-              value={`${totalBreaches} / ${activeAtRisk}`}
-              icon={<i className="fa-solid fa-triangle-exclamation text-rose-500"></i>}
-              description={`${totalBreaches} past target, ${activeAtRisk} nearing limit`}
-            />
+          {/* Sub-View Switcher Pill Bar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-2.5 bg-slate-100/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-slate-800/80 p-1 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/60">
+              <button
+                type="button"
+                onClick={() => setSlaSubView('staff')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  slaSubView === 'staff'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                <i className="fa-solid fa-users-gear text-xs"></i>
+                <span>PNC Staff & Mid-Way Handovers</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  slaSubView === 'staff' ? 'bg-white/20 text-white' : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
+                }`}>
+                  {pncStaffMetrics.length} Staff
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSlaSubView('pipeline')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  slaSubView === 'pipeline'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                <i className="fa-solid fa-chart-line text-xs"></i>
+                <span>Pipeline & Campus Diagnostics</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSlaSubView('ledger')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  slaSubView === 'ledger'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                <i className="fa-solid fa-list-check text-xs"></i>
+                <span>Request SLA Ledger</span>
+                <span className="text-[10px] font-mono text-slate-400 font-bold">({slaData.length})</span>
+              </button>
+            </div>
+
+            {/* Quick Handover Indicator Badge */}
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300/60 dark:border-amber-700/50 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-300">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              <i className="fa-solid fa-arrow-right-arrow-left text-amber-600 dark:text-amber-400"></i>
+              <span>{teamHandoverStats.totalHandovers} Mid-Way Handovers</span>
+              <span className="text-[11px] font-mono opacity-80 font-normal">({teamHandoverStats.handoverRate}% handover rate across {teamHandoverStats.totalPickups} pickups)</span>
+            </div>
           </div>
 
-          {/* Active Policy Status & SLA Enforcement Banner */}
-          <div className="bg-gradient-to-r from-indigo-500/10 via-slate-50 to-emerald-500/10 dark:from-indigo-950/30 dark:via-slate-900 dark:to-emerald-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
-                <i className="fa-solid fa-sliders text-base"></i>
+          {/* VIEW 1: PNC STAFF PERFORMANCE & HANDOVERS */}
+          {slaSubView === 'staff' && (
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {/* Executive PNC Desk Workload KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard
+                  title="Total Desk Pickups"
+                  value={teamHandoverStats.totalPickups}
+                  icon={<i className="fa-solid fa-inbox text-indigo-500"></i>}
+                  description={`${teamHandoverStats.totalCompleted} completed • ${pncStaffMetrics.reduce((s, u) => s + u.inProgressCount, 0)} active queue`}
+                />
+                <StatCard
+                  title="Mid-Way Handovers"
+                  value={teamHandoverStats.totalHandovers}
+                  icon={<i className="fa-solid fa-arrow-right-arrow-left text-amber-500"></i>}
+                  description={`${teamHandoverStats.handoverRate}% handover rate • continued by colleague`}
+                />
+                <StatCard
+                  title="Avg Stage TAT"
+                  value={`${teamHandoverStats.avgStageTatHours} hrs`}
+                  icon={<i className="fa-solid fa-stopwatch text-sky-500"></i>}
+                  description={`Target: ${tatProcessingTarget}h processing limit`}
+                />
+                <StatCard
+                  title="Desk SLA Compliance"
+                  value={`${teamHandoverStats.teamCompliancePct}%`}
+                  icon={<i className="fa-solid fa-shield-halved text-emerald-500"></i>}
+                  description={`${teamHandoverStats.totalBreaches} breaches across all desk members`}
+                />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-black text-slate-800 dark:text-white text-sm">
-                    {enableUrgencySla ? 'Urgency-Tiered SLA Enforcement Active' : 'Standard Fixed SLA Mode Active'}
-                  </h4>
-                  <span className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${enableUrgencySla ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-                    {enableUrgencySla ? 'Urgency Mode' : 'Standard Mode'}
+
+              {/* PNC Staff Workload & Performance Leaderboard Table */}
+              <Card className="overflow-hidden">
+                <div className="p-6 border-b dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800/50">
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                      <i className="fa-solid fa-id-badge text-indigo-500"></i>
+                      PNC Desk Staff Workload & Turnaround Performance
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Tracking who picked up requests, stage-by-stage turnaround times, SLA compliance, and mid-way handovers.
+                    </p>
+                  </div>
+                  {slaPncFilter !== 'all' && (
+                    <button
+                      onClick={() => setSlaPncFilter('all')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-all"
+                    >
+                      <i className="fa-solid fa-filter-circle-xmark"></i>
+                      <span>Clear Filter ({slaPncFilter})</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left whitespace-nowrap">
+                    <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                      <tr>
+                        <th className="px-6 py-4">Desk Staff Member</th>
+                        <th className="px-6 py-4">Initial Pickups</th>
+                        <th className="px-6 py-4">Active Queue</th>
+                        <th className="px-6 py-4">Completed</th>
+                        <th className="px-6 py-4">Mid-Way Handovers (Out ➔ In)</th>
+                        <th className="px-6 py-4">Avg Stage TAT</th>
+                        <th className="px-6 py-4">SLA Breaches</th>
+                        <th className="px-6 py-4">SLA Compliance</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y dark:divide-slate-800">
+                      {pncStaffMetrics.map((staff) => {
+                        const isFiltered = slaPncFilter === staff.name;
+                        const pickupShare = teamHandoverStats.totalPickups > 0
+                          ? Math.round((staff.pickedUpCount / teamHandoverStats.totalPickups) * 100)
+                          : 0;
+                        const isBreached = staff.avgStageTatHours > tatProcessingTarget;
+
+                        return (
+                          <tr
+                            key={staff.name}
+                            className={`transition-colors ${
+                              isFiltered
+                                ? 'bg-indigo-50/60 dark:bg-indigo-950/30'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                {staff.avatar ? (
+                                  <img
+                                    src={staff.avatar}
+                                    alt={staff.name}
+                                    className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-700 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                                    {staff.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-bold text-slate-800 dark:text-white text-sm flex items-center gap-2">
+                                    {staff.name}
+                                    <span className="px-1.5 py-0.2 text-[9px] font-black uppercase rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                      {staff.role}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-slate-400 font-mono">{staff.email || 'PNC Team Member'}</div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <div className="font-mono font-bold text-slate-800 dark:text-white text-sm">
+                                {staff.pickedUpCount}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                {pickupShare}% of desk total
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                staff.inProgressCount > 0
+                                  ? 'bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800'
+                                  : 'text-slate-400'
+                              }`}>
+                                <i className="fa-solid fa-spinner text-[10px]"></i>
+                                {staff.inProgressCount} active
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                {staff.completedCount}
+                              </span>
+                              <span className="text-xs text-slate-400 ml-1">booked</span>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${
+                                  staff.handoversInitiated > 0
+                                    ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                                    : 'text-slate-400 bg-slate-100 dark:bg-slate-800'
+                                }`}>
+                                  <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                                  <span>{staff.handoversInitiated} out</span>
+                                </span>
+                                <span className="text-slate-300 dark:text-slate-700">➔</span>
+                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${
+                                  staff.handoversReceived > 0
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                                    : 'text-slate-400 bg-slate-100 dark:bg-slate-800'
+                                }`}>
+                                  <i className="fa-solid fa-arrow-down-left-and-up-right-to-center text-[9px]"></i>
+                                  <span>{staff.handoversReceived} in</span>
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <div className={`font-mono font-bold ${isBreached ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'}`}>
+                                {staff.avgStageTatHours.toFixed(1)} hrs
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                across {staff.stagesCount} stages
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-1 font-bold text-xs ${
+                                staff.breachedCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'
+                              }`}>
+                                {staff.breachedCount > 0 && <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>}
+                                {staff.breachedCount} breaches
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-mono font-bold text-xs ${
+                                  staff.compliancePct >= 90
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : staff.compliancePct >= 75
+                                    ? 'text-amber-500'
+                                    : 'text-rose-500'
+                                }`}>
+                                  {staff.compliancePct}%
+                                </span>
+                                <div className="w-16 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${
+                                      staff.compliancePct >= 90
+                                        ? 'bg-emerald-500'
+                                        : staff.compliancePct >= 75
+                                        ? 'bg-amber-500'
+                                        : 'bg-rose-500'
+                                    }`}
+                                    style={{ width: `${staff.compliancePct}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSlaPncFilter(isFiltered ? 'all' : staff.name);
+                                  setSlaPage(1);
+                                }}
+                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  isFiltered
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                              >
+                                <i className="fa-solid fa-filter text-[10px]"></i>
+                                <span>{isFiltered ? 'Filtered' : 'Filter Ledger'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {pncStaffMetrics.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className="px-6 py-12 text-center text-slate-400 text-sm">
+                            No PNC staff activity found in the selected period.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+
+              {/* Mid-Way Handovers & Continuations Stream */}
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-base">
+                      <i className="fa-solid fa-arrow-right-arrow-left text-amber-500"></i>
+                      Mid-Way Handover & Continuation Stream
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Requests where one PNC staff member initiated or held a request, and another colleague picked it up mid-way to continue.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">
+                    {slaData.filter(d => d.hasHandover).length} Handover Cases
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {enableUrgencySla
-                    ? 'Target turnaround times scale with travel proximity: Critical (<2d) 4h, High (2-10d) 12h, Medium (10-20d) 24h, Low (>20d) 48h.'
-                    : `All booking fulfillments are evaluated against the standard target of ${tatBookingTarget} hours (Approval: ${tatApprovalTarget}h, Processing: ${tatProcessingTarget}h).`}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-              <i className="fa-solid fa-clock-rotate-left text-indigo-500"></i>
-              <span>Active Total: {totalSlaRequests} Requests</span>
-            </div>
-          </div>
 
-          {/* Urgency-Tier SLA Breakdown (4 Tiers) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="font-bold text-slate-800 dark:text-white text-base flex items-center gap-2">
-                <i className="fa-solid fa-layer-group text-indigo-500"></i>
-                Performance by Urgency Tier
-              </h4>
-              <span className="text-xs text-slate-400 font-medium">Dynamic classification based on days until travel date</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {tierStats.map(stat => {
-                const isCritical = stat.tier === Priority.CRITICAL;
-                const isHigh = stat.tier === Priority.HIGH;
-                const isMedium = stat.tier === Priority.MEDIUM;
-
-                const borderColor = isCritical ? 'border-rose-200 dark:border-rose-900/40' :
-                  isHigh ? 'border-amber-200 dark:border-amber-900/40' :
-                  isMedium ? 'border-sky-200 dark:border-sky-900/40' :
-                  'border-emerald-200 dark:border-emerald-900/40';
-
-                const badgeBg = isCritical ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
-                  isHigh ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
-                  isMedium ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' :
-                  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
-
-                const barBg = isCritical ? 'bg-rose-500' : isHigh ? 'bg-amber-500' : isMedium ? 'bg-sky-500' : 'bg-emerald-500';
-
-                const daysLabel = isCritical ? '< 2 Days' : isHigh ? '2 – 10 Days' : isMedium ? '10 – 20 Days' : '> 20 Days';
-
-                return (
-                  <Card key={stat.tier} className={`p-5 border ${borderColor} hover:shadow-md transition-shadow`}>
-                    <div className="flex justify-between items-start mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {slaData.filter(d => d.hasHandover).slice(0, 6).map((hReq) => (
+                    <div
+                      key={hReq.id}
+                      className="p-4 rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 flex flex-col justify-between gap-3 shadow-xs hover:shadow-md transition-all"
+                    >
                       <div>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider ${badgeBg}`}>
-                          <i className={`fa-solid ${isCritical ? 'fa-fire' : isHigh ? 'fa-bolt' : isMedium ? 'fa-clock' : 'fa-leaf'} text-[10px]`}></i>
-                          {stat.tier}
-                        </span>
-                        <div className="text-[11px] font-bold text-slate-400 mt-1">Travel in {daysLabel}</div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-2xl font-black text-slate-800 dark:text-white">{stat.count}</span>
-                        <span className="block text-[10px] uppercase font-bold text-slate-400">Tickets</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Target SLA:</span>
-                        <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{stat.targetHours}h</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Actual Avg TAT:</span>
-                        <span className={`font-mono font-bold ${stat.avgTat > stat.targetHours ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                          {stat.avgTat}h
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Breaches:</span>
-                        <span className={`font-bold ${stat.breaches > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{stat.breaches}</span>
-                      </div>
-
-                      <div className="pt-2">
-                        <div className="flex justify-between text-[11px] font-bold mb-1">
-                          <span className="text-slate-400">Compliance</span>
-                          <span className="text-slate-700 dark:text-slate-300">{stat.compliance}%</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400">
+                            {hReq.submissionId || hReq.id}
+                          </span>
+                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${
+                            hReq.slaStatus === 'Met' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600' :
+                            hReq.slaStatus === 'Breached' ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-600' :
+                            'bg-sky-100 dark:bg-sky-950/40 text-sky-600'
+                          }`}>
+                            {hReq.slaStatus}
+                          </span>
                         </div>
-                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div className={`h-full ${barBg} rounded-full transition-all duration-500`} style={{ width: `${stat.compliance}%` }}></div>
+                        <div className="font-bold text-slate-800 dark:text-white text-sm mt-1">
+                          {hReq.requesterName}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {hReq.from} ➔ {hReq.to} • {hReq.requesterCampus}
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
 
-          {/* Lifecycle Stage Bottleneck Diagnostic & Campus Scorecard */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Stage Bottleneck Diagnostic */}
-            <Card className="p-6">
-              <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-                <i className="fa-solid fa-arrows-split-up-and-left text-indigo-500"></i>
-                Lifecycle Stage Bottleneck Diagnostic
-              </h4>
-              <p className="text-xs text-slate-400 mb-6">Identifies where delays occur across the travel approval and fulfillment pipeline.</p>
-
-              <div className="space-y-6">
-                {stageStats.map(stage => {
-                  const isBreachedOverall = stage.avg > stage.target;
-                  const ratio = stage.target > 0 ? Math.min(100, Math.round((stage.avg / stage.target) * 100)) : 0;
-                  return (
-                    <div key={stage.name} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs">
-                            <i className={`fa-solid ${stage.icon}`}></i>
+                      {/* Visual Handover Pipeline */}
+                      <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold text-[10px] flex items-center justify-center">
+                            {hReq.initialHandlerName.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <span className="font-bold text-slate-800 dark:text-white">{stage.name}</span>
-                            <span className="text-xs text-slate-400 ml-2">Target: {stage.target}h</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] leading-tight">
+                              {hReq.initialHandlerName}
+                            </span>
+                            <span className="text-[10px] text-slate-400">Initial Handler</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center flex-shrink-0">
+                          <i className="fa-solid fa-arrow-right text-amber-500 text-xs"></i>
+                          <span className="text-[9px] uppercase font-black text-amber-600 dark:text-amber-400 tracking-wider">Handover</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-right justify-end">
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] leading-tight">
+                              {hReq.currentHandlerName}
+                            </span>
+                            <span className="text-[10px] text-slate-400">Continued By</span>
+                          </div>
+                          <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] flex items-center justify-center">
+                            {hReq.currentHandlerName.charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 text-xs">
+                        <div className="text-slate-500 font-mono text-[11px]">
+                          TAT: <strong>{hReq.actualTatHours.toFixed(1)}h</strong> (Target: {hReq.targetSlaHours}h)
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedJourneyRequest(hReq)}
+                          className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-bold text-xs"
+                        >
+                          <span>Inspect Journey</span>
+                          <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {slaData.filter(d => d.hasHandover).length === 0 && (
+                    <div className="col-span-2 py-10 text-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
+                      No mid-way handovers recorded in the selected period. All requests were processed end-to-end by single desk owners.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* VIEW 2: PIPELINE DIAGNOSTICS & CAMPUS SCORECARD */}
+          {slaSubView === 'pipeline' && (
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {/* Executive Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard
+                  title="Overall SLA Compliance"
+                  value={`${overallCompliancePct}%`}
+                  icon={<i className="fa-solid fa-shield-halved text-emerald-500"></i>}
+                  description={`${closedOnTime} of ${closedCount || totalSlaRequests} resolved within target`}
+                />
+                <StatCard
+                  title="Avg Fulfillment TAT"
+                  value={`${avgFulfillmentHours} hrs`}
+                  icon={<i className="fa-solid fa-stopwatch text-indigo-500"></i>}
+                  description={enableUrgencySla ? 'Urgency-tiered dynamic limits' : `Target: ${tatBookingTarget} hrs`}
+                />
+                <StatCard
+                  title="Avg Manager Approval"
+                  value={`${avgApprovalHours} hrs`}
+                  icon={<i className="fa-solid fa-user-check text-sky-500"></i>}
+                  description={`Target: ${tatApprovalTarget} hrs limit`}
+                />
+                <StatCard
+                  title="Breached / At Risk"
+                  value={`${totalBreaches} / ${activeAtRisk}`}
+                  icon={<i className="fa-solid fa-triangle-exclamation text-rose-500"></i>}
+                  description={`${totalBreaches} past target, ${activeAtRisk} nearing limit`}
+                />
+              </div>
+
+              {/* Active Policy Status Banner */}
+              <div className="bg-gradient-to-r from-indigo-500/10 via-slate-50 to-emerald-500/10 dark:from-indigo-950/30 dark:via-slate-900 dark:to-emerald-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                    <i className="fa-solid fa-sliders text-base"></i>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-black text-slate-800 dark:text-white text-sm">
+                        {enableUrgencySla ? 'Urgency-Tiered SLA Enforcement Active' : 'Standard Fixed SLA Mode Active'}
+                      </h4>
+                      <span className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${enableUrgencySla ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                        {enableUrgencySla ? 'Urgency Mode' : 'Standard Mode'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {enableUrgencySla
+                        ? 'Target turnaround times scale with travel proximity: Critical (<2d) 4h, High (2-10d) 12h, Medium (10-20d) 24h, Low (>20d) 48h.'
+                        : `All booking fulfillments are evaluated against the standard target of ${tatBookingTarget} hours (Approval: ${tatApprovalTarget}h, Processing: ${tatProcessingTarget}h).`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  <i className="fa-solid fa-clock-rotate-left text-indigo-500"></i>
+                  <span>Active Total: {totalSlaRequests} Requests</span>
+                </div>
+              </div>
+
+              {/* Urgency-Tier SLA Breakdown (4 Tiers) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 dark:text-white text-base flex items-center gap-2">
+                    <i className="fa-solid fa-layer-group text-indigo-500"></i>
+                    Performance by Urgency Tier
+                  </h4>
+                  <span className="text-xs text-slate-400 font-medium">Dynamic classification based on days until travel date</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {tierStats.map(stat => {
+                    const isCritical = stat.tier === Priority.CRITICAL;
+                    const isHigh = stat.tier === Priority.HIGH;
+                    const isMedium = stat.tier === Priority.MEDIUM;
+
+                    const borderColor = isCritical ? 'border-rose-200 dark:border-rose-900/40' :
+                      isHigh ? 'border-amber-200 dark:border-amber-900/40' :
+                      isMedium ? 'border-sky-200 dark:border-sky-900/40' :
+                      'border-emerald-200 dark:border-emerald-900/40';
+
+                    const badgeBg = isCritical ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
+                      isHigh ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                      isMedium ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' :
+                      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+
+                    const barBg = isCritical ? 'bg-rose-500' : isHigh ? 'bg-amber-500' : isMedium ? 'bg-sky-500' : 'bg-emerald-500';
+                    const daysLabel = isCritical ? '< 2 Days' : isHigh ? '2 – 10 Days' : isMedium ? '10 – 20 Days' : '> 20 Days';
+
+                    return (
+                      <Card key={stat.tier} className={`p-5 border ${borderColor} hover:shadow-md transition-shadow`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider ${badgeBg}`}>
+                              <i className={`fa-solid ${isCritical ? 'fa-fire' : isHigh ? 'fa-bolt' : isMedium ? 'fa-clock' : 'fa-leaf'} text-[10px]`}></i>
+                              {stat.tier}
+                            </span>
+                            <div className="text-[11px] font-bold text-slate-400 mt-1">Travel in {daysLabel}</div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-2xl font-black text-slate-800 dark:text-white">{stat.count}</span>
+                            <span className="block text-[10px] uppercase font-bold text-slate-400">Tickets</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Target SLA:</span>
+                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{stat.targetHours}h</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Actual Avg TAT:</span>
+                            <span className={`font-mono font-bold ${stat.avgTat > stat.targetHours ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {stat.avgTat}h
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Breaches:</span>
+                            <span className={`font-bold ${stat.breaches > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{stat.breaches}</span>
+                          </div>
+
+                          <div className="pt-2">
+                            <div className="flex justify-between text-[11px] font-bold mb-1">
+                              <span className="text-slate-400">Compliance</span>
+                              <span className="text-slate-700 dark:text-slate-300">{stat.compliance}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div className={`h-full ${barBg} rounded-full transition-all duration-500`} style={{ width: `${stat.compliance}%` }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Lifecycle Stage Diagnostic & Campus Scorecard */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Stage Bottleneck Diagnostic */}
+                <Card className="p-6">
+                  <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                    <i className="fa-solid fa-arrows-split-up-and-left text-indigo-500"></i>
+                    Lifecycle Stage Bottleneck Diagnostic
+                  </h4>
+                  <p className="text-xs text-slate-400 mb-6">Identifies where delays occur across the travel approval and fulfillment pipeline.</p>
+
+                  <div className="space-y-6">
+                    {stageStats.map(stage => {
+                      const isBreachedOverall = stage.avg > stage.target;
+                      const ratio = stage.target > 0 ? Math.min(100, Math.round((stage.avg / stage.target) * 100)) : 0;
+                      return (
+                        <div key={stage.name} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs">
+                                <i className={`fa-solid ${stage.icon}`}></i>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-800 dark:text-white">{stage.name}</span>
+                                <span className="text-xs text-slate-400 ml-2">Target: {stage.target}h</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className={`font-mono font-bold ${isBreachedOverall ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                {stage.avg}h avg
+                              </span>
+                              <span className="text-[10px] text-slate-400 ml-2">({stage.breaches} breaches)</span>
+                            </div>
+                          </div>
+
+                          <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${isBreachedOverall ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                              style={{ width: `${Math.min(100, ratio)}%` }}
+                            ></div>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-400">
+                            <span>0h</span>
+                            <span>{stage.target}h target limit</span>
+                            <span>{Math.max(stage.target, Math.round(stage.avg * 1.2))}h</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                {/* Campus SLA Scorecard */}
+                <Card className="p-6">
+                  <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                    <i className="fa-solid fa-ranking-star text-indigo-500"></i>
+                    Campus SLA Scorecard
+                  </h4>
+                  <p className="text-xs text-slate-400 mb-5">Rankings based on ticket fulfillment compliance and turnaround speed.</p>
+
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                    {campusSlaRanking.map((cr, idx) => (
+                      <div key={cr.campus} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                            #{idx + 1}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-800 dark:text-white text-sm">{cr.campus}</div>
+                            <div className="text-xs text-slate-400">{cr.count} total requests • {cr.breaches} breaches</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className={`font-mono font-bold ${isBreachedOverall ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                            {stage.avg}h avg
-                          </span>
-                          <span className="text-[10px] text-slate-400 ml-2">({stage.breaches} breaches)</span>
+                          <div className="flex items-center gap-2 justify-end">
+                            <span className={`text-sm font-black ${cr.compliance >= 90 ? 'text-emerald-600 dark:text-emerald-400' : cr.compliance >= 75 ? 'text-amber-500' : 'text-rose-500'}`}>
+                              {cr.compliance}%
+                            </span>
+                            <span className="text-[10px] uppercase font-bold text-slate-400">compliance</span>
+                          </div>
+                          <div className="text-xs text-slate-400 font-mono mt-0.5">{cr.avgTat}h avg TAT</div>
                         </div>
                       </div>
-
-                      <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${isBreachedOverall ? 'bg-rose-500' : 'bg-indigo-500'}`}
-                          style={{ width: `${Math.min(100, ratio)}%` }}
-                        ></div>
+                    ))}
+                    {campusSlaRanking.length === 0 && (
+                      <div className="h-36 flex items-center justify-center text-slate-400 text-xs italic">
+                        No campus data available.
                       </div>
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>0h</span>
-                        <span>{stage.target}h target limit</span>
-                        <span>{Math.max(stage.target, Math.round(stage.avg * 1.2))}h</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {/* Campus SLA Scorecard */}
-            <Card className="p-6">
-              <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-                <i className="fa-solid fa-ranking-star text-indigo-500"></i>
-                Campus SLA Scorecard
-              </h4>
-              <p className="text-xs text-slate-400 mb-5">Rankings based on ticket fulfillment compliance and turnaround speed.</p>
-
-              <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                {campusSlaRanking.map((cr, idx) => (
-                  <div key={cr.campus} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
-                        #{idx + 1}
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-800 dark:text-white text-sm">{cr.campus}</div>
-                        <div className="text-xs text-slate-400">{cr.count} total requests • {cr.breaches} breaches</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-2 justify-end">
-                        <span className={`text-sm font-black ${cr.compliance >= 90 ? 'text-emerald-600 dark:text-emerald-400' : cr.compliance >= 75 ? 'text-amber-500' : 'text-rose-500'}`}>
-                          {cr.compliance}%
-                        </span>
-                        <span className="text-[10px] uppercase font-bold text-slate-400">compliance</span>
-                      </div>
-                      <div className="text-xs text-slate-400 font-mono mt-0.5">{cr.avgTat}h avg TAT</div>
-                    </div>
+                    )}
                   </div>
-                ))}
-                {campusSlaRanking.length === 0 && (
-                  <div className="h-36 flex items-center justify-center text-slate-400 text-xs italic">
-                    No campus data available.
-                  </div>
-                )}
+                </Card>
               </div>
-            </Card>
-          </div>
+            </div>
+          )}
 
-          {/* Detailed Request SLA Audit Ledger */}
+          {/* VIEW 3 OR BOTTOM LEDGER: DETAILED REQUEST SLA AUDIT LEDGER */}
           <Card className="overflow-hidden">
             <div className="p-6 border-b dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800/50">
               <div>
-                <h4 className="font-bold text-slate-800 dark:text-white">Individual Request SLA Audit Ledger</h4>
-                <p className="text-xs text-slate-400 mt-0.5">Auditing dynamic urgency, stage progression, and breach states.</p>
+                <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <i className="fa-solid fa-list-check text-indigo-500"></i>
+                  Individual Request SLA & Stage Audit Ledger
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Detailed breakdown by desk handler, mid-way continuation status, dynamic urgency, and stage timings.
+                </p>
               </div>
 
               {/* Ledger Controls */}
@@ -1719,12 +2622,28 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                   <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                   <input
                     type="text"
-                    placeholder="Search ID, traveler, route..."
+                    placeholder="Search ID, traveler, handler..."
                     value={slaSearch}
                     onChange={e => { setSlaSearch(e.target.value); setSlaPage(1); }}
                     className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
+
+                {/* PNC Handler Filter */}
+                <select
+                  value={slaPncFilter}
+                  onChange={e => { setSlaPncFilter(e.target.value); setSlaPage(1); }}
+                  className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
+                >
+                  <option value="all">All Desk Handlers</option>
+                  <option value="handovers">🔀 Mid-Way Handovers Only</option>
+                  <option value="unassigned">Unassigned / Desk Pool</option>
+                  {pncStaffMetrics.map(st => (
+                    <option key={st.name} value={st.name}>
+                      👤 {st.name} ({st.pickedUpCount} pickups)
+                    </option>
+                  ))}
+                </select>
 
                 {/* Urgency Filter */}
                 <select
@@ -1764,6 +2683,9 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                     <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('requesterName')}>
                       Traveler & Campus <SortIcon col="requesterName" current={slaSort} />
                     </th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('pncHandler')}>
+                      Desk Handler & Handover <SortIcon col="pncHandler" current={slaSort} />
+                    </th>
                     <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('dateOfTravel')}>
                       Travel Date & Proximity <SortIcon col="dateOfTravel" current={slaSort} />
                     </th>
@@ -1778,6 +2700,7 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                     <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleSlaSort('slaStatus')}>
                       SLA Status <SortIcon col="slaStatus" current={slaSort} />
                     </th>
+                    <th className="px-6 py-4 text-right">Stage Journey</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y dark:divide-slate-800">
@@ -1806,6 +2729,31 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                         <td className="px-6 py-4">
                           <div className="font-bold text-slate-800 dark:text-white">{s.requesterName}</div>
                           <div className="text-xs text-slate-400">{s.requesterCampus} • {s.requesterDepartment}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] flex items-center justify-center flex-shrink-0">
+                              {s.currentHandlerName ? s.currentHandlerName.charAt(0).toUpperCase() : '?'}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-xs text-slate-800 dark:text-white leading-tight">
+                                {s.currentHandlerName || 'Unassigned'}
+                              </span>
+                              {s.hasHandover ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedJourneyRequest(s)}
+                                  className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/40 cursor-pointer transition-all"
+                                  title="Mid-way handover: Click to view stage progression"
+                                >
+                                  <i className="fa-solid fa-arrow-right-arrow-left text-[8px]"></i>
+                                  <span>{s.initialHandlerName} ➔ {s.currentHandlerName}</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">Single Owner</span>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-slate-700 dark:text-slate-300 font-medium">
@@ -1843,12 +2791,23 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
                             {s.slaStatus}
                           </span>
                         </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedJourneyRequest(s)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-white hover:bg-indigo-600 border border-indigo-200 dark:border-indigo-800/80 rounded-lg transition-all"
+                            title="Inspect full stage-to-stage journey"
+                          >
+                            <i className="fa-solid fa-route text-[11px]"></i>
+                            <span>Stages</span>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
                   {paginatedSlaData.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-sm">
+                      <td colSpan={10} className="px-6 py-12 text-center text-slate-400 text-sm">
                         No requests matching the selected filters.
                       </td>
                     </tr>
@@ -1880,6 +2839,181 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
               </div>
             )}
           </Card>
+
+          {/* STAGE-TO-STAGE JOURNEY MODAL */}
+          {selectedJourneyRequest && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+              onClick={() => setSelectedJourneyRequest(null)}
+            >
+              <div
+                className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4 bg-gradient-to-r from-indigo-50/50 via-white to-slate-50 dark:from-indigo-950/20 dark:via-slate-900 dark:to-slate-900">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-black font-mono bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                        {selectedJourneyRequest.submissionId || selectedJourneyRequest.id}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        selectedJourneyRequest.slaStatus === 'Met' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600' :
+                        selectedJourneyRequest.slaStatus === 'Breached' ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-600' :
+                        'bg-sky-100 dark:bg-sky-950/40 text-sky-600'
+                      }`}>
+                        {selectedJourneyRequest.slaStatus}
+                      </span>
+                      {selectedJourneyRequest.hasHandover && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                          <i className="fa-solid fa-arrow-right-arrow-left text-[9px]"></i>
+                          Mid-Way Handover
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white mt-1">
+                      Stage-to-Stage Journey Breakdown
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Traveler: <strong>{selectedJourneyRequest.requesterName}</strong> • {selectedJourneyRequest.requesterCampus} • Route: {selectedJourneyRequest.from} ➔ {selectedJourneyRequest.to}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedJourneyRequest(null)}
+                    className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-all"
+                  >
+                    <i className="fa-solid fa-xmark text-sm"></i>
+                  </button>
+                </div>
+
+                {/* Modal Body: Diagnostic Summary Cards */}
+                <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Total TAT</span>
+                      <span className="text-base font-black text-slate-800 dark:text-white font-mono">
+                        {selectedJourneyRequest.actualTatHours.toFixed(1)}h
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Target SLA</span>
+                      <span className="text-base font-black text-slate-800 dark:text-white font-mono">
+                        {selectedJourneyRequest.targetSlaHours}h
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Initial Desk Handler</span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-white truncate block">
+                        {selectedJourneyRequest.initialHandlerName}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Final / Continued By</span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-white truncate block">
+                        {selectedJourneyRequest.currentHandlerName}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Stage-by-Stage Progression Timeline */}
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <i className="fa-solid fa-timeline text-indigo-500"></i>
+                      Chronological Stage Flow & Desk Handovers
+                    </h4>
+
+                    <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+                      {selectedJourneyRequest.stages.map((stage, idx) => {
+                        const isHandoverStage = stage.isHandover;
+                        const isApproval = stage.stageName === 'Manager Approval';
+                        const isWait = stage.stageName === 'Queue Intake Wait';
+
+                        return (
+                          <div key={stage.id || idx} className="relative">
+                            {/* Timeline Node Bullet */}
+                            <div className={`absolute -left-6 top-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-xs ${
+                              isHandoverStage ? 'bg-amber-500' :
+                              isApproval ? 'bg-sky-500' :
+                              isWait ? 'bg-slate-400' :
+                              'bg-indigo-600'
+                            }`}>
+                              {idx + 1}
+                            </div>
+
+                            {/* Stage Content Card */}
+                            <div className={`p-4 rounded-xl border transition-all ${
+                              isHandoverStage
+                                ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50'
+                                : 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800'
+                            }`}>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                  <h5 className="font-bold text-slate-800 dark:text-white text-sm">
+                                    {stage.stageName}
+                                  </h5>
+                                  {isHandoverStage && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                                      Handover Continuation
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-xs bg-white dark:bg-slate-900 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                                    ⏱️ {stage.durationHours.toFixed(1)} hrs
+                                  </span>
+                                  <span className={`px-2 py-0.5 text-[10px] font-black rounded uppercase ${
+                                    stage.status === 'Completed' ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600' :
+                                    stage.status === 'On Hold' ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-600' :
+                                    'bg-sky-100 dark:bg-sky-950/50 text-sky-600'
+                                  }`}>
+                                    {stage.status}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                                <div className="flex items-center gap-1.5">
+                                  <i className="fa-solid fa-user text-[10px] text-slate-400"></i>
+                                  <span>Actor: <strong>{stage.actorName}</strong> ({stage.actorRole || 'Staff'})</span>
+                                </div>
+                                {stage.previousActorName && (
+                                  <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                                    <i className="fa-solid fa-arrow-right-arrow-left text-[10px]"></i>
+                                    <span>Continued mid-way from: <strong>{stage.previousActorName}</strong></span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {stage.details && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 bg-white/60 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                                  {stage.details}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex justify-between items-center">
+                  <span className="text-xs text-slate-500">
+                    Audit recorded on {new Date(selectedJourneyRequest.timestamp || Date.now()).toLocaleDateString()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedJourneyRequest(null)}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                  >
+                    Close Journey Audit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1887,3 +3021,4 @@ export const AnalyticsView: React.FC<{ requests: TravelRequest[]; currentUser: U
 };
 
 export default AnalyticsView;
+

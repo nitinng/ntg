@@ -4,10 +4,18 @@ All notable changes to the **Navgurukul Travel Desk** application are documented
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **This file is the single source of truth.** The in-app **Version & Changelog** screen and the
+> version in the Settings footer are parsed from this file at build time (`utils/changelog`), so a
+> release documented here appears in the app with no code change. Keep the structure below: a
+> `## [vX.Y.Z] - YYYY-MM-DD` heading, a `### Title`, a `> **Badge** — summary` blockquote, one or
+> more `#### Category` sections of bullets, and a `#### 📝 Commits in this Release` list whose
+> entries read ``* `hash` — `message` `` with an optional `— Author — YYYY-MM-DD` suffix.
+
 ---
 
 ## Quick Navigation
-* [Current Release — v2.6.0 (2026-10-01)](#v260---2026-10-01)
+* [Current Release — v2.7.0 (2026-10-09)](#v270---2026-10-09)
+* [v2.6.0 (2026-10-01)](#v260---2026-10-01)
 * [v2.5.0 (2026-09-28)](#v250---2026-09-28)
 * [v2.4.0 (2026-08-28)](#v240---2026-08-28)
 * [v2.3.0 (2026-08-28)](#v230---2026-08-28)
@@ -19,9 +27,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.7.0] - 2026-10-09
+
+### 🔐 Security Hardening, Booking Validation & Live Email Usage
+
+> **Security & Access** — Closed privilege-escalation and row-level-security gaps across profiles, ticket violations, request counters and file storage, locked the email queue down to authorised senders and sanitised email HTML before it is rendered to staff, plus booking form validation and a live email usage graph.
+
+#### 🔒 Security & Access Control
+* Stopped users escalating their own role through a direct `profiles` update.
+* Scoped `ticket_violations` and request audit history to staff roles, with PNC Admin included in the policies.
+* Enabled row-level security on `request_counters`.
+* Made storage buckets private and served invoices through signed URLs, anchoring the ownership match on the path separator.
+* Constrained which recipients an employee can queue email to, and required authorization on the `process-email-queue` edge function.
+* Sanitised email HTML before rendering it in staff-facing views.
+* Made the `ticket_violations` migration re-runnable, named the dollar-quote tags in the email queue migration, and rewrote the queue guard without a CTE body.
+* Documented how to apply the email queue migration by hand.
+
+#### ✨ Features & Improvements
+* Live past-usage graph in the Email Center with trend lines and filters.
+* Booking form validation with the related UI updates.
+* Policy management restricted to PNC Admin, and the changelog hidden from PNC and Finance roles.
+* Renamed the `Closed / Recorded` ticket status to cover self-booked trips across types, email templates, scripts and migrations.
+
+#### 🐛 Fixes
+* Restored employees' ability to submit travel requests.
+
+#### 📝 Commits in this Release
+* `7b5dba6` — `fix(security): require authorization in the email queue edge function` — Claude — 2026-10-09
+* `b662e79` — `fix(security): enable row-level security on request_counters` — Claude — 2026-10-08
+* `7c33163` — `docs(security): record how to apply the email queue migration by hand` — Claude — 2026-10-08
+* `8c83f60` — `fix(security): rewrite the email queue guard without a CTE body` — Claude — 2026-10-08
+* `e2fa089` — `fix(security): name the dollar-quote tags in the email queue migration` — Claude — 2026-10-08
+* `aac7749` — `fix(security): constrain who an employee can queue email to` — Claude — 2026-10-08
+* `1c86aad` — `fix(security): sanitise email HTML before rendering it in staff views` — Claude — 2026-10-08
+* `c0f38a6` — `fix(security): make the ticket_violations migration re-runnable` — Claude — 2026-10-08
+* `4d5ec81` — `fix(security): include PNC Admin in the ticket_violations policies` — Claude — 2026-10-08
+* `2a10a20` — `fix(security): anchor invoice ownership match on the path separator` — Claude — 2026-10-08
+* `987b2aa` — `fix(security): make storage buckets private and serve signed URLs` — Claude — 2026-10-08
+* `abe4d82` — `fix(security): scope ticket_violations and audit history to staff` — Claude — 2026-10-08
+* `5f61a1c` — `fix(security): stop users escalating their own profile role` — Claude — 2026-10-08
+* `3013a1c` — `fix(requests): let employees submit travel requests again` — Claude — 2026-10-05
+* `6525179` — `chore: update status string in migrations` — Nitin Sudarshan — 2026-10-02
+* `07bd1f0` — `chore: update status string in email templates and scripts` — Nitin Sudarshan — 2026-10-02
+* `8c79362` — `chore: rename Closed / Recorded status in types to include self-booked` — Nitin Sudarshan — 2026-10-02
+* `bc1e13b` — `feat(email-center): implement live past usage graph with trend lines and filters` — Nitin Sudarshan — 2026-10-01
+* `da06a08` — `feat(booking): implement booking form validation and related UI updates` — Nitin Sudarshan — 2026-10-01
+* `bfc9183` — `feat(access): restrict policies to PNC Admin and remove changelog for PNC and Finance` — Nitin Sudarshan — 2026-10-01
+
+---
+
 ## [v2.6.0] - 2026-10-01
 
 ### ✉️ Dual SMTP Slot Router & Scalable Email Architecture
+
+> **Email Architecture** — Dual-slot SMTP routing that spreads outgoing mail across two provider accounts with per-account quota tracking and independent connection tests, email queue and template schema updates, automatic progression of approved requests to Processing, and removal of hardcoded mail credentials from source and seed data.
 
 #### ✨ Features & Architecture
 * **Dual SMTP Routing Engine**:
@@ -59,6 +118,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [v2.5.0] - 2026-09-28
 
 ### 🎨 Dark Mode Neutral Palette Alignment, Email Templates & Booking Urgency Settings
+
+> **Design System** — Aligned dark mode to the PNC ELC pure neutral palette, fixed invalid Tailwind shade classes, added the official NavGurukul brand logo to email templates, aligned the navbar active role tab background with the header, and added booking urgency and SLA settings.
 
 #### 🎨 Dark Mode Neutral Palette Alignment (PNC ELC)
 * Dark mode aligned to neutral palette (matches PNC ELC); fixed ~300 invalid Tailwind shade classes across 30+ components.
@@ -108,6 +169,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### 🚀 Production-Safe Transactional Email Engine & Template Authoring
 
+> **Email Engine** — Full end-to-end transactional email integration connecting the travel lifecycle state machine to versioned mail templates, asynchronous queueing, Gmail API / Amazon SES dispatch, and operational delivery observability.
+
 Major milestone connecting travel lifecycle state transitions to an asynchronous email queue, Gmail API / Amazon SES provider layer, and template management.
 
 #### ✨ Features & Improvements
@@ -155,6 +218,8 @@ Major milestone connecting travel lifecycle state transitions to an asynchronous
 
 ### 🏗️ Domain Modularization & Provider Abstraction
 
+> **Architecture** — Decomposed the monolithic App.tsx into specialized domain view modules and established the pluggable email provider strategy architecture.
+
 #### ✨ Features & Architecture
 * **Modularized App Architecture**:
   * Decomposed monolithic `App.tsx` into standalone domain views: `AdminDashboard`, `PNCDashboard`, `FinanceDashboard`, `ManagerApprovalsView`, `PolicyManagement`, `RequestDetailOverlay`, and `EmployeeGuideView`.
@@ -177,6 +242,8 @@ Major milestone connecting travel lifecycle state transitions to an asynchronous
 
 ### 📊 Analytics Overhaul & Design Polish
 
+> **UI & Analytics** — Enhanced PNC, Finance, and Admin analytics with paginated data views, spend analytics, and project-wide transition optimizations.
+
 #### ✨ Features & Fixes
 * **Advanced Analytics Dashboard**:
   * Enhanced PNC, Finance, and Admin analytics with paginated tables, travel spend graphs, SLA turnaround metrics, and status breakdowns.
@@ -197,6 +264,8 @@ Major milestone connecting travel lifecycle state transitions to an asynchronous
 ## [v2.1.0] - 2026-07-26
 
 ### 🔄 Multi-Leg Ticket Cancellation & Policy Splits
+
+> **Operations** — Engineered leg-by-leg cancellation workflows, automatic cost split calculations (Navgurukul vs Employee), and finance advance reconciliation.
 
 #### ✨ Features & Compliance
 * **Leg-by-Leg Cancellation Engine**:
@@ -222,6 +291,8 @@ Major milestone connecting travel lifecycle state transitions to an asynchronous
 
 ### ⚡ Ticket State Machine & Interactive Flowchart
 
+> **Core Engine** — Standardized the ticket state machine lifecycle, replaced the Sankey diagram with an interactive SVG flowchart, and streamlined the bundle footprint.
+
 #### ✨ Features
 * Replaced legacy Sankey diagram with interactive SVG/HTML Flowchart in PNC Dashboard.
 * Formalized ticket state machine transitions (`Not Started` → `Approval Pending` → `Approved` → `Processing` → `Booked` → `Closed`).
@@ -241,6 +312,8 @@ Major milestone connecting travel lifecycle state transitions to an asynchronous
 
 ### 💬 Real-Time Chat & Authentication Modes
 
+> **Collaboration** — Real-time employee-to-PNC chat with thread management and unread indicators, dual Google OAuth and email/password authentication, and Tailwind-based responsive styling with dark mode support.
+
 #### ✨ Features
 * Real-time employee-to-PNC chat support with thread management and unread message indicators.
 * Dual authentication support: Google OAuth + Email/Password authentication toggle.
@@ -258,6 +331,8 @@ Major milestone connecting travel lifecycle state transitions to an asynchronous
 ## [v1.0.0] - 2026-02-28
 
 ### 🎯 Initial Core Travel Desk Release
+
+> **Initial Release** — Core travel request submission, manager approval routing, PNC booking queue, and profile management, backed by Supabase PostgreSQL and Igatpuri campus meetup coordination.
 
 * Core travel request form submission, manager approval routing, PNC booking queue, and profile management.
 * Supabase PostgreSQL database integration with profiles, policies, and role management.

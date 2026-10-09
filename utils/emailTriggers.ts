@@ -303,7 +303,7 @@ const getPncEmails = async (config: EmailRoutingConfig): Promise<string[]> => {
     const { data } = await supabase
       .from('profiles')
       .select('email')
-      .in('role', ['PNC', 'Admin']);
+      .in('role', ['PNC', 'PNC Admin', 'Admin']);
     const fromProfiles = (data || []).map((u: any) => u.email).filter(Boolean) as string[];
     return dedupe([...fromProfiles, ...config.pncQueueCc]);
   } catch (err) {

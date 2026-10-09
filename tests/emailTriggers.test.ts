@@ -45,6 +45,7 @@ const templates = [
   template(TravelEvent.REFUND_DISPUTED, 'finance', { cc_rule: 'default' }),
   template(TravelEvent.INFO_PROVIDED, 'pnc', { cc_rule: 'default' }),
 
+
   // Draft and archived rows must never be selected.
   template(TravelEvent.BOOKING_UPDATED, 'employee', {
     context_key: 'post_booking',
@@ -204,6 +205,43 @@ describe('CC rules', () => {
     await queueEmailsForEvent(createMockRequest(), TravelEvent.INFO_REQUEST_ESCALATED);
     expect(lastInsert().recipients).toEqual(['escalation@navgurukul.org']);
     expect(lastInsert().cc).toEqual(['verma@navgurukul.org']);
+  });
+});
+
+describe('PNC desk routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.profilesRoleFilters.length = 0;
+    mockOptions.templates = templates;
+    invalidateRoutingConfigCache();
+  });
+
+  it('counts PNC Admin as part of the PNC desk', async () => {
+    // A 'PNC Admin' profile is staff in every other respect (App.tsx 606-640),
+    // but the recipient lookup listed only PNC and Admin, so a desk staffed by
+    // PNC Admins received none of their own queue mail.
+    await queueEmailsForEvent(createMockRequest(), TravelEvent.INFO_PROVIDED, {
+      fromStatus: PNCStatus.ON_HOLD,
+      toStatus: PNCStatus.PROCESSING
+    });
+
+    expect(mocks.profilesRoleFilters.length).toBeGreaterThan(0);
+    for (const roles of mocks.profilesRoleFilters) {
+      expect(roles).toContain('PNC Admin');
+      expect(roles).toContain('PNC');
+      expect(roles).toContain('Admin');
+    }
+  });
+
+  it('still resolves the pnc audience to the configured desk addresses', async () => {
+    await queueEmailsForEvent(createMockRequest(), TravelEvent.INFO_PROVIDED, {
+      fromStatus: PNCStatus.ON_HOLD,
+      toStatus: PNCStatus.PROCESSING
+    });
+
+    const row = lastInsert();
+    expect(row.audience).toBe('pnc');
+    expect(row.recipients.length).toBeGreaterThan(0);
   });
 });
 

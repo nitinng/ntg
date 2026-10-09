@@ -85,6 +85,9 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
   // the mock is built, so capturing the value here would freeze the first state.
   const statusHistory = () => options.statusHistory ?? [];
 
+  /** Every role list passed to profiles.select().in('role', ...), in call order. */
+  const profilesRoleFilters: string[][] = [];
+
   const insertMock = vi.fn().mockResolvedValue({ error: options.insertError ?? null });
   const invokeMock = vi.fn().mockResolvedValue({ data: null, error: null });
 
@@ -114,9 +117,13 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
     if (table === 'profiles') {
       return {
         select: vi.fn(() => ({
-          in: vi.fn(() =>
-            Promise.resolve({ data: pncEmails.map(email => ({ email })), error: null })
-          )
+          // The role list is recorded rather than ignored: which roles count as
+          // "the PNC desk" is exactly the kind of thing that silently drifts
+          // (PNC Admin was missing here), so tests need to assert on it.
+          in: vi.fn((_col: string, roles: string[]) => {
+            profilesRoleFilters.push(roles);
+            return Promise.resolve({ data: pncEmails.map(email => ({ email })), error: null });
+          })
         }))
       };
     }
@@ -146,7 +153,8 @@ export const createSupabaseMock = (options: MockOptions = {}) => {
     supabase: { from, functions: { invoke: invokeMock } },
     insertMock,
     invokeMock,
-    from
+    from,
+    profilesRoleFilters
   };
 };
 

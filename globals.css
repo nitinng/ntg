@@ -272,7 +272,8 @@ small,
         width: 250px !important;
         height: calc(100vh - 4rem) !important;
         z-index: 45 !important;
-        display: block !important;
+        display: flex !important;
+        flex-direction: column !important;
         transition: left 0.3s ease-in-out !important;
         margin: 0 !important;
     }
@@ -467,7 +468,8 @@ small,
         width: 250px !important;
         height: calc(100vh - 4rem) !important;
         z-index: 45 !important;
-        display: block !important;
+        display: flex !important;
+        flex-direction: column !important;
         transition: left 0.3s ease-in-out !important;
         margin: 0 !important;
     }

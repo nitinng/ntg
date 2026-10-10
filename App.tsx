@@ -92,8 +92,9 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('activeTab') || 'dashboard');
 
-  // Unresolved critical alerts, shown as a badge on the SOS nav item so a
-  // failure is visible from whichever screen the desk happens to be on.
+  // Unresolved critical alerts, shown as a badge on the Alerts & Notices nav
+  // item so a failure is visible from whichever screen the desk happens to be
+  // on.
   const [sosOpenCritical, setSosOpenCritical] = useState(0);
 
   useEffect(() => {
@@ -101,7 +102,8 @@ const App: React.FC = () => {
   }, [activeTab]);
 
   // Deep link from an alert: the SOS mail posted into Slack links to
-  // /?tab=sos, so a reader lands on the console rather than the dashboard.
+  // /?tab=sos, so a reader lands on the alert feed rather than the dashboard
+  // (?tab=notifications opens the same screen on its other tab).
   // The parameter is consumed once and stripped, so a refresh does not keep
   // dragging the user back to it.
   useEffect(() => {
@@ -852,12 +854,15 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;
       case 'sos':
+      case 'notifications':
         // Admin only. The feed reads every failure across the desk, with
         // context that can quote another traveller's request, and its settings
         // decide which Slack channels the desk posts to. Row-level security
         // enforces the same thing, so a narrower role would see an empty feed.
+        // One screen, two tabs: 'sos' opens the alert feed, 'notifications'
+        // the request traffic the desk posts while nothing has failed.
         if (currentUser.role !== UserRole.ADMIN) return renderDashboard();
-        return <SOSView currentUser={currentUser} />;
+        return <SOSView currentUser={currentUser} initialTab={activeTab === 'notifications' ? 'notifications' : 'alerts'} />;
       case 'requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         // Filter out rejected and closed requests from queue
@@ -1267,7 +1272,7 @@ const App: React.FC = () => {
                   <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />
                   <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                   <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
-                  <SidebarLink icon="fa-tower-broadcast" label="SOS" active={activeTab === 'sos'} onClick={() => handleTabChange('sos')} badge={sosOpenCritical > 0 ? sosOpenCritical : null} badgeColor="bg-rose-500 text-white" />
+                  <SidebarLink icon="fa-tower-broadcast" label="Alerts & Notices" active={['sos', 'notifications'].includes(activeTab)} onClick={() => handleTabChange('sos')} badge={sosOpenCritical > 0 ? sosOpenCritical : null} badgeColor="bg-rose-500 text-white" />
                   <SidebarLink icon="fa-code-branch" label="Changelog" active={activeTab === 'changelog'} onClick={() => handleTabChange('changelog')} />
                 </div>
 

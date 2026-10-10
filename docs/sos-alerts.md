@@ -7,9 +7,19 @@ Two Slack streams, one place to configure them:
 | **SOS** (`alerting`) | Every failure the system can detect. | `sos_settings.alerting` |
 | **Notifications** (`notifications`) | Request traffic and the end-of-day desk report. | `sos_settings.notifications` |
 
-Both are configured on the **SOS** screen, which is **Admin only** — not PNC
-Admin, not PNC, not Finance. Row-level security enforces that, so a narrower
-role sees an empty feed rather than a partial one.
+Both are configured on the **Alerts & Notices** screen (sidebar → *Alerts &
+Notices*), which is **Admin only** — not PNC Admin, not PNC, not Finance.
+Row-level security enforces that, so a narrower role sees an empty feed rather
+than a partial one.
+
+The screen has one tab per stream, so neither set of settings can be mistaken
+for the other:
+
+* **SOS Alerts** — the failure feed, its figures, the alerting settings and the
+  catalogue of what is watched. Deep link `/?tab=sos`.
+* **Notifications** — the request-traffic settings, today's digest preview, and
+  the *Send digest now* / *Download report* buttons. Deep link
+  `/?tab=notifications`.
 
 Both streams start on the same Slack channel address. Splitting them when the
 SLA channel exists is a settings change, not a deployment.
@@ -113,8 +123,8 @@ and posts the summary with the full breakdown attached as a PDF:
 
 The data is assembled by `build_desk_digest()`; the queue row carries it in
 `email_queue.report_payload`, and the worker renders the PDF at send time.
-The console's **Download report** button renders the same document in the
-browser from the same code (`utils/report/pdfBuilder.ts` and
+The **Download report** button on the console's **Notifications** tab renders
+the same document in the browser from the same code (`utils/report/pdfBuilder.ts` and
 `utils/desk/digest.ts`, mirrored into the worker — `tests/mirroredReportBuilder.test.ts`
 fails if the copies drift).
 
@@ -153,10 +163,10 @@ error, the failure count and today's usage attached.
 
 | Control | Default | Where |
 | --- | --- | --- |
-| Severity floor | `warning` and above are pushed | SOS → Settings |
-| Repeat window | 30 minutes — repeats fold into the existing alert, count up, and do not re-notify | SOS → Settings |
-| Muted areas | none | SOS → Settings |
-| Daily push cap | 200 per IST day | SOS → Settings |
+| Severity floor | `warning` and above are pushed | SOS Alerts tab → Settings |
+| Repeat window | 30 minutes — repeats fold into the existing alert, count up, and do not re-notify | SOS Alerts tab → Settings |
+| Muted areas | none | SOS Alerts tab → Settings |
+| Daily push cap | 200 per IST day | SOS Alerts tab → Settings |
 | Per-account rate limit | 30 alerts/minute from one account | `raise_sos_alert()` |
 | Client throttle | 15 seconds per fingerprint, per tab | `raiseSos.ts` |
 
@@ -219,7 +229,8 @@ so and skips scheduling rather than failing.
 
 ## When the channel goes quiet
 
-1. Open **SOS** in the sidebar — the feed is independent of delivery.
+1. Open **Alerts & Notices** in the sidebar — the feed on the **SOS Alerts**
+   tab is independent of delivery.
 2. Check the **Undelivered** figure. Non-zero means alerts were recorded but
    their Slack mail did not leave: look at Email Center → Provider.
 3. Each alert mail links straight back to the console (`/?tab=sos`), so a reader

@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.10.0 (2026-10-10)](#v2100---2026-10-10)
+* [Current Release — v2.10.1 (2026-10-10)](#v2101---2026-10-10)
+* [v2.10.0 (2026-10-10)](#v2100---2026-10-10)
 * [v2.9.0 (2026-10-10)](#v290---2026-10-10)
 * [v2.8.0 (2026-10-10)](#v280---2026-10-10)
 * [v2.7.1 (2026-10-09)](#v271---2026-10-09)
@@ -28,6 +29,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.10.1] - 2026-10-10
+
+### 🔔 Alerts & Notices — one nav item, two tabs
+
+> **UI Polish** — The SOS screen carried two unrelated sets of settings on one page. It is now **Alerts & Notices**, split into a **SOS Alerts** tab and a **Notifications** tab, so failures and ordinary desk traffic can no longer be mistaken for one another.
+
+#### 🎨 User Interface & Navigation
+* **Renamed Nav Item**: **SOS** is now **Alerts & Notices**, still badged with the count of unresolved critical alerts.
+* **SOS Alerts Tab**: The headline figures, the alert feed, its filters, the alerting settings and the catalogue of monitored failures — unchanged, just on their own tab.
+* **Notifications Tab**: Request-traffic settings, today's digest preview, **Send digest now** and **Download report** moved out from behind the SOS settings toggle onto a tab of their own, with their own on/off and channel summary.
+* **Deep Links**: `/?tab=sos` still opens the alert feed, so every alert mail already in Slack lands where it did before; `/?tab=notifications` opens the other tab.
+* **Digest Preview On Demand**: Today's figures load when the Notifications tab is opened and can be refreshed from the banner, instead of loading when the settings panel was expanded.
+
+#### 📝 Commits in this Release
+* `f9d4617` — `feat(sos): split alerts and notifications into tabs under one nav item` — Nitin — 2026-10-10
 
 ---
 

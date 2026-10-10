@@ -46,7 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **Digest Preview On Demand**: Today's figures load when the Notifications tab is opened and can be refreshed from the banner, instead of loading when the settings panel was expanded.
 
 #### 📝 Commits in this Release
-* `pending` — `feat(sos): split alerts and notifications into tabs under one nav item` — Nitin — 2026-10-10
+* `f9d4617` — `feat(sos): split alerts and notifications into tabs under one nav item` — Nitin — 2026-10-10
 
 ---
 

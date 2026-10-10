@@ -56,7 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **SOS Is Admin-Only**: The screen, the nav item, the alert feed and both channels' settings are restricted to Admin — not PNC Admin, PNC or Finance — in the UI and in row-level security.
 
 #### 📝 Commits in this Release
-* `pending` — `feat(notifications): announce desk traffic and post a daily report` — Nitin — 2026-10-10
+* `a6ef571` — `feat(notifications): announce desk traffic and post a daily report` — Nitin — 2026-10-10
 
 ---
 

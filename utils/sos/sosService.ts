@@ -11,6 +11,12 @@
 import { supabase } from '../../supabaseClient';
 import { SosCategory, SosSeverity } from './catalog';
 import { DEFAULT_SOS_SETTINGS, normalizeSosSettings, SosSettings } from './alertRules';
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  DeskNotificationSettings,
+  normalizeNotificationSettings
+} from '../desk/notificationSettings';
+import { DeskDigest, digestFileName, digestToPdfBase64 } from '../desk/digest';
 import { raiseSos } from './raiseSos';
 
 export type SosStatus = 'Open' | 'Acknowledged' | 'Resolved';
@@ -166,6 +172,24 @@ export const reopenSosAlert = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
+const readSettingsRow = async (key: string): Promise<any | null> => {
+  const { data, error } = await supabase
+    .from('sos_settings')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle();
+
+  return error || !data ? null : data.value;
+};
+
+const writeSettingsRow = async (key: string, value: any, actorEmail: string): Promise<void> => {
+  const { error } = await supabase
+    .from('sos_settings')
+    .update({ value, updated_at: new Date().toISOString(), updated_by: actorEmail })
+    .eq('key', key);
+  if (error) throw error;
+};
+
 export const fetchSosSettings = async (): Promise<SosSettings> => {
   const { data, error } = await supabase
     .from('sos_settings')
@@ -179,16 +203,55 @@ export const fetchSosSettings = async (): Promise<SosSettings> => {
   return normalizeSosSettings(data.value);
 };
 
-export const saveSosSettings = async (settings: SosSettings, actorEmail: string): Promise<void> => {
-  const { error } = await supabase
-    .from('sos_settings')
-    .update({
-      value: normalizeSosSettings(settings) as any,
-      updated_at: new Date().toISOString(),
-      updated_by: actorEmail
-    })
-    .eq('key', 'alerting');
+export const saveSosSettings = async (settings: SosSettings, actorEmail: string): Promise<void> =>
+  writeSettingsRow('alerting', normalizeSosSettings(settings), actorEmail);
+
+export const fetchNotificationSettings = async (): Promise<DeskNotificationSettings> => {
+  const value = await readSettingsRow('notifications');
+  return value ? normalizeNotificationSettings(value) : { ...DEFAULT_NOTIFICATION_SETTINGS };
+};
+
+export const saveNotificationSettings = async (
+  settings: DeskNotificationSettings,
+  actorEmail: string
+): Promise<void> =>
+  writeSettingsRow('notifications', normalizeNotificationSettings(settings), actorEmail);
+
+/**
+ * Builds the digest for a window without sending it.
+ *
+ * Used by the console to show today's figures and to download the same PDF the
+ * channel receives, so an admin can check the report before it goes out.
+ */
+export const fetchDeskDigest = async (from?: string, to?: string): Promise<DeskDigest> => {
+  const { data, error } = await supabase.rpc('build_desk_digest', {
+    p_from: from ?? null,
+    p_to: to ?? null
+  });
   if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) as DeskDigest;
+};
+
+/** Queues the digest to the notifications channel now, outside its schedule. */
+export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: string }> => {
+  const { data, error } = await supabase.rpc('send_desk_digest', { p_from: null, p_to: null });
+  if (error) throw error;
+  const result = (Array.isArray(data) ? data[0] : data) || {};
+  return { sent: Boolean(result.sent), reason: result.reason };
+};
+
+/** Hands the browser the same PDF the channel is sent. */
+export const downloadDigestPdf = (digest: DeskDigest): void => {
+  const base64 = digestToPdfBase64(digest);
+  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = digestFileName(digest);
+  link.click();
+
+  URL.revokeObjectURL(url);
 };
 
 /**
@@ -203,7 +266,7 @@ export const sendSosTestAlert = async (actorEmail: string): Promise<{ delivered:
   const result = await raiseSos('SOS_SELF_TEST', {
     severity: settings.minSeverity,
     message: `Test alert sent from the SOS console by ${actorEmail}. If this reached the channel, alerting is wired up end to end.`,
-    context: { triggeredBy: actorEmail, channel: settings.channelEmail },
+    context: { triggeredBy: actorEmail, channels: settings.channelEmails.join(', ') },
     // Unique each time: a test must never be folded into an earlier one.
     dedupeKey: `test-${Date.now()}`
   });

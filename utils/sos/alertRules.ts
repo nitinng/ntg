@@ -36,11 +36,42 @@ export const SEVERITY_RANK: Record<SosSeverity, number> = {
 export const DEFAULT_SOS_CHANNEL_EMAIL =
   'alert-team-automation-aaaawk4tlokditwloipugpaleq@navgurukul.slack.com';
 
+/**
+ * Pulls a list of addresses out of whatever the settings row holds.
+ *
+ * The column has carried a single string, an array, and (from the console) a
+ * textarea's worth of comma- and newline-separated text. All three parse the
+ * same way, so changing the shape never silently empties the channel.
+ */
+export const parseChannelEmails = (raw: any): string[] => {
+  const candidates: string[] = Array.isArray(raw)
+    ? raw.map(v => String(v ?? ''))
+    : typeof raw === 'string'
+      ? raw.split(/[\s,;]+/)
+      : [];
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const candidate of candidates) {
+    const address = candidate.trim().toLowerCase();
+    if (!address || !address.includes('@') || seen.has(address)) continue;
+    seen.add(address);
+    out.push(address);
+  }
+
+  return out;
+};
+
 export interface SosSettings {
   /** Master switch. Off records alerts but pushes nothing. */
   enabled: boolean;
-  /** Slack channel email address that receives alerts. */
-  channelEmail: string;
+  /**
+   * Every address the SOS channel posts to. A list rather than one address
+   * because a second team always arrives, and an on-call inbox alongside the
+   * Slack channel is the usual first request.
+   */
+  channelEmails: string[];
   /**
    * Optional Slack incoming webhook. Preferred when set, because it does not
    * travel through the email system an alert may be reporting on.
@@ -61,7 +92,7 @@ export interface SosSettings {
 
 export const DEFAULT_SOS_SETTINGS: SosSettings = {
   enabled: true,
-  channelEmail: DEFAULT_SOS_CHANNEL_EMAIL,
+  channelEmails: [DEFAULT_SOS_CHANNEL_EMAIL],
   webhookUrl: '',
   minSeverity: 'warning',
   mutedCategories: [],
@@ -93,12 +124,15 @@ export const normalizeSosSettings = (raw: any): SosSettings => {
       ? Math.floor(candidate)
       : fallback;
 
+  // `channelEmail` is the pre-20261010120000 shape; reading it keeps a settings
+  // row that predates the migration working rather than muting the channel.
+  const channelEmails = parseChannelEmails(
+    value.channelEmails !== undefined ? value.channelEmails : value.channelEmail
+  );
+
   return {
     enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULT_SOS_SETTINGS.enabled,
-    channelEmail:
-      typeof value.channelEmail === 'string' && value.channelEmail.includes('@')
-        ? value.channelEmail.trim()
-        : DEFAULT_SOS_SETTINGS.channelEmail,
+    channelEmails: channelEmails.length ? channelEmails : DEFAULT_SOS_SETTINGS.channelEmails,
     webhookUrl: typeof value.webhookUrl === 'string' ? value.webhookUrl.trim() : '',
     minSeverity: severity,
     mutedCategories: muted,
@@ -158,7 +192,9 @@ export const shouldNotify = (input: {
   const now = input.now || new Date();
 
   if (!settings.enabled) return { notify: false, reason: 'alerting_disabled' };
-  if (!settings.channelEmail && !settings.webhookUrl) return { notify: false, reason: 'no_destination' };
+  if (settings.channelEmails.length === 0 && !settings.webhookUrl) {
+    return { notify: false, reason: 'no_destination' };
+  }
   if (SEVERITY_RANK[severity] < SEVERITY_RANK[settings.minSeverity]) {
     return { notify: false, reason: 'below_min_severity' };
   }

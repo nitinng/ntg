@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.9.0 (2026-10-10)](#v290---2026-10-10)
+* [Current Release — v2.10.0 (2026-10-10)](#v2100---2026-10-10)
+* [v2.9.0 (2026-10-10)](#v290---2026-10-10)
 * [v2.8.0 (2026-10-10)](#v280---2026-10-10)
 * [v2.7.1 (2026-10-09)](#v271---2026-10-09)
 * [v2.7.0 (2026-10-09)](#v270---2026-10-09)
@@ -27,6 +28,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.10.0] - 2026-10-10
+
+### 📣 Desk Notifications, Daily Report & Admin-Only SOS
+
+> **Observability** — Added a second Slack stream for the desk's ordinary traffic: every request raised is announced as it comes in, and an end-of-day digest posts what the desk did with a comprehensive PDF report attached. Both streams now take a list of channel addresses, every message was rewritten as a compact structured block, and the SOS screen is Admin-only.
+
+#### 📣 Desk Notifications
+* **Request Pings**: Every request raised posts a structured block to the notifications channel — requester, department, trip, date, mode, priority, manager and owner — straight from the database, and never able to fail the insert that triggered it.
+* **Daily Desk Digest**: A scheduled end-of-day summary (pg_cron `desk-daily-digest`, 19:30 IST) covering raised, booked, closed and cancelled counts, who is holding what, what was claimed, what nobody owns, what moved and what has stopped moving.
+* **PDF Report**: The digest carries the full per-ticket breakdown as a PDF — unassigned, stalled, desk load by owner, everything raised, and every status change with who made it. Rendered by a dependency-free builder shared between the queue worker and the browser, so **Download report** in the console produces the same document the channel receives.
+* **Send On Demand**: Admins can send the digest outside its schedule and preview today's figures before it goes.
+
+#### 🔧 Channels & Configuration
+* **Two Configurable Streams**: SOS and notifications are configured separately — a muted alert channel can never mute request traffic. Both start on the same Slack address, so splitting them when the SLA channel exists is a settings change rather than a deployment.
+* **Multiple Addresses Per Channel**: Each stream takes a list of addresses instead of one, pasted or typed one per line. Pre-existing single-address settings are migrated automatically and still read correctly.
+* **Pinned Recipients**: The `email_queue` recipient guard now recognises either stream and overwrites the recipients with that stream's configured addresses, so channel mail can only ever reach a configured channel.
+
+#### ✉️ Message Format
+* **Structured, Not Wordy**: Every message — SOS, request ping and digest alike — is now a heading line plus one fact per line as `key=value`, replacing the HTML cards that read as paragraphs in Slack. Nested context is flattened to dotted keys (`usageToday.smtp=120`) so a line can be scanned or parsed.
+* **Scannable Subjects**: Slack renders the subject as the message title, so it carries the same structure: severity, code and headline for an SOS; ticket, trip and date for a request; the day's counts for the digest.
+
+#### 🛡️ Access Control
+* **SOS Is Admin-Only**: The screen, the nav item, the alert feed and both channels' settings are restricted to Admin — not PNC Admin, PNC or Finance — in the UI and in row-level security.
+
+#### 📝 Commits in this Release
+* `pending` — `feat(notifications): announce desk traffic and post a daily report` — Nitin — 2026-10-10
 
 ---
 

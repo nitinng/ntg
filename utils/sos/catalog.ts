@@ -615,6 +615,28 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
       'Open the SOS console — every alert is there regardless of delivery. Configure the Slack webhook for a path that does not depend on email.',
     raisedBy: ['database', 'worker']
   }),
+  DESK_NOTIFICATION_FAILED: spec({
+    code: 'DESK_NOTIFICATION_FAILED',
+    category: 'platform',
+    severity: 'warning',
+    title: 'A desk notification could not be queued',
+    meaning:
+      'A request was raised but the ping to the notifications channel was not queued, so the channel is missing traffic the desk thinks it announced.',
+    firstCheck:
+      'SOS → Settings: the notifications channel needs at least one address. The request itself was created normally.',
+    raisedBy: ['database']
+  }),
+  DESK_REPORT_RENDER_FAILED: spec({
+    code: 'DESK_REPORT_RENDER_FAILED',
+    category: 'platform',
+    severity: 'warning',
+    title: 'Desk report could not be rendered',
+    meaning:
+      'The daily digest went out without its PDF. The headline numbers are in the message; the per-ticket breakdown is not.',
+    firstCheck:
+      'The error in the context, then re-send from SOS → Notifications → Send digest now.',
+    raisedBy: ['worker']
+  }),
   SOS_SELF_TEST: spec({
     code: 'SOS_SELF_TEST',
     category: 'platform',

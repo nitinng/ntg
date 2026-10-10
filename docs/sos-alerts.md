@@ -1,78 +1,131 @@
-# SOS — no silent failures
+# SOS & desk notifications
 
-Every failure the Travel Desk can detect is recorded in `public.sos_alerts` and
-pushed to the automation Slack channel. The rule is simple: **nothing fails
-quietly**. A toast the user dismisses, a `console.error` nobody reads and a
-`catch` that returns early are all failures somebody should hear about.
+Two Slack streams, one place to configure them:
 
-This document is the operator's view: where alerts go, what is watched, how to
-change it, and what to do when the channel itself goes quiet.
-
----
-
-## The shape of it
-
-```
-   browser            queue worker          database sweep
-  raiseSos()           sos({...})          scan_sos_health()
-       \                   |                     /
-        \                  v                    /
-         ----------> raise_sos_alert() <--------
-                            |
-              records in public.sos_alerts  (always)
-                            |
-                   notification rules
-                            |
-                   email_queue -> Slack channel address
-```
-
-| Piece | Where | What it does |
+| Stream | Carries | Settings key |
 | --- | --- | --- |
-| Catalogue | `utils/sos/catalog.ts` | Every failure code: area, severity, what it means, what to check first. |
-| Rules | `utils/sos/alertRules.ts` | Dedupe, severity floor, muted areas, daily cap, message formatting. |
-| Client | `utils/sos/raiseSos.ts` | `raiseSos` / `reportSos`, plus the global `error` and `unhandledrejection` handlers. |
-| Console | `components/SOSView.tsx` | The **SOS** screen: feed, triage, settings, monitored-failure reference. |
-| Database | `supabase/migrations/20261010090000_sos_alert_system.sql` | Tables, `raise_sos_alert()`, the recipient-guard exemption, the hourly sweep. |
-| Worker | `supabase/functions/process-email-queue/index.ts` | Reports transport failures the browser can never see. |
+| **SOS** (`alerting`) | Every failure the system can detect. | `sos_settings.alerting` |
+| **Notifications** (`notifications`) | Request traffic and the end-of-day desk report. | `sos_settings.notifications` |
 
-**Recording and notifying are separate.** An alert that is muted, folded into a
-repeat, below the severity floor, or lost because the email system was the thing
-that broke is still in the console. The channel is a notification; the console
-is the record.
+Both are configured on the **SOS** screen, which is **Admin only** — not PNC
+Admin, not PNC, not Finance. Row-level security enforces that, so a narrower
+role sees an empty feed rather than a partial one.
 
----
+Both streams start on the same Slack channel address. Splitting them when the
+SLA channel exists is a settings change, not a deployment.
 
-## Where alerts go
-
-Alerts are posted into `#alert-team-automation` by **email**, through the Slack
-channel's own address:
-
-```
-alert-team-automation-aaaawk4tlokditwloipugpaleq@navgurukul.slack.com
-```
-
-(Slack → channel → Integrations → *Send emails to this channel*.)
-
-That needs no credentials and no app install, and it reuses the transport the
-desk already runs. The cost is honest and worth stating: **mail-delivered alerts
-travel through the email system they most often report on.** Two things follow,
-both deliberate:
-
-1. Every alert is recorded regardless of delivery, and an alert whose Slack mail
-   failed shows as **Not delivered** in the console with the reason.
-2. A **Slack incoming webhook** can be configured in SOS → Settings. When set,
-   `raise_sos_alert()` posts to it directly (via `pg_net`) and never touches the
-   email queue — the delivery path that survives an email outage. If `pg_net` is
-   not enabled, or the post fails, it falls back to the channel address rather
-   than losing the alert; if there is no channel address either, the alert is
-   marked **Not delivered** instead of pretending it went out.
-
-If both SMTP accounts are down, the console and the webhook are how you find
-out. That is why the console exists.
+The rule behind all of it: **nothing fails quietly, and nothing happens on the
+desk that the channel does not hear about.**
 
 ---
 
-## What is watched
+## Where messages go
+
+Each stream takes a **list of addresses** — one per line in the console. Mail
+sent to a Slack channel address is posted into that channel (Slack → channel →
+Integrations → *Send emails to this channel*), which needs no credentials and no
+app install.
+
+The honest caveat: mail-delivered alerts travel through the email system they
+most often report on. So:
+
+1. Every alert is recorded in `sos_alerts` whether or not it was delivered. One
+   whose Slack mail failed shows as **Not delivered**, with the reason.
+2. A **Slack webhook** on the SOS stream is posted directly from the database
+   through `pg_net` and never touches the email queue — the path that survives
+   an email outage. If `pg_net` is off or the post fails, it falls back to the
+   channel addresses; with neither available the alert is marked **Not
+   delivered** rather than pretending it went out.
+
+The digest's PDF is only ever delivered by mail — a webhook cannot carry a file.
+
+---
+
+## The message format
+
+Every message is a compact block: a heading line, then one fact per line as
+`key=value`. It scans in a second and splits cleanly if anything downstream
+wants to parse it. No prose, no cards.
+
+**An SOS**
+
+```
+SOS · CRITICAL · SMTP_FAILOVER_PROMOTED
+Account B failed 3 consecutive non-transient sends; Account A promoted.
+area=email_transport  src=worker  at=10 Oct 21:52 IST
+demoted=smtp2  failures=3  promoted=smtp  usageToday.smtp=120  usageToday.smtp2=1999
+open: https://travel.navgurukul.org/?tab=sos
+```
+
+**A request**
+
+```
+REQUEST · TRV-O-261010-001 · Approval Pending
+who=Priya Sharma  dept=Tech  campus=Pune
+trip=Pune -> Bengaluru  date=20 Oct  mode=Flight  type=One-way
+priority=High  travellers=1  manager=manager@navgurukul.org  owner=unassigned
+open: https://travel.navgurukul.org/?tab=requests
+```
+
+**The digest**
+
+```
+DESK DIGEST · 10 Oct 2026 (IST)
+raised=12  booked=1  closed=0  cancelled=0
+open=15  assigned=10  unassigned=5  claimed=10
+moved=12  stalled=3  oldest_open=168h
+owners: Ravi Kumar=5  Asha Nair=5
+unassigned: TRV-O-261010-004(168h) TRV-O-261010-013(12h) TRV-O-261010-010(9h)
+stalled: TRV-O-261010-012(144h) TRV-O-261010-008(144h)
+report: attached (PDF)
+open: https://travel.navgurukul.org/?tab=all-requests
+```
+
+Subjects carry the same structure, because Slack shows the subject as the
+message title: `🚨 CRITICAL · SMTP_FAILOVER_PROMOTED · …`, `🆕 TRV-O-261010-001 ·
+Pune -> Bengaluru · 20 Oct`, `📊 Desk digest · 10 Oct 2026 · raised 12 ·
+unassigned 5 · stalled 3`.
+
+---
+
+## Request traffic
+
+Every request raised fires `trg_notify_new_request`, which posts the block
+above. It is guarded by **Ping on every request** in the console, and it can
+never fail the insert: if the queue refuses the ping, the request is still
+created and the failure is raised as an SOS.
+
+---
+
+## The daily report
+
+`send_desk_digest()` runs on a pg_cron job (`desk-daily-digest`) at **19:30 IST**
+and posts the summary with the full breakdown attached as a PDF:
+
+* **Summary** — raised, booked, closed, cancelled, open, assigned, unassigned,
+  claimed, moved, stalled, oldest open.
+* **Unassigned** — every open request nobody owns, with its age.
+* **Stalled** — open requests with no movement for longer than the configured
+  window (48h by default).
+* **Desk load by owner** — who is holding what.
+* **Raised in this window** — each new request with requester, trip and owner.
+* **Movement in this window** — every status change, who made it and when.
+
+The data is assembled by `build_desk_digest()`; the queue row carries it in
+`email_queue.report_payload`, and the worker renders the PDF at send time.
+The console's **Download report** button renders the same document in the
+browser from the same code (`utils/report/pdfBuilder.ts` and
+`utils/desk/digest.ts`, mirrored into the worker — `tests/mirroredReportBuilder.test.ts`
+fails if the copies drift).
+
+**To change the time**, edit the cron expression in
+`supabase/migrations/20261010120000_desk_notifications_and_digest.sql` and
+re-run it; the job is replaced by name. pg_cron runs on UTC, so 19:30 IST is
+`0 14 * * *`.
+
+---
+
+## What is watched by SOS
 
 The console renders the live catalogue under **Monitored Failures**; the summary
 below is the shape of it.
@@ -87,7 +140,7 @@ below is the shape of it.
 | **Documents** | An upload that failed; a stored document that cannot be opened; a verification decision that did not save. |
 | **Data, config** | Core data that failed to load; analytics that failed to compute; settings, policy and template saves that did not persist. |
 | **Scheduled jobs** | A pg_cron run that failed; an expected job that is not registered; the overnight auto-close sweep that has stopped running. |
-| **Platform** | Uncaught browser errors and unhandled rejections; the database unreachable; an SOS that could not be pushed. |
+| **Platform** | Uncaught browser errors and unhandled rejections; the database unreachable; an SOS that could not be pushed; a request ping that could not be queued; a report that failed to render. |
 
 The example the system was built around: **Account B is active, starts failing,
 and the worker promotes Account A.** The desk's sending identity changes with no
@@ -114,14 +167,12 @@ back after being quiet pages again instead of hiding inside an old row.
 
 ## Triage
 
-Staff (Admin, PNC Admin, PNC, Finance) can read the feed. Admin and PNC Admin
-can **Acknowledge** ("seen, working on it"), **Resolve** (with an optional note
-of what fixed it) and **Reopen**. Resolved alerts older than 90 days are purged
-by `purge_sos_alerts()`; open alerts are never purged, whatever their age.
+Admin can **Acknowledge** ("seen, working on it"), **Resolve** (with an optional
+note of what fixed it) and **Reopen**. Resolved alerts older than 90 days are
+purged by `purge_sos_alerts()`; open alerts are never purged, whatever their age.
 
 Each alert carries its catalogue entry — *why it matters* and *first check* —
-plus the raw context it was raised with, so a reader does not need the code to
-act on it.
+plus the raw context and the exact message the channel was sent.
 
 ---
 
@@ -171,8 +222,8 @@ so and skips scheduling rather than failing.
 1. Open **SOS** in the sidebar — the feed is independent of delivery.
 2. Check the **Undelivered** figure. Non-zero means alerts were recorded but
    their Slack mail did not leave: look at Email Center → Provider.
-3. Each alert mail links straight back to the console (`/?tab=sos`), so a
-   reader in Slack lands on the record rather than the dashboard.
+3. Each alert mail links straight back to the console (`/?tab=sos`), so a reader
+   in Slack lands on the record rather than the dashboard.
 4. Press **Send Test Alert**. It is raised at the configured severity floor, so
    it exercises the real delivery path rather than being filtered out by the
    threshold it is meant to verify.

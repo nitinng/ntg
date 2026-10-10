@@ -117,7 +117,7 @@ const App: React.FC = () => {
   useEffect(() => installGlobalSosHandlers(), []);
 
   useEffect(() => {
-    if (!currentUser || currentUser.role === UserRole.EMPLOYEE) {
+    if (!currentUser || currentUser.role !== UserRole.ADMIN) {
       setSosOpenCritical(0);
       return;
     }
@@ -852,9 +852,11 @@ const App: React.FC = () => {
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
         return <VersionChangelogView currentUser={currentUser} />;
       case 'sos':
-        // Alert context can quote another traveller's request, so the feed is
-        // staff-only -- Admin and PNC Admin can also acknowledge and resolve.
-        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        // Admin only. The feed reads every failure across the desk, with
+        // context that can quote another traveller's request, and its settings
+        // decide which Slack channels the desk posts to. Row-level security
+        // enforces the same thing, so a narrower role would see an empty feed.
+        if (currentUser.role !== UserRole.ADMIN) return renderDashboard();
         return <SOSView currentUser={currentUser} />;
       case 'requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
@@ -1235,7 +1237,6 @@ const App: React.FC = () => {
                   {currentUser.role === UserRole.PNC_ADMIN && <SidebarLink icon="fa-shield-halved" label="Policies" active={activeTab === 'policies'} onClick={() => handleTabChange('policies')} />}
                   <SidebarLink icon="fa-users-gear" label="Users" active={activeTab === 'role-management'} onClick={() => handleTabChange('role-management')} />
                   <SidebarLink icon="fa-building" label="Departments" active={activeTab === 'departments'} onClick={() => handleTabChange('departments')} />
-                  <SidebarLink icon="fa-tower-broadcast" label="SOS" active={activeTab === 'sos'} onClick={() => handleTabChange('sos')} badge={sosOpenCritical > 0 ? sosOpenCritical : null} badgeColor="bg-rose-500 text-white" />
                 </div>
 
               </>

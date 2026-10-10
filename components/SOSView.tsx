@@ -13,30 +13,71 @@ import {
   getSosSpec,
   sosCodesByCategory
 } from '../utils/sos/catalog';
-import { SosSettings, formatAlertText } from '../utils/sos/alertRules';
+import { SosSettings, formatAlertText, parseChannelEmails } from '../utils/sos/alertRules';
+import { DeskNotificationSettings } from '../utils/desk/notificationSettings';
+import { DeskDigest, formatAge } from '../utils/desk/digest';
 import {
   SosAlert,
   SosStatus,
   acknowledgeSosAlert,
+  downloadDigestPdf,
+  fetchDeskDigest,
+  fetchNotificationSettings,
   fetchSosAlerts,
   fetchSosSettings,
   fetchSosSummary,
   reopenSosAlert,
   resolveSosAlert,
+  saveNotificationSettings,
   saveSosSettings,
+  sendDeskDigestNow,
   sendSosTestAlert,
   SosSummary
 } from '../utils/sos/sosService';
 
 /**
  * SOS — the one screen that answers "has anything failed, and did anyone hear
- * about it?".
+ * about it?", and where the desk's two Slack channels are configured.
  *
  * Alerting pushes to Slack, but the channel is a notification, not a record:
  * alerts suppressed by a threshold, folded into a repeat, or lost because the
  * email transport was the thing that broke are all here regardless. That is
  * the point of the screen — the channel can be missed, this cannot.
+ *
+ * Admin only, by request: it reads every failure across the desk, including
+ * context quoting other people's requests, and its settings decide where that
+ * goes. Row-level security enforces the same thing, so a narrower role sees an
+ * empty feed rather than a partial one.
  */
+
+/** One address per line. A textarea beats chips when the list is pasted. */
+const ChannelEmailsField = ({
+  label,
+  hint,
+  value,
+  onChange
+}: {
+  label: string;
+  hint: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+}) => (
+  <div className="space-y-2">
+    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+      {label}
+    </label>
+    <textarea
+      rows={Math.max(2, value.length + 1)}
+      value={value.join('\n')}
+      onChange={e => onChange(parseChannelEmails(e.target.value))}
+      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono text-slate-900 dark:text-white"
+      placeholder="channel-name-xxxx@workspace.slack.com"
+    />
+    <p className="text-[11px] text-slate-400">
+      {hint} One address per line — {value.length || 'no'} configured.
+    </p>
+  </div>
+);
 
 interface SOSViewProps {
   currentUser: User;
@@ -94,7 +135,9 @@ const deliveryLabel = (alert: SosAlert): { text: string; tone: string; icon: str
 };
 
 export const SOSView = ({ currentUser }: SOSViewProps) => {
-  const canTriage = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN;
+  // Admin only — and the database agrees, so this is a UI nicety rather than
+  // the control.
+  const canTriage = currentUser.role === UserRole.ADMIN;
 
   const [alerts, setAlerts] = useState<SosAlert[]>([]);
   const [summary, setSummary] = useState<SosSummary>({ openCritical: 0, open: 0, last24h: 0, undelivered: 0 });
@@ -106,6 +149,11 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+
+  const [notifSettings, setNotifSettings] = useState<DeskNotificationSettings | null>(null);
+  const [draftNotif, setDraftNotif] = useState<DeskNotificationSettings | null>(null);
+  const [digest, setDigest] = useState<DeskDigest | null>(null);
+  const [isSendingDigest, setIsSendingDigest] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<SosStatus | 'all'>('Open');
   const [severityFilter, setSeverityFilter] = useState<SosSeverity | 'all'>('all');
@@ -137,11 +185,30 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
 
   useEffect(() => {
     void (async () => {
-      const loaded = await fetchSosSettings();
-      setSettings(loaded);
-      setDraftSettings(loaded);
+      const [alerting, notifications] = await Promise.all([
+        fetchSosSettings(),
+        fetchNotificationSettings()
+      ]);
+      setSettings(alerting);
+      setDraftSettings(alerting);
+      setNotifSettings(notifications);
+      setDraftNotif(notifications);
     })();
   }, []);
+
+  // Today's figures, so an admin can see what the channel will be told before
+  // it is told. Loaded only when the settings panel is open — it is a scan over
+  // the desk, not something to run on every render of the alert feed.
+  useEffect(() => {
+    if (!showSettings || digest) return;
+    void (async () => {
+      try {
+        setDigest(await fetchDeskDigest());
+      } catch (err: any) {
+        toast.error(err.message || 'Could not build the digest preview');
+      }
+    })();
+  }, [showSettings, digest]);
 
   const handleAcknowledge = async (alert: SosAlert) => {
     try {
@@ -202,6 +269,46 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
       toast.error(err.message || 'Could not save alerting settings');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    if (!draftNotif) return;
+    setIsSaving(true);
+    try {
+      await saveNotificationSettings(draftNotif, currentUser.email);
+      setNotifSettings(draftNotif);
+      toast.success('Notification settings saved');
+    } catch (err: any) {
+      toast.error(err.message || 'Could not save notification settings');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendDigest = async () => {
+    setIsSendingDigest(true);
+    try {
+      const result = await sendDeskDigestNow();
+      if (result.sent) {
+        toast.success('Digest queued to the notifications channel');
+      } else {
+        toast.warning(`Digest not sent: ${result.reason || 'disabled'}`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Could not send the digest');
+    } finally {
+      setIsSendingDigest(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    try {
+      const current = digest || (await fetchDeskDigest());
+      setDigest(current);
+      downloadDigestPdf(current);
+    } catch (err: any) {
+      toast.error(err.message || 'Could not build the report');
     }
   };
 
@@ -270,20 +377,36 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
         </Card>
       </div>
 
-      {/* Where alerts go, and the caveat that matters: mail-delivered alerts
-          share a transport with the email failures they report. */}
+      {/* Where each stream goes, and the caveat that matters: mail-delivered
+          alerts share a transport with the email failures they report. */}
       {settings && (
         <Card className="p-4 border-l-4 border-l-rose-500">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
               <i className="fa-brands fa-slack text-xl text-slate-400 mt-0.5"></i>
-              <div>
-                <p className="text-sm font-bold text-slate-900 dark:text-white">
-                  {settings.enabled ? 'Alerting is on' : 'Alerting is off — failures are recorded but nothing is pushed'}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">
-                  {settings.webhookUrl ? 'Slack webhook (independent of email)' : settings.channelEmail}
-                </p>
+              <div className="space-y-1.5">
+                <div>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    {settings.enabled ? 'SOS alerting is on' : 'SOS alerting is off — failures are recorded but nothing is pushed'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">
+                    {settings.webhookUrl
+                      ? 'Slack webhook (independent of email)'
+                      : settings.channelEmails.join(', ') || 'no address configured'}
+                  </p>
+                </div>
+                {notifSettings && (
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      {notifSettings.enabled
+                        ? 'Request notifications are on'
+                        : 'Request notifications are off'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">
+                      {notifSettings.channelEmails.join(', ') || 'no address configured'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs">
@@ -321,7 +444,7 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
         <Card className="p-6 space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Alerting Settings
+              SOS Alerting — failures
             </h2>
             <Toggle
               active={draftSettings.enabled}
@@ -331,18 +454,12 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Slack Channel Email
-              </label>
-              <input
-                value={draftSettings.channelEmail}
-                onChange={e => setDraftSettings({ ...draftSettings, channelEmail: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono text-slate-900 dark:text-white"
-                placeholder="channel-name-xxxx@workspace.slack.com"
-              />
-              <p className="text-[11px] text-slate-400">Slack → channel → Integrations → Send emails to this channel.</p>
-            </div>
+            <ChannelEmailsField
+              label="SOS Channel Addresses"
+              hint="Slack → channel → Integrations → Send emails to this channel."
+              value={draftSettings.channelEmails}
+              onChange={channelEmails => setDraftSettings({ ...draftSettings, channelEmails })}
+            />
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Slack Webhook URL <span className="text-slate-400 normal-case font-medium">(optional, preferred)</span>
@@ -438,6 +555,142 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
               Save Settings
             </button>
           </div>
+        </Card>
+      )}
+
+      {/* Desk notifications — the other channel: request traffic and the
+          end-of-day report, kept separate so muting one never mutes the other. */}
+      {showSettings && canTriage && draftNotif && (
+        <Card className="p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Desk Notifications — request traffic
+            </h2>
+            <Toggle
+              active={draftNotif.enabled}
+              onChange={() => setDraftNotif({ ...draftNotif, enabled: !draftNotif.enabled })}
+              label="Post request traffic"
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <ChannelEmailsField
+              label="Notifications Channel Addresses"
+              hint="Currently the same channel as SOS. Point it at the SLA channel when that exists."
+              value={draftNotif.channelEmails}
+              onChange={channelEmails => setDraftNotif({ ...draftNotif, channelEmails })}
+            />
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Slack Webhook URL <span className="text-slate-400 normal-case font-medium">(optional)</span>
+              </label>
+              <input
+                value={draftNotif.webhookUrl}
+                onChange={e => setDraftNotif({ ...draftNotif, webhookUrl: e.target.value })}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono text-slate-900 dark:text-white"
+                placeholder="https://hooks.slack.com/services/..."
+              />
+              <p className="text-[11px] text-slate-400">
+                Reserved for request traffic. The digest's PDF is only ever delivered by mail.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Ping on every request</span>
+              <Toggle
+                active={draftNotif.notifyOnNewRequest}
+                onChange={() => setDraftNotif({ ...draftNotif, notifyOnNewRequest: !draftNotif.notifyOnNewRequest })}
+                size="sm"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Daily digest</span>
+              <Toggle
+                active={draftNotif.digestEnabled}
+                onChange={() => setDraftNotif({ ...draftNotif, digestEnabled: !draftNotif.digestEnabled })}
+                size="sm"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Attach PDF report</span>
+              <Toggle
+                active={draftNotif.digestAttachPdf}
+                onChange={() => setDraftNotif({ ...draftNotif, digestAttachPdf: !draftNotif.digestAttachPdf })}
+                size="sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Stalled after (hours)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={draftNotif.stalledAfterHours}
+                onChange={e => setDraftNotif({ ...draftNotif, stalledAfterHours: Number(e.target.value) || 1 })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* What the channel would be told right now. */}
+          <div className="p-4 rounded-lg bg-slate-900 dark:bg-black">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+              Today so far
+            </p>
+            {digest ? (
+              <pre className="text-[11px] text-slate-200 font-mono whitespace-pre-wrap">
+{`raised=${digest.totals.raised}  booked=${digest.totals.booked}  closed=${digest.totals.closed}  cancelled=${digest.totals.cancelled}
+open=${digest.totals.open}  assigned=${digest.totals.assigned}  unassigned=${digest.totals.unassigned}  claimed=${digest.totals.claimed}
+moved=${digest.totals.moved}  stalled=${digest.totals.stalled}  oldest_open=${formatAge(digest.totals.oldestOpenHours)}`}
+              </pre>
+            ) : (
+              <p className="text-[11px] text-slate-400 font-mono">Building…</p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void handleSendDigest()}
+                disabled={isSendingDigest}
+                className="px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-bold transition-all active:scale-95 disabled:opacity-50"
+              >
+                <i className={`fa-solid ${isSendingDigest ? 'fa-spinner fa-spin' : 'fa-paper-plane'} mr-2`}></i>
+                Send digest now
+              </button>
+              <button
+                onClick={() => void handleDownloadReport()}
+                className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold transition-all active:scale-95"
+              >
+                <i className="fa-solid fa-file-pdf mr-2"></i>
+                Download report
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDraftNotif(notifSettings)}
+                className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => void handleSaveNotifications()}
+                disabled={isSaving}
+                className="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black shadow-sm transition-all active:scale-95 disabled:opacity-50"
+              >
+                <i className={`fa-solid ${isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'} mr-2`}></i>
+                Save Notifications
+              </button>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            The digest is sent on a schedule by the database (pg_cron job <code>desk-daily-digest</code>, 19:30 IST).
+            Changing the time means editing that job — see docs/sos-alerts.md.
+          </p>
         </Card>
       )}
 

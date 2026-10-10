@@ -17,6 +17,7 @@ import {
   formatAlertSubject,
   formatAlertText,
   normalizeSosSettings,
+  parseChannelEmails,
   shouldNotify
 } from '../utils/sos/alertRules';
 import { SosAlertInput } from '../utils/sos/alertRules';
@@ -111,7 +112,7 @@ describe('shouldNotify', () => {
     const result = shouldNotify({
       severity: 'critical',
       category: 'email_transport',
-      settings: settings({ channelEmail: '', webhookUrl: '' })
+      settings: settings({ channelEmails: [], webhookUrl: '' })
     });
     expect(result).toEqual({ notify: false, reason: 'no_destination' });
   });
@@ -131,7 +132,7 @@ describe('normalizeSosSettings', () => {
       mutedCategories: ['finance', 'not_a_category', 42],
       dedupeWindowMinutes: -5,
       dailyNotificationCap: 'lots',
-      channelEmail: 'not-an-address'
+      channelEmails: ['not-an-address', '', 'ops@navgurukul.org', 'OPS@navgurukul.org']
     });
 
     expect(result.enabled).toBe(true);
@@ -139,7 +140,8 @@ describe('normalizeSosSettings', () => {
     expect(result.mutedCategories).toEqual(['finance']);
     expect(result.dedupeWindowMinutes).toBe(DEFAULT_SOS_SETTINGS.dedupeWindowMinutes);
     expect(result.dailyNotificationCap).toBe(DEFAULT_SOS_SETTINGS.dailyNotificationCap);
-    expect(result.channelEmail).toBe(DEFAULT_SOS_CHANNEL_EMAIL);
+    // Only the usable address survives, de-duplicated and lower-cased.
+    expect(result.channelEmails).toEqual(['ops@navgurukul.org']);
   });
 
   it('survives null, which is what an unreadable settings row looks like', () => {
@@ -149,17 +151,37 @@ describe('normalizeSosSettings', () => {
   it('keeps values that are valid', () => {
     const result = normalizeSosSettings({
       enabled: false,
-      channelEmail: '  ops-alerts@example.slack.com ',
+      channelEmails: '  ops-alerts@example.slack.com, second@navgurukul.org ',
       webhookUrl: ' https://hooks.slack.com/services/x ',
       minSeverity: 'critical',
       dedupeWindowMinutes: 5,
       dailyNotificationCap: 10
     });
     expect(result.enabled).toBe(false);
-    expect(result.channelEmail).toBe('ops-alerts@example.slack.com');
+    expect(result.channelEmails).toEqual(['ops-alerts@example.slack.com', 'second@navgurukul.org']);
     expect(result.webhookUrl).toBe('https://hooks.slack.com/services/x');
     expect(result.minSeverity).toBe('critical');
     expect(result.dedupeWindowMinutes).toBe(5);
+  });
+});
+
+describe('parseChannelEmails', () => {
+  it('accepts a list, a comma-separated string and a pasted block alike', () => {
+    expect(parseChannelEmails(['a@x.org', 'b@x.org'])).toEqual(['a@x.org', 'b@x.org']);
+    expect(parseChannelEmails('a@x.org, b@x.org')).toEqual(['a@x.org', 'b@x.org']);
+    expect(parseChannelEmails('a@x.org\nb@x.org\n')).toEqual(['a@x.org', 'b@x.org']);
+  });
+
+  it('drops blanks and anything that is not an address', () => {
+    expect(parseChannelEmails(['', '   ', 'nope', 'ok@x.org'])).toEqual(['ok@x.org']);
+  });
+
+  it('de-duplicates case-insensitively, since Slack addresses get pasted twice', () => {
+    expect(parseChannelEmails(['Ops@X.org', 'ops@x.org'])).toEqual(['ops@x.org']);
+  });
+
+  it('reads the pre-migration single-address shape', () => {
+    expect(normalizeSosSettings({ channelEmail: 'legacy@x.org' }).channelEmails).toEqual(['legacy@x.org']);
   });
 });
 

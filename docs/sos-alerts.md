@@ -229,3 +229,25 @@ so and skips scheduling rather than failing.
    threshold it is meant to verify.
 5. If email is the problem, configure a Slack webhook so alerting stops
    depending on it.
+
+### "Could not find the table 'public.sos_alerts' in the schema cache"
+
+The table exists; PostgREST has not reloaded. The app talks to PostgREST, not to
+Postgres, so until its cache refreshes every read and RPC against a newly
+created table fails — and a test alert reports that it could not be recorded at
+all, which is accurate.
+
+Run this in the SQL editor:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+Both migrations end with that statement, so re-running either one also fixes it.
+If the error persists, check the objects really are there — all three rows must
+come back:
+
+```sql
+SELECT to_regclass('public.sos_alerts'), to_regclass('public.sos_settings'),
+       to_regproc('public.raise_sos_alert');
+```

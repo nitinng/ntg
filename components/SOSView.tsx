@@ -245,11 +245,23 @@ export const SOSView = ({ currentUser }: SOSViewProps) => {
     setIsTesting(true);
     try {
       const result = await sendSosTestAlert(currentUser.email);
+
       if (result.delivered) {
         toast.success('Test alert pushed — check the Slack channel');
-      } else {
+      } else if (result.recorded) {
+        // Written to sos_alerts, held back by a rule. It is in the feed below.
         toast.warning(`Test alert recorded but not pushed: ${result.reason || 'suppressed'}`);
+      } else {
+        // Nothing reached the database at all, so there is no record to look at
+        // either. Saying "recorded" here would be the one lie this screen
+        // cannot afford.
+        toast.error(
+          'Test alert could not be recorded — the database rejected it. ' +
+            'If the SOS tables were just created, reload the API schema cache ' +
+            "(NOTIFY pgrst, 'reload schema';) and try again."
+        );
       }
+
       void load();
     } catch (err: any) {
       toast.error(err.message || 'Could not send the test alert');

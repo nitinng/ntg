@@ -954,3 +954,24 @@ $purge_sos_alerts$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION public.purge_sos_alerts(INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.purge_sos_alerts(INTEGER) TO service_role;
+
+-- 11. Make the new objects reachable through the API ----------------------------
+-- The app talks to PostgREST, not to Postgres. Two things have to be true for a
+-- new table to be usable: the API roles must hold privileges on it, and
+-- PostgREST must have reloaded its schema cache. Supabase's default privileges
+-- normally cover the first and an event trigger normally covers the second, but
+-- when either does not fire the symptom is the same and badly misleading --
+-- "Could not find the table 'public.sos_alerts' in the schema cache" for a
+-- table that plainly exists. Doing both explicitly costs nothing.
+
+GRANT SELECT, UPDATE ON public.sos_alerts   TO authenticated;
+GRANT SELECT, UPDATE ON public.sos_settings TO authenticated;
+GRANT ALL    ON public.sos_alerts           TO service_role;
+GRANT ALL    ON public.sos_settings         TO service_role;
+
+-- Alerts are only ever written through raise_sos_alert(), which applies the
+-- dedupe, the rate limit and the notification rules. The missing INSERT policy
+-- already blocks a direct write; this says the same thing at the grant level.
+REVOKE INSERT, DELETE ON public.sos_alerts FROM authenticated;
+
+NOTIFY pgrst, 'reload schema';

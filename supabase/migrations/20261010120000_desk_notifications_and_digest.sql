@@ -874,3 +874,16 @@ BEGIN
   RAISE NOTICE 'Desk digest scheduled: 14:00 UTC daily (19:30 IST).';
 END;
 $schedule_desk_digest$;
+
+-- 11. Reload the API schema cache ------------------------------------------------
+-- This migration adds a column to email_queue and replaces the policies on both
+-- SOS tables. PostgREST serves from a cached schema, so without this the app can
+-- keep seeing the pre-migration shape.
+
+GRANT SELECT, UPDATE ON public.sos_alerts   TO authenticated;
+GRANT SELECT, UPDATE ON public.sos_settings TO authenticated;
+GRANT ALL    ON public.sos_alerts           TO service_role;
+GRANT ALL    ON public.sos_settings         TO service_role;
+REVOKE INSERT, DELETE ON public.sos_alerts FROM authenticated;
+
+NOTIFY pgrst, 'reload schema';

@@ -261,7 +261,9 @@ export const downloadDigestPdf = (digest: DeskDigest): void => {
  * the real delivery path rather than being filtered out by the threshold it is
  * supposed to be verifying.
  */
-export const sendSosTestAlert = async (actorEmail: string): Promise<{ delivered: boolean; reason?: string }> => {
+export const sendSosTestAlert = async (
+  actorEmail: string
+): Promise<{ delivered: boolean; recorded: boolean; reason?: string }> => {
   const settings = await fetchSosSettings();
   const result = await raiseSos('SOS_SELF_TEST', {
     severity: settings.minSeverity,
@@ -271,5 +273,13 @@ export const sendSosTestAlert = async (actorEmail: string): Promise<{ delivered:
     dedupeKey: `test-${Date.now()}`
   });
 
-  return { delivered: result.notified, reason: result.suppressionReason };
+  // `recorded` is carried through deliberately. An alert that was written but
+  // deliberately not pushed and an alert that never reached the database are
+  // completely different problems, and the console must not report them with
+  // the same sentence.
+  return {
+    delivered: result.notified,
+    recorded: result.recorded,
+    reason: result.suppressionReason
+  };
 };

@@ -12,6 +12,7 @@ import {
 } from '../utils/settlement';
 import { queueEmailsForTransition } from '../utils/emailQueueUtils';
 import { mapDbRequest } from '../services/requestMapper';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface CancellationsDashboardProps {
   currentUser: User | null;
@@ -46,7 +47,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
     const { data, error } = await query;
     if (error) {
       toast.error('Failed to load cancellations');
-      console.error(error);
+      reportSos('DATA_LOAD_FAILED', error, { screen: 'cancellations_dashboard' });
     } else {
       setCancellations(data || []);
     }
@@ -191,7 +192,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
       setNotes('');
       fetchCancellations();
     } catch (error: any) {
-      console.error(error);
+      reportSos('SETTLEMENT_WRITE_FAILED', error, { step: 'cancellation_settlement' });
       toast.error('Failed to settle cancellation: ' + error.message);
     } finally {
       setIsSubmitting(false);

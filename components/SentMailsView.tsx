@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import Card from './Card';
 import StatCard from './StatCard';
+import { reportSos } from '../utils/sos/raiseSos';
 
 export interface EmailQueueRecord {
   id: string;
@@ -117,7 +118,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
         setAvailableTemplates(templateRes.data);
       }
     } catch (err: any) {
-      console.error('Error fetching email queue logs:', err);
+      reportSos('DATA_LOAD_FAILED', err, { screen: 'sent_mails', dataset: 'email_queue' });
       toast.error('Failed to load email logs: ' + err.message);
     } finally {
       setLoading(false);
@@ -214,7 +215,8 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
       }
       await fetchEmailLogs();
     } catch (err: any) {
-      console.error('Failed to trigger process-email-queue:', err);
+      // Mail is queued but nothing is draining it until the next scheduled run.
+      reportSos('EMAIL_WORKER_UNREACHABLE', err, { trigger: 'manual_queue_drain' });
       toast.error('Worker trigger failed: ' + (err.message || 'Check Edge Function status in Supabase'));
     } finally {
       setIsProcessingQueue(false);
@@ -347,7 +349,7 @@ export const SentMailsView: React.FC<SentMailsViewProps> = ({
       await fetchEmailLogs();
       setActiveSubTab('logs');
     } catch (err: any) {
-      console.error('Error sending test email:', err);
+      reportSos('EMAIL_CONNECTION_TEST_FAILED', err, { action: 'test_email' });
       toast.error('Test email failed: ' + err.message);
     } finally {
       setIsSendingTest(false);

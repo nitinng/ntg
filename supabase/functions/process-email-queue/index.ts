@@ -1061,6 +1061,609 @@ const shiftIstIso = (now: Date, days: number): string => {
 const istDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 0);
 const istNextDayStartIso = (now: Date = new Date()): string => shiftIstIso(now, 1);
 
+// ===== MIRRORED REPORT BUILDER (start) =====
+// Copied verbatim from utils/report/pdfBuilder.ts and utils/desk/digest.ts,
+// minus their imports and export keywords. This function is deployed as a
+// single self-contained file -- tsconfig.json excludes supabase/functions from
+// the app build -- so shared code is mirrored here the way the SLOT ROUTER
+// block above is.
+//
+// DO NOT EDIT THIS BLOCK BY HAND. Change the source files and re-mirror;
+// tests/mirroredReportBuilder.test.ts fails while the two differ.
+
+/**
+ * A small, dependency-free PDF writer.
+ *
+ * The desk digest has to arrive in Slack as a document somebody can open, read
+ * and forward — not as a wall of text in a message. That means producing a real
+ * PDF from two places that cannot share a bundler: the browser (an admin
+ * downloading today's report) and the Deno queue worker (the scheduled send).
+ *
+ * Pulling a PDF library into both was the obvious option and the wrong one: the
+ * worker runs on a cold start with no package manager, and a CDN import is one
+ * more thing that can be down at 7pm. The report is text in tables, so the
+ * subset of PDF needed to express it is small enough to write out directly.
+ *
+ * What this supports, deliberately and no more: Helvetica headings, Courier
+ * tables (fixed width, so columns line up without measuring glyphs), automatic
+ * pagination, and page footers. Everything is WinAnsi; anything outside it is
+ * transliterated rather than silently mangled, because a report with a broken
+ * glyph reads as a broken report.
+ *
+ * MIRRORED into supabase/functions/process-email-queue/index.ts — see the PDF
+ * BUILDER block there. Any change here must be copied over.
+ */
+
+interface PdfTable {
+  columns: Array<{ header: string; width: number }>;
+  rows: string[][];
+  /** Shown in place of the table when there are no rows. */
+  emptyText?: string;
+}
+
+interface PdfSection {
+  heading: string;
+  /** Free text under the heading, before any table. */
+  paragraphs?: string[];
+  table?: PdfTable;
+}
+
+interface PdfDocument {
+  title: string;
+  subtitle?: string;
+  sections: PdfSection[];
+  /** Printed at the foot of every page, with the page number. */
+  footer?: string;
+}
+
+// US Letter at 72dpi, which every reader and printer handles without scaling.
+const PAGE_WIDTH = 612;
+const PAGE_HEIGHT = 792;
+const MARGIN = 48;
+const BODY_WIDTH = PAGE_WIDTH - MARGIN * 2;
+
+const FONT_HELVETICA = 'F1';
+const FONT_HELVETICA_BOLD = 'F2';
+const FONT_COURIER = 'F3';
+
+/** Courier is exactly 0.6em wide, which is what lets columns align by counting characters. */
+const COURIER_RATIO = 0.6;
+const BODY_SIZE = 9;
+const CHARS_PER_LINE = Math.floor(BODY_WIDTH / (BODY_SIZE * COURIER_RATIO));
+
+/**
+ * The widest a table row may be before it runs past the right margin.
+ *
+ * Exported because a table's columns are chosen by the caller, and a caller
+ * that overruns this produces a report with text falling off the page —
+ * `tests/deskDigest.test.ts` checks the digest's tables against it.
+ */
+const MAX_TABLE_CHARS = CHARS_PER_LINE;
+
+/**
+ * Reduces text to WinAnsi.
+ *
+ * The digest carries status names, emails and place names, plus whatever an
+ * employee typed into a purpose field. Rather than emitting bytes the font
+ * cannot render, the handful of characters that actually show up are mapped to
+ * their ASCII equivalents and the rest becomes '?'.
+ */
+const toWinAnsi = (value: string): string => {
+  const replacements: Record<string, string> = {
+    '—': '-', '–': '-', '‑': '-', '→': '->', '←': '<-',
+    '“': '"', '”': '"', '‘': "'", '’': "'", '•': '*', '·': '-',
+    '₹': 'INR ', '×': 'x', '…': '...', ' ': ' '
+  };
+
+  return Array.from(value ?? '')
+    .map(char => {
+      if (replacements[char] !== undefined) return replacements[char];
+      const code = char.codePointAt(0) ?? 63;
+      if (code === 9) return '    ';
+      if (code < 32) return ' ';
+      if (code <= 126) return char;
+      return '?';
+    })
+    .join('');
+};
+
+/** Escapes the three characters that mean something inside a PDF string literal. */
+const pdfString = (value: string): string =>
+  toWinAnsi(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+/** Pads or truncates to an exact character count, so Courier columns line up. */
+const fitCell = (value: string, width: number): string => {
+  const text = toWinAnsi(value ?? '');
+  if (width <= 0) return '';
+  if (text.length === width) return text;
+  if (text.length < width) return text + ' '.repeat(width - text.length);
+  return width <= 1 ? text.slice(0, width) : text.slice(0, width - 1) + '>';
+};
+
+/** Greedy word wrap at a character count. Long words are broken rather than overflowing. */
+const wrapText = (value: string, width: number): string[] => {
+  const words = toWinAnsi(value ?? '').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [''];
+
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if (current.length + 1 + word.length <= width) {
+      current = `${current} ${word}`;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+
+    while (current.length > width) {
+      lines.push(current.slice(0, width));
+      current = current.slice(width);
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines;
+};
+
+interface TextOp {
+  font: string;
+  size: number;
+  text: string;
+  /** Points below the previous line. */
+  gap: number;
+}
+
+/** Lays the document out into pages of positioned text. */
+const layout = (doc: PdfDocument): TextOp[][] => {
+  const pages: TextOp[][] = [];
+  let page: TextOp[] = [];
+  let y = PAGE_HEIGHT - MARGIN;
+
+  const bottomLimit = MARGIN + 24; // room for the footer
+
+  const push = (op: TextOp) => {
+    if (y - op.gap < bottomLimit) {
+      pages.push(page);
+      page = [];
+      y = PAGE_HEIGHT - MARGIN;
+    }
+    y -= op.gap;
+    page.push({ ...op, gap: y });
+  };
+
+  push({ font: FONT_HELVETICA_BOLD, size: 16, text: doc.title, gap: 20 });
+  if (doc.subtitle) {
+    push({ font: FONT_HELVETICA, size: 10, text: doc.subtitle, gap: 16 });
+  }
+
+  for (const section of doc.sections) {
+    push({ font: FONT_HELVETICA_BOLD, size: 11, text: section.heading, gap: 26 });
+
+    for (const paragraph of section.paragraphs || []) {
+      for (const line of wrapText(paragraph, CHARS_PER_LINE)) {
+        push({ font: FONT_COURIER, size: BODY_SIZE, text: line, gap: 12 });
+      }
+    }
+
+    if (section.table) {
+      const { columns, rows, emptyText } = section.table;
+
+      if (rows.length === 0) {
+        push({
+          font: FONT_COURIER,
+          size: BODY_SIZE,
+          text: emptyText || 'None.',
+          gap: 14
+        });
+        continue;
+      }
+
+      const header = columns.map(c => fitCell(c.header.toUpperCase(), c.width)).join(' ');
+      push({ font: FONT_COURIER, size: BODY_SIZE, text: header, gap: 14 });
+      push({
+        font: FONT_COURIER,
+        size: BODY_SIZE,
+        text: columns.map(c => '-'.repeat(c.width)).join(' '),
+        gap: 11
+      });
+
+      for (const row of rows) {
+        const line = columns.map((c, i) => fitCell(row[i] ?? '', c.width)).join(' ');
+        push({ font: FONT_COURIER, size: BODY_SIZE, text: line, gap: 11 });
+      }
+    }
+  }
+
+  pages.push(page);
+  return pages;
+};
+
+const contentStream = (ops: TextOp[], footer: string, pageNumber: number, pageCount: number): string => {
+  const parts = ops.map(
+    op => `BT /${op.font} ${op.size} Tf ${MARGIN} ${op.gap.toFixed(2)} Td (${pdfString(op.text)}) Tj ET`
+  );
+
+  const footerText = `${footer ? `${footer}  ` : ''}Page ${pageNumber} of ${pageCount}`;
+  parts.push(
+    `BT /${FONT_HELVETICA} 8 Tf ${MARGIN} ${MARGIN - 12} Td (${pdfString(footerText)}) Tj ET`
+  );
+
+  return parts.join('\n');
+};
+
+/**
+ * Renders the document and returns the raw PDF as a latin1 string.
+ *
+ * Offsets in the cross-reference table are byte offsets, and every byte written
+ * here is latin1, so string length and byte length are the same number — which
+ * is the only reason this can be assembled as a string at all.
+ */
+const buildPdfRaw = (doc: PdfDocument): string => {
+  const pages = layout(doc);
+  const pageCount = pages.length;
+
+  const objects: string[] = [];
+  const addObject = (body: string): number => {
+    objects.push(body);
+    return objects.length; // 1-based object number
+  };
+
+  // 1 catalog, 2 page tree, 3-5 fonts: fixed so the page objects can reference them.
+  addObject('<< /Type /Catalog /Pages 2 0 R >>');
+  addObject('PAGES_PLACEHOLDER');
+  addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>');
+
+  const pageObjectNumbers: number[] = [];
+
+  pages.forEach((ops, index) => {
+    const stream = contentStream(ops, doc.footer || '', index + 1, pageCount);
+    const contentNumber = addObject(
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+    );
+    const pageNumber = addObject(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] ` +
+        `/Resources << /Font << /${FONT_HELVETICA} 3 0 R /${FONT_HELVETICA_BOLD} 4 0 R /${FONT_COURIER} 5 0 R >> >> ` +
+        `/Contents ${contentNumber} 0 R >>`
+    );
+    pageObjectNumbers.push(pageNumber);
+  });
+
+  objects[1] =
+    `<< /Type /Pages /Kids [${pageObjectNumbers.map(n => `${n} 0 R`).join(' ')}] /Count ${pageCount} >>`;
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (const offset of offsets) {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+
+  return pdf;
+};
+
+/** Base64 of the rendered PDF, which is the form an email attachment takes. */
+const buildPdfBase64 = (doc: PdfDocument): string => {
+  const raw = buildPdfRaw(doc);
+
+  if (typeof btoa === 'function') {
+    return btoa(raw);
+  }
+
+  // Node (tests, and any server-side render).
+  return Buffer.from(raw, 'latin1').toString('base64');
+};
+
+/**
+ * The desk digest: what the travel desk did today.
+ *
+ * The data is assembled by `public.build_desk_digest()` — one query pass over
+ * requests, ownership and status history — and this module turns it into the
+ * report that goes to the notifications channel as a PDF attachment.
+ *
+ * The shape below is the contract with that function. The Slack message itself
+ * is built in SQL, next to the data, so there is exactly one place that writes
+ * it; this file owns only the document.
+ */
+
+
+interface DigestTotals {
+  raised: number;
+  booked: number;
+  closed: number;
+  cancelled: number;
+  open: number;
+  assigned: number;
+  unassigned: number;
+  claimed: number;
+  moved: number;
+  stalled: number;
+  oldestOpenHours: number;
+}
+
+interface DigestRequestRow {
+  ticket: string;
+  status: string;
+  requester: string;
+  trip: string;
+  travelDate?: string | null;
+  priority?: string | null;
+  owner?: string | null;
+  ageHours?: number | null;
+}
+
+interface DigestOwnerRow {
+  owner: string;
+  assigned: number;
+  booked: number;
+  open: number;
+}
+
+interface DigestMovementRow {
+  ticket: string;
+  fromStatus?: string | null;
+  toStatus: string;
+  at: string;
+  actor?: string | null;
+}
+
+interface DeskDigest {
+  generatedAt: string;
+  windowLabel: string;
+  windowFrom: string;
+  windowTo: string;
+  totals: DigestTotals;
+  byStatus: Array<{ status: string; count: number }>;
+  byOwner: DigestOwnerRow[];
+  raisedList: DigestRequestRow[];
+  unassignedList: DigestRequestRow[];
+  stalledList: DigestRequestRow[];
+  movementList: DigestMovementRow[];
+}
+
+/** "3d 4h" — short enough for a table column, exact enough to act on. */
+const formatAge = (hours?: number | null): string => {
+  if (hours === null || hours === undefined || !Number.isFinite(hours)) return '—';
+  const whole = Math.max(0, Math.round(hours));
+  if (whole < 24) return `${whole}h`;
+  const days = Math.floor(whole / 24);
+  const rest = whole % 24;
+  return rest ? `${days}d ${rest}h` : `${days}d`;
+};
+
+const shortTime = (iso?: string | null): string => {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  // IST, because every reader of this report is on it.
+  return date.toLocaleString('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const summaryLine = (totals: DigestTotals): string =>
+  [
+    `raised=${totals.raised}`,
+    `booked=${totals.booked}`,
+    `closed=${totals.closed}`,
+    `cancelled=${totals.cancelled}`,
+    `open=${totals.open}`,
+    `assigned=${totals.assigned}`,
+    `unassigned=${totals.unassigned}`,
+    `claimed=${totals.claimed}`,
+    `moved=${totals.moved}`,
+    `stalled=${totals.stalled}`
+  ].join('  ');
+
+/**
+ * Turns a digest into the printable report.
+ *
+ * Ordered by what someone acting on it needs first: the numbers, then the work
+ * nobody owns, then the work that has stopped moving, then the detail.
+ */
+const digestToPdfDocument = (digest: DeskDigest): PdfDocument => {
+  const { totals } = digest;
+
+  return {
+    title: 'Travel Desk — Daily Report',
+    subtitle: `${digest.windowLabel} (IST) · generated ${shortTime(digest.generatedAt)}`,
+    footer: 'Navgurukul Travel Desk',
+    sections: [
+      {
+        heading: 'Summary',
+        paragraphs: [
+          summaryLine(totals),
+          `Oldest open request: ${formatAge(totals.oldestOpenHours)}.`,
+          digest.byStatus.length
+            ? `Open by status — ${digest.byStatus.map(s => `${s.status}=${s.count}`).join('  ')}`
+            : 'No open requests.'
+        ]
+      },
+      {
+        heading: `Unassigned — nobody owns these (${digest.unassignedList.length})`,
+        table: {
+          columns: [
+            { header: 'Ticket', width: 17 },
+            { header: 'Status', width: 18 },
+            { header: 'Requester', width: 24 },
+            { header: 'Trip', width: 24 },
+            { header: 'Age', width: 6 }
+          ],
+          rows: digest.unassignedList.map(r => [
+            r.ticket,
+            r.status,
+            r.requester,
+            r.trip,
+            formatAge(r.ageHours)
+          ]),
+          emptyText: 'Every open request has an owner.'
+        }
+      },
+      {
+        heading: `Stalled — no movement (${digest.stalledList.length})`,
+        table: {
+          columns: [
+            { header: 'Ticket', width: 17 },
+            { header: 'Status', width: 18 },
+            { header: 'Owner', width: 20 },
+            { header: 'Requester', width: 20 },
+            { header: 'Idle', width: 7 }
+          ],
+          rows: digest.stalledList.map(r => [
+            r.ticket,
+            r.status,
+            r.owner || 'Unassigned',
+            r.requester,
+            formatAge(r.ageHours)
+          ]),
+          emptyText: 'Everything open has moved recently.'
+        }
+      },
+      {
+        heading: `Desk load by owner (${digest.byOwner.length})`,
+        table: {
+          columns: [
+            { header: 'Owner', width: 30 },
+            { header: 'Holding', width: 9 },
+            { header: 'Open', width: 7 },
+            { header: 'Booked', width: 8 }
+          ],
+          rows: digest.byOwner.map(o => [
+            o.owner,
+            String(o.assigned),
+            String(o.open),
+            String(o.booked)
+          ]),
+          emptyText: 'Nothing is assigned.'
+        }
+      },
+      {
+        heading: `Raised in this window (${digest.raisedList.length})`,
+        table: {
+          columns: [
+            { header: 'Ticket', width: 17 },
+            { header: 'Requester', width: 20 },
+            { header: 'Trip', width: 22 },
+            { header: 'Travel', width: 9 },
+            { header: 'Pri', width: 6 },
+            { header: 'Owner', width: 14 }
+          ],
+          rows: digest.raisedList.map(r => [
+            r.ticket,
+            r.requester,
+            r.trip,
+            r.travelDate || '—',
+            r.priority || '—',
+            r.owner || 'Unassigned'
+          ]),
+          emptyText: 'No new requests in this window.'
+        }
+      },
+      {
+        heading: `Movement in this window (${digest.movementList.length})`,
+        table: {
+          columns: [
+            { header: 'Ticket', width: 17 },
+            { header: 'From', width: 18 },
+            { header: 'To', width: 18 },
+            { header: 'When', width: 14 },
+            { header: 'By', width: 14 }
+          ],
+          rows: digest.movementList.map(m => [
+            m.ticket,
+            m.fromStatus || '—',
+            m.toStatus,
+            shortTime(m.at),
+            m.actor || '—'
+          ]),
+          emptyText: 'Nothing moved in this window.'
+        }
+      }
+    ]
+  };
+};
+
+/** The attachment the notifications channel receives. */
+const digestToPdfBase64 = (digest: DeskDigest): string =>
+  buildPdfBase64(digestToPdfDocument(digest));
+
+/** `travel-desk-report-2026-10-10.pdf` */
+const digestFileName = (digest: DeskDigest): string => {
+  const day = (digest.windowTo || digest.generatedAt || '').slice(0, 10) || 'report';
+  return `travel-desk-report-${day}.pdf`;
+};
+
+// ===== MIRRORED REPORT BUILDER (end) =====
+
+// =============================================================================
+// SOS REPORTER
+// =============================================================================
+// This worker is the least observed part of the system: it runs with no user
+// watching, and its failures -- a demoted SMTP account, a spent quota, a crash
+// mid-batch -- used to end at a console line in the edge logs. Every one of
+// them now goes through raise_sos_alert(), which records it and pushes it to
+// the automation Slack channel.
+//
+// Reporting is best-effort and never throws: the worker's job is to deliver
+// mail, and a failure to report a failure must not stop it. See
+// supabase/migrations/20261010090000_sos_alert_system.sql for the rules the
+// RPC applies, and utils/sos/catalog.ts for what each code means.
+
+type SosSeverityName = 'critical' | 'high' | 'warning' | 'info';
+
+interface SosReport {
+  code: string;
+  category: string;
+  severity: SosSeverityName;
+  title: string;
+  message: string;
+  context?: Record<string, any>;
+  /** Extra dedupe identity: an account slot, a queue id, a template key. */
+  dedupeKey?: string;
+}
+
+const createSosReporter = (supabase: any) => {
+  return async (report: SosReport): Promise<void> => {
+    try {
+      console.warn(`[SOS ${report.severity}] ${report.code}: ${report.message}`);
+      const { error } = await supabase.rpc('raise_sos_alert', {
+        p_code: report.code,
+        p_category: report.category,
+        p_severity: report.severity,
+        p_title: report.title,
+        p_message: report.message.slice(0, 2000),
+        p_context: report.context || {},
+        p_source: 'worker',
+        p_dedupe_key: report.dedupeKey || null
+      });
+      if (error) {
+        // Deliberately terminal. Raising an alert about a failed alert is how
+        // an alerting system takes itself down.
+        console.error('[SOS] could not record alert:', error.message);
+      }
+    } catch (err: any) {
+      console.error('[SOS] could not record alert:', err?.message || err);
+    }
+  };
+};
+
 Deno.serve(async (req: Request) => {
   const corsHeaders = buildCorsHeaders(req);
 
@@ -1082,6 +1685,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const sos = createSosReporter(supabase);
     const url = new URL(req.url);
     const reqBody = await req.json().catch(() => ({}));
 
@@ -1139,8 +1743,20 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Could not query dynamic email routing settings:', err);
+      // The worker carries on with defaults, which may point mail at the wrong
+      // transport entirely -- exactly the kind of thing that used to be
+      // invisible until someone noticed the mail had stopped.
+      await sos({
+        code: 'EMAIL_ROUTING_CONFIG_FALLBACK',
+        category: 'email_delivery',
+        severity: 'warning',
+        title: 'Email routing settings unreadable — defaults in use',
+        message: `The worker could not read email_routing_settings and is running on defaults: ${err?.message || err}`,
+        context: { error: String(err?.message || err) },
+        dedupeKey: 'worker-settings'
+      });
     }
 
     // Override from request if explicitly testing a specific provider.
@@ -1392,6 +2008,21 @@ Deno.serve(async (req: Request) => {
     const slotRoutingEnabled =
       requestedProvider === 'smtp' && (slotConfigured.smtp || slotConfigured.smtp2);
 
+    // The account marked active cannot send. Routing silently falls through to
+    // the other slot, so mail still goes out -- as a different identity, which
+    // nobody asked for and nobody would otherwise be told about.
+    if (slotRoutingEnabled && !slotConfigured[activeSmtpSlot]) {
+      await sos({
+        code: 'SMTP_SLOT_UNCONFIGURED',
+        category: 'email_transport',
+        severity: 'high',
+        title: 'Active SMTP account has no usable credentials',
+        message: `Account ${activeSmtpSlot === 'smtp' ? 'A' : 'B'} is marked active but has no username or password configured, so sends are falling through to the backup account.`,
+        context: { activeSlot: activeSmtpSlot, configured: slotConfigured },
+        dedupeKey: activeSmtpSlot
+      });
+    }
+
     // Today's sends per account. Rows predating smtp_slot carry NULL and belong
     // to Account A, which was the only account sending at the time.
     const slotUsage: Record<SmtpSlotName, number> = { smtp: 0, smtp2: 0 };
@@ -1436,7 +2067,20 @@ Deno.serve(async (req: Request) => {
       .order('created_at', { ascending: true })
       .limit(25);
 
-    if (fetchErr) throw fetchErr;
+    if (fetchErr) {
+      // The worker ran and sent nothing at all. Without this the run looks
+      // identical to an empty queue.
+      await sos({
+        code: 'EMAIL_QUEUE_POLL_FAILED',
+        category: 'email_delivery',
+        severity: 'high',
+        title: 'Worker could not read the email queue',
+        message: `Polling email_queue failed, so this run delivered nothing: ${fetchErr.message}`,
+        context: { error: fetchErr.message, code: (fetchErr as any).code },
+        dedupeKey: 'poll'
+      });
+      throw fetchErr;
+    }
 
     const results = {
       processed: 0,
@@ -1473,7 +2117,53 @@ Deno.serve(async (req: Request) => {
         if (ticket.note) {
           console.log(`[email ${item.id}] ticket delivery: ${ticket.note}`);
         }
+        // "no ticket uploaded" is a normal state; a failure to sign or fetch
+        // one that exists means the traveller gets a mail promising a ticket
+        // that is not attached to it.
+        if (ticket.note && /^(could not sign|attachment skipped)/.test(ticket.note)) {
+          await sos({
+            code: 'EMAIL_TICKET_ATTACHMENT_FAILED',
+            category: 'email_delivery',
+            severity: 'warning',
+            title: 'Ticket file could not be attached to a mail',
+            message: `The ticket for this request could not be delivered with its mail: ${ticket.note}`,
+            context: { queueId: item.id, ticketId: item.ticket_id, note: ticket.note },
+            dedupeKey: String(item.ticket_id || item.id)
+          });
+        }
       }
+
+      // A queue row carrying digest data becomes a PDF at send time: the
+      // report cannot be built in SQL, and rendering it here means the
+      // scheduled send and an admin's download come out of the same code.
+      let reportAttachment: EmailAttachment | null = null;
+      if (item.report_payload) {
+        try {
+          const digest = item.report_payload as DeskDigest;
+          reportAttachment = {
+            filename: digestFileName(digest),
+            content: digestToPdfBase64(digest),
+            contentType: 'application/pdf'
+          };
+        } catch (err: any) {
+          // Send the summary without the attachment rather than holding the
+          // whole digest back: the message carries the numbers that matter.
+          await sos({
+            code: 'DESK_REPORT_RENDER_FAILED',
+            category: 'platform',
+            severity: 'warning',
+            title: 'Desk report could not be rendered',
+            message: `The daily digest was sent without its PDF: ${err?.message || err}`,
+            context: { queueId: item.id, error: String(err?.message || err) },
+            dedupeKey: 'digest-pdf'
+          });
+        }
+      }
+
+      const attachments = [
+        ...(ticket.attachment ? [ticket.attachment] : []),
+        ...(reportAttachment ? [reportAttachment] : [])
+      ];
 
       const payload = {
         to: item.recipients || [],
@@ -1485,7 +2175,7 @@ Deno.serve(async (req: Request) => {
         // The link stays in the body even when the file is attached: a
         // recipient whose client strips attachments still has a way through,
         // and a forwarded mail keeps working.
-        attachments: ticket.attachment ? [ticket.attachment] : undefined
+        attachments: attachments.length ? attachments : undefined
       };
 
       let usedSlot: SmtpSlotName | null = null;
@@ -1502,6 +2192,25 @@ Deno.serve(async (req: Request) => {
         if (!pick.slot) {
           // Both accounts have spent their daily cap. Hold the item until the
           // quota rolls over instead of burning a retry attempt on it.
+          //
+          // Nothing leaves the desk until IST midnight, so this is as loud as
+          // the transport alerts get.
+          await sos({
+            code: 'SMTP_QUOTA_EXHAUSTED',
+            category: 'email_transport',
+            severity: 'critical',
+            title: 'Both SMTP accounts have spent their daily quota',
+            message: `Account A has sent ${slotUsage.smtp} and Account B ${slotUsage.smtp2} against a cap of ${perAccountQuota} each. Queued mail is held until the quota rolls over at IST midnight.`,
+            context: {
+              accountA: slotUsage.smtp,
+              accountB: slotUsage.smtp2,
+              perAccountQuota,
+              heldUntil: istNextDayStartIso(),
+              reason: pick.reason
+            },
+            dedupeKey: 'quota'
+          });
+
           await supabase
             .from('email_queue')
             .update({
@@ -1530,15 +2239,40 @@ Deno.serve(async (req: Request) => {
 
         // Any failure retries once on the other account before giving up.
         if (!sendRes.success) {
+          const failedSlot = usedSlot;
           const backupSlot = otherSlot(usedSlot);
+          let rescuedBy: SmtpSlotName | null = null;
+
           if (slotConfigured[backupSlot] && (slotUsage[backupSlot] || 0) < perAccountQuota) {
             console.warn(`SMTP ${usedSlot} failed (${sendRes.error?.message || 'unknown'}). Retrying on ${backupSlot}...`);
             const backupRes = await slotProvider(backupSlot).send(payload);
             if (backupRes.success) {
               sendRes = backupRes;
               usedSlot = backupSlot;
+              rescuedBy = backupSlot;
             }
           }
+
+          // The warning before a promotion: one account is refusing sends
+          // while the other quietly carries the load.
+          await sos({
+            code: 'SMTP_SLOT_SEND_FAILED',
+            category: 'email_transport',
+            severity: 'high',
+            title: 'SMTP account rejected a send and the backup took over',
+            message: `Account ${failedSlot === 'smtp' ? 'A' : 'B'} rejected a send (${sendRes.error?.message || 'unknown error'}).${rescuedBy ? ` The mail went out on Account ${rescuedBy === 'smtp' ? 'A' : 'B'} instead.` : ' No backup account was available to carry it.'}`,
+            context: {
+              failedSlot,
+              rescuedBy,
+              queueId: item.id,
+              transient: sendRes.error?.isTransient ?? true,
+              errorCode: sendRes.error?.code,
+              error: sendRes.error?.message,
+              consecutiveFailures: failureStreak.count,
+              promotesAfter: failoverAfterFailures
+            },
+            dedupeKey: failedSlot
+          });
         }
 
         if (sendRes.success) {
@@ -1551,6 +2285,7 @@ Deno.serve(async (req: Request) => {
       // Cross-provider last resort: both SMTP accounts are out, try SES/Gmail.
       if (!sendRes.success && quotaSettings?.fallbackProvider && quotaSettings.fallbackProvider !== provider.name) {
         console.warn(`Primary provider ${provider.name} failed. Attempting failover to ${quotaSettings.fallbackProvider}...`);
+        const primaryError = sendRes.error?.message;
         const fallbackProvider = buildProvider(quotaSettings.fallbackProvider);
         const fallbackRes = await fallbackProvider.send(payload);
         if (fallbackRes.success) {
@@ -1558,6 +2293,28 @@ Deno.serve(async (req: Request) => {
           // A different transport carried it, so no SMTP account owns this send.
           usedSlot = null;
         }
+
+        // Either way this is worth knowing: the mail went out as a different
+        // sending identity, or the last transport available also refused it.
+        await sos({
+          code: fallbackRes.success ? 'EMAIL_PROVIDER_FALLBACK' : 'EMAIL_PROVIDER_MISCONFIGURED',
+          category: 'email_transport',
+          severity: fallbackRes.success ? 'high' : 'critical',
+          title: fallbackRes.success
+            ? 'Outbound mail fell back to a secondary provider'
+            : 'Selected email provider is missing its configuration',
+          message: fallbackRes.success
+            ? `Both SMTP accounts refused this send, so it was delivered through ${quotaSettings.fallbackProvider} instead of the usual transport.`
+            : `Every configured transport refused this send. Primary: ${provider.name}; fallback ${quotaSettings.fallbackProvider}: ${fallbackRes.error?.message || 'unknown error'}.`,
+          context: {
+            queueId: item.id,
+            primaryProvider: provider.name,
+            fallbackProvider: quotaSettings.fallbackProvider,
+            primaryError,
+            fallbackError: fallbackRes.error?.message
+          },
+          dedupeKey: String(quotaSettings.fallbackProvider)
+        });
       }
 
       if (sendRes.success) {
@@ -1633,6 +2390,24 @@ Deno.serve(async (req: Request) => {
       if (pendingPromotion && pendingPromotion !== activeSmtpSlot) {
         console.warn(`Promoting SMTP ${pendingPromotion} to active after ${failoverAfterFailures} consecutive failures.`);
 
+        // The sending identity of the whole desk just changed, without a human
+        // deciding it. This is the alert the SOS system was built around.
+        await sos({
+          code: 'SMTP_FAILOVER_PROMOTED',
+          category: 'email_transport',
+          severity: 'critical',
+          title: 'SMTP account auto-promoted after repeated failures',
+          message: `Account ${activeSmtpSlot === 'smtp' ? 'A' : 'B'} failed ${failoverAfterFailures} consecutive non-transient sends, so Account ${pendingPromotion === 'smtp' ? 'A' : 'B'} has been promoted to active. Mail is now going out as the backup identity.`,
+          context: {
+            demoted: activeSmtpSlot,
+            promoted: pendingPromotion,
+            consecutiveFailures: failoverAfterFailures,
+            usageToday: slotUsage,
+            perAccountQuota
+          },
+          dedupeKey: `${activeSmtpSlot}->${pendingPromotion}`
+        });
+
         await supabase.from('email_routing_settings').upsert({
           key: 'active_smtp_slot',
           value: pendingPromotion,
@@ -1685,6 +2460,33 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (err: any) {
+    // The run died part-way through. Anything it had claimed is stranded in
+    // Processing until the stale-claim window expires, so this is reported
+    // even though the only caller is usually a background trigger that
+    // discards the response.
+    try {
+      // @ts-ignore: Deno.env
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      // @ts-ignore: Deno.env
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      if (supabaseUrl && serviceRoleKey) {
+        await createSosReporter(createClient(supabaseUrl, serviceRoleKey))({
+          code: 'EMAIL_WORKER_CRASHED',
+          category: 'email_delivery',
+          severity: 'critical',
+          title: 'Email worker crashed mid-run',
+          message: `The queue worker threw before finishing its batch: ${err?.message || err}`,
+          context: {
+            error: String(err?.message || err),
+            stack: typeof err?.stack === 'string' ? err.stack.split('\n').slice(0, 4).join(' | ') : undefined
+          },
+          dedupeKey: String(err?.message || 'crash').slice(0, 120)
+        });
+      }
+    } catch {
+      // Reporting must never replace the error being reported.
+    }
+
     return new Response(JSON.stringify({ success: false, error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

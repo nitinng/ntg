@@ -13,6 +13,7 @@
 
 import { supabase } from '../supabaseClient';
 import { TravelRequest, User, UserRole, TimelineEvent } from '../types';
+import { reportSos } from './sos/raiseSos';
 
 /** Roles that can hold a request. */
 export const canOwnRequests = (role?: UserRole | null): boolean =>
@@ -90,7 +91,8 @@ export const assignRequestTo = async (
     .eq('id', request.id);
 
   if (error) {
-    console.warn('Could not assign request:', error.message);
+    // An unassigned request ages in the queue with nobody accountable for it.
+    reportSos('ASSIGNMENT_FAILED', error, { ticketId: request.id, assigneeId: assignee.id });
     return { request, error: error.message };
   }
 

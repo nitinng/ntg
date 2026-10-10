@@ -32,6 +32,7 @@ import {
 } from '../types';
 import { resolveTemplateVariables } from './emailQueueUtils';
 import { getDaysRemaining } from './policyUtils';
+import { reportSos } from './sos/raiseSos';
 
 /** Matches getEffectiveBookingSlaHours' own fallback for the Critical tier. */
 const DEFAULT_CRITICAL_SLA_HOURS = 4;
@@ -107,7 +108,9 @@ export const getEmailRoutingConfig = async (
       }
     }
   } catch (err) {
-    console.warn('Falling back to default email routing config:', err);
+    // Mail keeps flowing, addressed by hardcoded defaults -- which may be the
+    // wrong desk entirely.
+    reportSos('EMAIL_ROUTING_CONFIG_FALLBACK', err, { table: 'email_routing_settings' });
   }
 
   routingCache = { value: config, at: Date.now() };
@@ -524,7 +527,7 @@ export const resolveTemplate = async (
       contextKey: chosen.context_key || null
     };
   } catch (err) {
-    console.warn(`Could not resolve template for ${event}/${audience}:`, err);
+    reportSos('EMAIL_TEMPLATE_MISSING', err, { event, audience }, { severity: 'warning' });
     return null;
   }
 };
@@ -778,7 +781,16 @@ export const queueEmailsForEvent = async (
           audience,
           reason: duplicate ? 'already queued' : `insert failed: ${error.message}`
         });
-        if (!duplicate) console.warn(`Failed to queue ${event}/${audience}:`, error.message);
+        if (!duplicate) {
+          // Lifecycle mail is queued non-blocking by design, so nothing else
+          // would ever notice that this notification does not exist.
+          reportSos('EMAIL_ENQUEUE_FAILED', error, {
+            event,
+            audience,
+            ticketId: request?.id,
+            templateKey: template.templateKey
+          }, { dedupeKey: `${event}:${audience}` });
+        }
         continue;
       }
 
@@ -789,7 +801,7 @@ export const queueEmailsForEvent = async (
       void triggerWorker();
     }
   } catch (err) {
-    console.error('Non-blocking error in queueEmailsForEvent:', err);
+    reportSos('EMAIL_ENQUEUE_FAILED', err, { event, ticketId: request?.id, stage: 'queueEmailsForEvent' });
   }
 
   return result;
@@ -801,6 +813,6 @@ export const triggerWorker = async (batchSize = 10): Promise<void> => {
     if (typeof supabase?.functions?.invoke !== 'function') return;
     await supabase.functions.invoke('process-email-queue', { body: { batchSize } });
   } catch (err) {
-    console.warn('Non-blocking background worker trigger notice:', err);
+    reportSos('EMAIL_WORKER_UNREACHABLE', err, { trigger: 'lifecycle_event' });
   }
 };

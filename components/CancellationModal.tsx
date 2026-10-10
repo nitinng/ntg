@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 import { calculateCancellationSplit } from '../utils/cancellation';
 import { queueEmailsForTransition } from '../utils/emailQueueUtils';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface CancellationModalProps {
   request: TravelRequest;
@@ -153,7 +154,7 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
         toast.success('Cancellation processed successfully');
         onSuccess();
       } catch (error: any) {
-        console.error(error);
+        reportSos('CANCELLATION_FAILED', error, { ticketId: request?.id, scope: 'full_request' });
         toast.error('Failed to process cancellation: ' + error.message);
       } finally {
         setIsSubmitting(false);
@@ -274,7 +275,7 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
       toast.success(`${selectedLegs.length} leg${selectedLegs.length > 1 ? 's' : ''} cancelled successfully`);
       onSuccess();
     } catch (error: any) {
-      console.error(error);
+      reportSos('CANCELLATION_FAILED', error, { ticketId: request?.id, scope: 'selected_legs' });
       toast.error('Failed to process cancellation: ' + error.message);
     } finally {
       setIsSubmitting(false);

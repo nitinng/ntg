@@ -6,6 +6,7 @@ import Input from './Input';
 import PageBanner from './PageBanner';
 import TextArea from './TextArea';
 import { toast } from 'sonner';
+import { reportSos } from '../utils/sos/raiseSos';
 
 interface AdvanceManagementProps {
   currentUser: User | null;
@@ -50,7 +51,7 @@ const AdvanceManagement: React.FC<AdvanceManagementProps> = ({ currentUser, user
 
     if (error) {
       toast.error('Failed to load advances');
-      console.error(error);
+      reportSos('ADVANCE_FETCH_FAILED', error, { screen: 'advance_management' });
     } else {
       setAdvances(data || []);
     }

@@ -133,7 +133,7 @@ export const normalizeSosSettings = (raw: any): SosSettings => {
   return {
     enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULT_SOS_SETTINGS.enabled,
     channelEmails: channelEmails.length ? channelEmails : DEFAULT_SOS_SETTINGS.channelEmails,
-    webhookUrl: typeof value.webhookUrl === 'string' ? value.webhookUrl.trim() : '',
+    webhookUrl: typeof value.webhookUrl === 'string' ? value.webhookUrl.trim() : DEFAULT_SOS_SETTINGS.webhookUrl,
     minSeverity: severity,
     mutedCategories: muted,
     dedupeWindowMinutes: positiveNumber(value.dedupeWindowMinutes, DEFAULT_SOS_SETTINGS.dedupeWindowMinutes),

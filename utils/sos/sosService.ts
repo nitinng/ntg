@@ -17,6 +17,7 @@ import {
   normalizeNotificationSettings
 } from '../desk/notificationSettings';
 import { DeskDigest, digestFileName, digestToPdfBase64 } from '../desk/digest';
+import { formatSlackDigest } from '../desk/slackDigest';
 import { raiseSos } from './raiseSos';
 
 export type SosStatus = 'Open' | 'Acknowledged' | 'Resolved';
@@ -234,9 +235,35 @@ export const fetchDeskDigest = async (from?: string, to?: string): Promise<DeskD
 
 /** Queues the digest to the notifications channel now, outside its schedule. */
 export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: string }> => {
+  // 1. If Slack webhook is configured, post formatted digest directly to Slack!
+  try {
+    const notifSettings = await fetchNotificationSettings();
+    if (notifSettings.enabled && notifSettings.webhookUrl) {
+      const digest = await fetchDeskDigest();
+      const slackText = formatSlackDigest(digest);
+      await fetch(notifSettings.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: slackText })
+      });
+    }
+  } catch (whErr) {
+    console.warn('Slack webhook direct dispatch failed in sendDeskDigestNow:', whErr);
+  }
+
+  // 2. Queue in database (for email record and PDF generation)
   const { data, error } = await supabase.rpc('send_desk_digest', { p_from: null, p_to: null });
   if (error) throw error;
   const result = (Array.isArray(data) ? data[0] : data) || {};
+
+  // 3. Trigger worker immediately so it does not sit pending in the queue
+  if (result.sent) {
+    try {
+      await supabase.functions.invoke('process-email-queue', { body: { batchSize: 10 } });
+    } catch (workerErr) {
+      console.warn('Worker trigger after digest send:', workerErr);
+    }
+  }
   return { sent: Boolean(result.sent), reason: result.reason };
 };
 

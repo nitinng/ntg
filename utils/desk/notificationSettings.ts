@@ -53,7 +53,7 @@ export const normalizeNotificationSettings = (raw: any): DeskNotificationSetting
   return {
     enabled: bool(value.enabled, DEFAULT_NOTIFICATION_SETTINGS.enabled),
     channelEmails: channelEmails.length ? channelEmails : DEFAULT_NOTIFICATION_SETTINGS.channelEmails,
-    webhookUrl: typeof value.webhookUrl === 'string' ? value.webhookUrl.trim() : '',
+    webhookUrl: typeof value.webhookUrl === 'string' ? value.webhookUrl.trim() : DEFAULT_NOTIFICATION_SETTINGS.webhookUrl,
     notifyOnNewRequest: bool(value.notifyOnNewRequest, DEFAULT_NOTIFICATION_SETTINGS.notifyOnNewRequest),
     digestEnabled: bool(value.digestEnabled, DEFAULT_NOTIFICATION_SETTINGS.digestEnabled),
     digestAttachPdf: bool(value.digestAttachPdf, DEFAULT_NOTIFICATION_SETTINGS.digestAttachPdf),

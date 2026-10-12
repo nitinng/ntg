@@ -236,30 +236,12 @@ export const fetchDeskDigest = async (from?: string, to?: string): Promise<DeskD
 
 /** Queues the digest to the notifications channel now, outside its schedule. */
 export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: string }> => {
-  // 1. If Slack webhook is configured, post formatted digest directly to Slack!
-  try {
-    const notifSettings = await fetchNotificationSettings();
-    const sosSettings = await fetchSosSettings();
-    const webhookUrl = notifSettings.webhookUrl || sosSettings.webhookUrl;
-    if (notifSettings.enabled && webhookUrl) {
-      const digest = await fetchDeskDigest();
-      const slackPayload = formatSlackDigestPayload(digest);
-      await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(slackPayload)
-      });
-    }
-  } catch (whErr) {
-    console.warn('Slack webhook direct dispatch failed in sendDeskDigestNow:', whErr);
-  }
-
-  // 2. Queue in database (for email record and PDF generation)
+  // Dispatches to Slack webhook directly in PostgreSQL via pg_net (bypassing browser CORS)
   const { data, error } = await supabase.rpc('send_desk_digest', { p_from: null, p_to: null });
   if (error) throw error;
   const result = (Array.isArray(data) ? data[0] : data) || {};
 
-  // 3. Trigger worker immediately if email was queued
+  // Trigger worker immediately if email was queued
   if (result.sent && result.queueId) {
     try {
       await supabase.functions.invoke('process-email-queue', { body: { batchSize: 10 } });
@@ -272,42 +254,24 @@ export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: str
 
 /**
  * Sends a live test notification to verify the Slack workflow webhook.
+ * Executed via database RPC to avoid browser CORS restrictions on Slack webhook endpoints.
  */
 export const sendNotificationTest = async (
   actorEmail: string
 ): Promise<{ delivered: boolean; reason?: string }> => {
-  // 1. Try RPC first
-  try {
-    const { data, error } = await supabase.rpc('send_desk_notification_test', {
-      p_actor_email: actorEmail
-    });
-    if (!error && data && data.delivered) {
-      return { delivered: true };
-    }
-  } catch (rpcErr) {
-    console.warn('RPC send_desk_notification_test failed, attempting client direct dispatch:', rpcErr);
+  const { data, error } = await supabase.rpc('send_desk_notification_test', {
+    p_actor_email: actorEmail
+  });
+
+  if (error) {
+    throw new Error(error.message || 'RPC send_desk_notification_test failed');
   }
 
-  // 2. Client direct dispatch if webhook URL is configured
-  const notifSettings = await fetchNotificationSettings();
-  const sosSettings = await fetchSosSettings();
-  const webhookUrl = notifSettings.webhookUrl || sosSettings.webhookUrl;
-
-  if (!webhookUrl) {
-    return { delivered: false, reason: 'No webhook URL configured' };
-  }
-
-  try {
-    const payload = formatSlackNotificationTest(actorEmail);
-    const resp = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { delivered: resp.ok, reason: resp.ok ? undefined : `HTTP ${resp.status}` };
-  } catch (err: any) {
-    return { delivered: false, reason: err.message || 'Direct dispatch failed' };
-  }
+  const result = (Array.isArray(data) ? data[0] : data) || {};
+  return {
+    delivered: Boolean(result.delivered),
+    reason: result.reason
+  };
 };
 
 /** Hands the browser the same PDF the channel is sent. */
@@ -394,7 +358,8 @@ export const createDummyTravelRequest = async (
     ]
   };
 
-  // 1. Insert into travel_requests — this fires DB trigger trg_notify_new_request
+  // Inserting into travel_requests fires DB trigger trg_notify_new_request,
+  // which compiles the rich card payload and dispatches to the Slack workflow via pg_net.
   const { data: inserted, error: insertErr } = await supabase
     .from('travel_requests')
     .insert(dummyPayload)
@@ -405,26 +370,6 @@ export const createDummyTravelRequest = async (
     throw new Error(`Failed to insert dummy request: ${insertErr.message}`);
   }
 
-  // 2. Client-side fallback dispatch to guarantee delivery to Slack if DB migration isn't run yet
-  let webhookDelivered = false;
-  try {
-    const notifSettings = await fetchNotificationSettings();
-    const sosSettings = await fetchSosSettings();
-    const webhookUrl = notifSettings.webhookUrl || sosSettings.webhookUrl;
-
-    if (notifSettings.enabled && webhookUrl) {
-      const payload = formatSlackNewRequest(inserted);
-      const resp = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      webhookDelivered = resp.ok;
-    }
-  } catch (clientErr) {
-    console.warn('Direct client dispatch for dummy request warning:', clientErr);
-  }
-
-  return { success: true, ticket: inserted, webhookDelivered };
+  return { success: true, ticket: inserted };
 };
 

@@ -17,7 +17,8 @@ import {
   normalizeNotificationSettings
 } from '../desk/notificationSettings';
 import { DeskDigest, digestFileName, digestToPdfBase64 } from '../desk/digest';
-import { formatSlackDigest } from '../desk/slackDigest';
+import { formatSlackDigestPayload } from '../desk/slackDigest';
+import { formatSlackNotificationTest } from '../desk/slackNotification';
 import { raiseSos } from './raiseSos';
 
 export type SosStatus = 'Open' | 'Acknowledged' | 'Resolved';
@@ -238,13 +239,15 @@ export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: str
   // 1. If Slack webhook is configured, post formatted digest directly to Slack!
   try {
     const notifSettings = await fetchNotificationSettings();
-    if (notifSettings.enabled && notifSettings.webhookUrl) {
+    const sosSettings = await fetchSosSettings();
+    const webhookUrl = notifSettings.webhookUrl || sosSettings.webhookUrl;
+    if (notifSettings.enabled && webhookUrl) {
       const digest = await fetchDeskDigest();
-      const slackText = formatSlackDigest(digest);
-      await fetch(notifSettings.webhookUrl, {
+      const slackPayload = formatSlackDigestPayload(digest);
+      await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: slackText })
+        body: JSON.stringify(slackPayload)
       });
     }
   } catch (whErr) {
@@ -256,8 +259,8 @@ export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: str
   if (error) throw error;
   const result = (Array.isArray(data) ? data[0] : data) || {};
 
-  // 3. Trigger worker immediately so it does not sit pending in the queue
-  if (result.sent) {
+  // 3. Trigger worker immediately if email was queued
+  if (result.sent && result.queueId) {
     try {
       await supabase.functions.invoke('process-email-queue', { body: { batchSize: 10 } });
     } catch (workerErr) {
@@ -265,6 +268,46 @@ export const sendDeskDigestNow = async (): Promise<{ sent: boolean; reason?: str
     }
   }
   return { sent: Boolean(result.sent), reason: result.reason };
+};
+
+/**
+ * Sends a live test notification to verify the Slack workflow webhook.
+ */
+export const sendNotificationTest = async (
+  actorEmail: string
+): Promise<{ delivered: boolean; reason?: string }> => {
+  // 1. Try RPC first
+  try {
+    const { data, error } = await supabase.rpc('send_desk_notification_test', {
+      p_actor_email: actorEmail
+    });
+    if (!error && data && data.delivered) {
+      return { delivered: true };
+    }
+  } catch (rpcErr) {
+    console.warn('RPC send_desk_notification_test failed, attempting client direct dispatch:', rpcErr);
+  }
+
+  // 2. Client direct dispatch if webhook URL is configured
+  const notifSettings = await fetchNotificationSettings();
+  const sosSettings = await fetchSosSettings();
+  const webhookUrl = notifSettings.webhookUrl || sosSettings.webhookUrl;
+
+  if (!webhookUrl) {
+    return { delivered: false, reason: 'No webhook URL configured' };
+  }
+
+  try {
+    const payload = formatSlackNotificationTest(actorEmail);
+    const resp = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { delivered: resp.ok, reason: resp.ok ? undefined : `HTTP ${resp.status}` };
+  } catch (err: any) {
+    return { delivered: false, reason: err.message || 'Direct dispatch failed' };
+  }
 };
 
 /** Hands the browser the same PDF the channel is sent. */

@@ -1,15 +1,27 @@
 import { DeskDigest, formatAge } from './digest';
+import { SlackPayload } from './slackNotification';
 
 /**
- * Formats the daily desk digest into a clean, human-readable Slack mrkdwn message.
- * Optimized for Slack incoming webhooks / workflow builder.
+ * Formats the daily desk digest into a clean, human-readable Slack mrkdwn message
+ * closely matching the NavGurukul Mail Template brand design.
  */
 export const formatSlackDigest = (digest: DeskDigest, portalUrl?: string): string => {
+  return formatSlackDigestPayload(digest, portalUrl).text;
+};
+
+/**
+ * Formats the daily desk digest into a complete Slack payload with both mrkdwn and Block Kit blocks.
+ */
+export const formatSlackDigestPayload = (digest: DeskDigest, portalUrl?: string): SlackPayload => {
   const { totals } = digest;
   const lines: string[] = [];
+  const basePortal = portalUrl ? portalUrl.replace(/\/+$/, '') : 'https://ng-travel-desk.vercel.app';
+  const targetUrl = `${basePortal}/?tab=all-requests`;
 
-  lines.push(`📊 *DAILY DESK DIGEST · ${digest.windowLabel} (IST)*`);
+  lines.push(`📊 *TRAVEL DESK · DAILY DIGEST*`);
+  lines.push(`*Date:* ${digest.windowLabel} (IST)`);
   lines.push('');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('*⚡ Today\'s Activity:*');
   lines.push(`• *Raised:* ${totals.raised}   • *Booked:* ${totals.booked}   • *Closed:* ${totals.closed}   • *Cancelled:* ${totals.cancelled}`);
   lines.push('');
@@ -40,9 +52,68 @@ export const formatSlackDigest = (digest: DeskDigest, portalUrl?: string): strin
     lines.push(`• ${preview}${remaining}`);
   }
 
-  const url = portalUrl ? portalUrl.replace(/\/+$/, '') : 'https://ng-travel-desk.vercel.app';
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
-  lines.push(`🔗 *Open Desk:* <${url}/?tab=all-requests|View All Requests>`);
+  lines.push(`🔗 *Action:* <${targetUrl}|View All Requests →>`);
+  lines.push('');
+  lines.push(`_Navgurukul Travel Desk • Automated Report_`);
 
-  return lines.join('\n');
+  const text = lines.join('\n');
+
+  const blocks = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: `📊 Daily Desk Digest — ${digest.windowLabel} (IST)`,
+        emoji: true
+      }
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*⚡ Today:* *${totals.raised}* raised · *${totals.booked}* booked · *${totals.closed}* closed\n*📈 Queue:* *${totals.open}* open · *${totals.unassigned}* unassigned · *${totals.stalled}* stalled`
+      }
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Raised Today:*\n${totals.raised}` },
+        { type: 'mrkdwn', text: `*Booked Today:*\n${totals.booked}` },
+        { type: 'mrkdwn', text: `*Total Open:*\n${totals.open}` },
+        { type: 'mrkdwn', text: `*Unassigned:*\n${totals.unassigned}` },
+        { type: 'mrkdwn', text: `*Stalled (>48h):*\n${totals.stalled}` },
+        { type: 'mrkdwn', text: `*Oldest in Queue:*\n${formatAge(totals.oldestOpenHours)}` }
+      ]
+    },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: 'View All Requests →',
+            emoji: true
+          },
+          url: targetUrl,
+          style: 'primary'
+        }
+      ]
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: 'Navgurukul Travel Desk • Automated Report'
+        }
+      ]
+    }
+  ];
+
+  return { text, blocks };
 };

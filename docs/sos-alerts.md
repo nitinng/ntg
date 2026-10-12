@@ -100,10 +100,10 @@ unassigned 5 · stalled 3`.
 
 ## Request traffic
 
-Every request raised fires `trg_notify_new_request`, which posts the block
-above. It is guarded by **Ping on every request** in the console, and it can
-never fail the insert: if the queue refuses the ping, the request is still
-created and the failure is raised as an SOS.
+Every request raised fires `trg_notify_new_request`:
+* **Slack Workflow Webhook**: If a webhook is configured under Notifications (or falls back to SOS), the request card is dispatched directly to the Slack workflow with rich mrkdwn and Block Kit layout matching the NavGurukul Mail Template design.
+* **Email Fallback**: If the webhook is not configured or delivery fails, it cleanly falls back to queuing an email to the configured channel address (`desk_queue_channel_mail`), avoiding missed notices while preventing duplicate messages when the webhook is active.
+* It is guarded by **Ping on every request** in the console, and it can never fail the insert: if notification dispatch fails, the request is still created and the failure is raised as an SOS.
 
 ---
 

@@ -31,6 +31,7 @@ import {
   saveNotificationSettings,
   saveSosSettings,
   sendDeskDigestNow,
+  sendNotificationTest,
   sendSosTestAlert,
   SosSummary
 } from '../utils/sos/sosService';
@@ -171,6 +172,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
   const [digest, setDigest] = useState<DeskDigest | null>(null);
   const [isDigestLoading, setIsDigestLoading] = useState(false);
   const [isSendingDigest, setIsSendingDigest] = useState(false);
+  const [isTestingNotif, setIsTestingNotif] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<SosStatus | 'all'>('Open');
   const [severityFilter, setSeverityFilter] = useState<SosSeverity | 'all'>('all');
@@ -333,6 +335,22 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
       toast.error(err.message || 'Could not send the digest');
     } finally {
       setIsSendingDigest(false);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    setIsTestingNotif(true);
+    try {
+      const result = await sendNotificationTest(currentUser.email);
+      if (result.delivered) {
+        toast.success('Test notification sent to Slack — check the channel!');
+      } else {
+        toast.warning(`Test notification not sent: ${result.reason || 'check webhook URL'}`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Could not send test notification');
+    } finally {
+      setIsTestingNotif(false);
     }
   };
 
@@ -939,10 +957,10 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
                     value={draftNotif.webhookUrl}
                     onChange={e => setDraftNotif({ ...draftNotif, webhookUrl: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono text-slate-900 dark:text-white"
-                    placeholder="https://hooks.slack.com/services/..."
+                    placeholder="https://hooks.slack.com/triggers/... or services/..."
                   />
                   <p className="text-[11px] text-slate-400">
-                    Reserved for request traffic. The digest's PDF is only ever delivered by mail.
+                    Routes request traffic and digests directly to the Slack workflow (falls back to SOS webhook if empty).
                   </p>
                 </div>
               </div>
@@ -1011,6 +1029,14 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
                   >
                     <i className={`fa-solid ${isSendingDigest ? 'fa-spinner fa-spin' : 'fa-paper-plane'} mr-2`}></i>
                     Send digest now
+                  </button>
+                  <button
+                    onClick={() => void handleTestNotification()}
+                    disabled={isTestingNotif}
+                    className="px-4 py-2.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-sm font-bold transition-all active:scale-95 disabled:opacity-50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+                  >
+                    <i className={`fa-solid ${isTestingNotif ? 'fa-spinner fa-spin' : 'fa-bell'} mr-2`}></i>
+                    Send test notification
                   </button>
                   <button
                     onClick={() => void handleDownloadReport()}

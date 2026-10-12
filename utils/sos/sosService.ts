@@ -18,7 +18,7 @@ import {
 } from '../desk/notificationSettings';
 import { DeskDigest, digestFileName, digestToPdfBase64 } from '../desk/digest';
 import { formatSlackDigestPayload } from '../desk/slackDigest';
-import { formatSlackNotificationTest } from '../desk/slackNotification';
+import { formatSlackNewRequest, formatSlackNotificationTest } from '../desk/slackNotification';
 import { raiseSos } from './raiseSos';
 
 export type SosStatus = 'Open' | 'Acknowledged' | 'Resolved';
@@ -353,3 +353,78 @@ export const sendSosTestAlert = async (
     reason: result.suppressionReason
   };
 };
+
+/**
+ * Creates a dummy travel ticket request to test and verify the notification flow
+ * both in the database (firing trg_notify_new_request) and through the Slack workflow.
+ */
+export const createDummyTravelRequest = async (
+  actor: { id: string; name?: string; email: string; department?: string; campus?: string }
+): Promise<{ success: boolean; ticket: any; webhookDelivered?: boolean }> => {
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + 5);
+  const dateStr = futureDate.toISOString().split('T')[0];
+
+  const dummyPayload = {
+    requester_id: actor.id,
+    requester_name: actor.name || 'Nitin Sudarshan',
+    requester_email: actor.email,
+    requester_department: actor.department || 'CEO Office',
+    requester_campus: actor.campus || 'Remote',
+    from_location: 'Pune',
+    to_location: 'Bengaluru',
+    date_of_travel: dateStr,
+    travel_mode: 'Flight',
+    trip_type: 'One-way',
+    number_of_travelers: 1,
+    priority: 'High',
+    purpose: 'Quarterly Strategy & Slack Notification Workflow Demo',
+    approving_manager_name: 'Operations Manager',
+    approving_manager_email: 'operations@navgurukul.org',
+    approval_status: 'Pending',
+    pnc_status: 'Not Started',
+    booked_by: 'PNC',
+    timeline: [
+      {
+        id: '1',
+        timestamp: new Date().toISOString(),
+        actor: actor.name || 'System Demo',
+        event: 'Request Created (Dummy Test)'
+      }
+    ]
+  };
+
+  // 1. Insert into travel_requests — this fires DB trigger trg_notify_new_request
+  const { data: inserted, error: insertErr } = await supabase
+    .from('travel_requests')
+    .insert(dummyPayload)
+    .select()
+    .single();
+
+  if (insertErr) {
+    throw new Error(`Failed to insert dummy request: ${insertErr.message}`);
+  }
+
+  // 2. Client-side fallback dispatch to guarantee delivery to Slack if DB migration isn't run yet
+  let webhookDelivered = false;
+  try {
+    const notifSettings = await fetchNotificationSettings();
+    const sosSettings = await fetchSosSettings();
+    const webhookUrl = notifSettings.webhookUrl || sosSettings.webhookUrl;
+
+    if (notifSettings.enabled && webhookUrl) {
+      const payload = formatSlackNewRequest(inserted);
+      const resp = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      webhookDelivered = resp.ok;
+    }
+  } catch (clientErr) {
+    console.warn('Direct client dispatch for dummy request warning:', clientErr);
+  }
+
+  return { success: true, ticket: inserted, webhookDelivered };
+};
+

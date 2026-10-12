@@ -22,6 +22,7 @@ import {
   acknowledgeSosAlert,
   downloadDigestPdf,
   fetchDeskDigest,
+  createDummyTravelRequest,
   fetchNotificationSettings,
   fetchSosAlerts,
   fetchSosSettings,
@@ -173,6 +174,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
   const [isDigestLoading, setIsDigestLoading] = useState(false);
   const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [isTestingNotif, setIsTestingNotif] = useState(false);
+  const [isCreatingDummy, setIsCreatingDummy] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<SosStatus | 'all'>('Open');
   const [severityFilter, setSeverityFilter] = useState<SosSeverity | 'all'>('all');
@@ -351,6 +353,20 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
       toast.error(err.message || 'Could not send test notification');
     } finally {
       setIsTestingNotif(false);
+    }
+  };
+
+  const handleCreateDummyRequest = async () => {
+    setIsCreatingDummy(true);
+    try {
+      const result = await createDummyTravelRequest(currentUser);
+      const ticketId = result.ticket?.submission_id || result.ticket?.id?.slice(0, 8) || 'TRV-DEMO';
+      toast.success(`🎉 Dummy ticket created (${ticketId})! Dispatched to Slack workflow.`);
+      void load();
+    } catch (err: any) {
+      toast.error(err.message || 'Could not create dummy ticket');
+    } finally {
+      setIsCreatingDummy(false);
     }
   };
 
@@ -1037,6 +1053,15 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
                   >
                     <i className={`fa-solid ${isTestingNotif ? 'fa-spinner fa-spin' : 'fa-bell'} mr-2`}></i>
                     Send test notification
+                  </button>
+                  <button
+                    onClick={() => void handleCreateDummyRequest()}
+                    disabled={isCreatingDummy}
+                    className="px-4 py-2.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-sm font-bold transition-all active:scale-95 disabled:opacity-50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
+                    title="Creates a real dummy travel ticket to test the Slack workflow notification"
+                  >
+                    <i className={`fa-solid ${isCreatingDummy ? 'fa-spinner fa-spin' : 'fa-ticket'} mr-2 text-emerald-600 dark:text-emerald-400`}></i>
+                    Create dummy request
                   </button>
                   <button
                     onClick={() => void handleDownloadReport()}

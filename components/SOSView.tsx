@@ -11,9 +11,19 @@ import {
   SosCategory,
   SosSeverity,
   getSosSpec,
+  getSosSimpleTerms,
+  getSosWhatToCheck,
+  getSosDiagnosticSteps,
   sosCodesByCategory
 } from '../utils/sos/catalog';
-import { SosSettings, formatAlertText, parseChannelEmails } from '../utils/sos/alertRules';
+import {
+  SosSettings,
+  formatAlertText,
+  formatAlertSlackPayload,
+  SLACK_SEVERITY_COLORS,
+  SLACK_SEVERITY_PILLS,
+  parseChannelEmails
+} from '../utils/sos/alertRules';
 import { DeskNotificationSettings } from '../utils/desk/notificationSettings';
 import { DeskDigest, formatAge } from '../utils/desk/digest';
 import {
@@ -165,6 +175,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedStacks, setExpandedStacks] = useState<Record<string, boolean>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
 
@@ -792,61 +803,212 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
                     </div>
 
                     {isOpen && (
-                      <div className="mt-4 space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
-                        {spec && (
-                          <div className="grid md:grid-cols-2 gap-3">
-                            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Why it matters</p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{spec.meaning}</p>
-                            </div>
-                            <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/30">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-indigo-500 mb-1">First check</p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{spec.firstCheck}</p>
+                      <div className="mt-4 space-y-3.5 border-t border-slate-100 dark:border-slate-800 pt-3">
+                        {/* 1. What the issue is in simple terms & What to check */}
+                        <div className="grid md:grid-cols-2 gap-3">
+                          <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50">
+                            <p className="text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-1.5 flex items-center gap-1.5">
+                              <i className="fa-solid fa-lightbulb text-amber-500"></i>
+                              What the issue is (in simple terms)
+                            </p>
+                            <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                              {getSosSimpleTerms(alert.code, alert.message)}
+                            </p>
+                            {spec?.meaning && spec.meaning !== getSosSimpleTerms(alert.code, alert.message) && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 pt-2 border-t border-amber-200/50 dark:border-amber-900/40 leading-relaxed">
+                                <strong className="font-semibold text-slate-700 dark:text-slate-300">Why it matters:</strong> {spec.meaning}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/50">
+                            <p className="text-[11px] font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-400 mb-1.5 flex items-center gap-1.5">
+                              <i className="fa-solid fa-list-check text-indigo-500"></i>
+                              What to check (Triage checklist)
+                            </p>
+                            <ul className="space-y-1.5">
+                              {getSosWhatToCheck(alert.code).map((item, idx) => (
+                                <li key={idx} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200 leading-snug">
+                                  <span className="w-4 h-4 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-[9px] flex-shrink-0 mt-0.5 font-black">
+                                    <i className="fa-solid fa-check"></i>
+                                  </span>
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+
+                        {/* 2. Diagnostic Path & Investigation Steps */}
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/70 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <i className="fa-solid fa-route text-sky-500"></i>
+                              Detailed Diagnostics & Investigation Path
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                              {alert.context?.route && (
+                                <span className="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-mono font-bold">
+                                  <i className="fa-solid fa-compass mr-1"></i>{String(alert.context.route)}
+                                </span>
+                              )}
+                              {alert.context?.source && (
+                                <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-mono">
+                                  <i className="fa-solid fa-file-code mr-1"></i>{String(alert.context.source)}
+                                </span>
+                              )}
+                              {alert.raisedByEmail && (
+                                <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-semibold">
+                                  <i className="fa-solid fa-user mr-1"></i>{alert.raisedByEmail}
+                                </span>
+                              )}
                             </div>
                           </div>
-                        )}
 
+                          <ol className="space-y-1.5 pl-0.5">
+                            {getSosDiagnosticSteps(alert.code, alert.context).map((step, idx) => (
+                              <li key={idx} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2">
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex-shrink-0 mt-0.5">
+                                  {idx + 1}
+                                </span>
+                                <span className="leading-relaxed">{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+
+                          {/* Stack Trace / Error Snippet preview */}
+                          {Boolean(alert.context?.stack || alert.context?.error || alert.message) && (
+                            <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  <i className="fa-solid fa-terminal mr-1"></i> Error Stack / Log Snippet
+                                </p>
+                                {typeof alert.context?.stack === 'string' && alert.context.stack.length > 120 && (
+                                  <button
+                                    onClick={() =>
+                                      setExpandedStacks(prev => ({
+                                        ...prev,
+                                        [alert.id]: !prev[alert.id]
+                                      }))
+                                    }
+                                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                  >
+                                    {expandedStacks[alert.id] ? 'Show less (3 lines)' : 'Show full stack trace'}
+                                  </button>
+                                )}
+                              </div>
+                              <pre className={`p-2.5 rounded-lg bg-slate-900 dark:bg-black text-[11px] text-slate-200 font-mono whitespace-pre-wrap break-all ${
+                                expandedStacks[alert.id] ? 'max-h-96 overflow-y-auto' : 'line-clamp-3'
+                              }`}>
+                                {typeof alert.context?.stack === 'string'
+                                  ? alert.context.stack
+                                  : typeof alert.context?.error === 'string'
+                                  ? alert.context.error
+                                  : alert.message}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. Slack Card Preview (Block Kit Card Layout) */}
+                        <div className="p-3.5 rounded-xl bg-slate-900 text-white shadow-sm border border-slate-800 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                              <i className="fa-brands fa-slack text-white"></i>
+                              Slack Alert Card (Block Kit Card)
+                            </span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                              Color: {SLACK_SEVERITY_COLORS[alert.severity]}
+                            </span>
+                          </div>
+
+                          {/* The Card Mockup */}
+                          <div
+                            className="p-3 rounded-lg bg-slate-950/80 border-l-4 space-y-2.5 text-xs"
+                            style={{ borderLeftColor: SLACK_SEVERITY_COLORS[alert.severity] }}
+                          >
+                            <p className="font-bold text-sm text-slate-100 flex items-center gap-1.5">
+                              {SLACK_SEVERITY_PILLS[alert.severity]} — {alert.title}
+                            </p>
+
+                            {/* 4-field grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 py-1.5 border-y border-slate-800 text-[11px]">
+                              <div>
+                                <span className="font-bold text-slate-400 block uppercase text-[10px]">Service</span>
+                                <span className="text-slate-200 font-mono">
+                                  {alert.source === 'worker' ? 'travel-desk-worker' : alert.source === 'database' ? 'travel-desk-db' : 'travel-desk-web'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-400 block uppercase text-[10px]">Environment</span>
+                                <span className="text-slate-200 font-mono">production</span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-400 block uppercase text-[10px]">Occurrences</span>
+                                <span className="text-slate-200">
+                                  {alert.occurrences > 1 ? `${alert.occurrences} in recent window` : '1 occurrence'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-400 block uppercase text-[10px]">Impact</span>
+                                <span className="text-slate-200 truncate block">
+                                  {alert.raisedByEmail || alert.context?.userEmail || alert.context?.route || 'Single user session'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Stack trace code block */}
+                            <pre className="p-2 rounded bg-black/60 font-mono text-[11px] text-rose-300 whitespace-pre-wrap break-all line-clamp-3">
+                              {typeof alert.context?.stack === 'string'
+                                ? alert.context.stack.split(/[\n|]/).slice(0, 3).join('\n')
+                                : alert.message}
+                            </pre>
+
+                            {/* Actions mockup */}
+                            <div className="flex items-center gap-2 pt-1">
+                              <span className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 cursor-default">
+                                <i className="fa-solid fa-check"></i> Acknowledge
+                              </span>
+                              <span className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1 cursor-default">
+                                <i className="fa-solid fa-arrow-up-right-from-square"></i> View logs
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 4. Full Context JSON & Audit Details */}
                         {Object.keys(alert.context || {}).length > 0 && (
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Context</p>
-                            <div className="rounded-lg bg-slate-900 dark:bg-black p-3 overflow-x-auto">
-                              <pre className="text-[11px] text-slate-200 font-mono whitespace-pre-wrap break-all">
+                          <details className="group">
+                            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-between">
+                              <span><i className="fa-solid fa-code mr-1.5"></i> Raw Context Payload ({Object.keys(alert.context || {}).length} keys)</span>
+                              <span className="text-[10px] font-semibold text-indigo-500 group-open:hidden">Click to expand</span>
+                            </summary>
+                            <div className="mt-2 relative">
+                              <button
+                                onClick={() => {
+                                  void navigator.clipboard.writeText(JSON.stringify(alert.context, null, 2));
+                                  toast.success('Context JSON copied to clipboard');
+                                }}
+                                className="absolute right-2 top-2 px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white text-[10px] font-bold"
+                              >
+                                <i className="fa-solid fa-copy mr-1"></i> Copy
+                              </button>
+                              <pre className="p-3 rounded-lg bg-slate-900 dark:bg-black text-[11px] text-slate-200 font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
                                 {JSON.stringify(alert.context, null, 2)}
                               </pre>
                             </div>
-                          </div>
+                          </details>
                         )}
 
-                        {/* Exactly what the channel was sent, so a reader can tell
-                            whether the alert was actionable without going to Slack. */}
-                        <details className="group">
-                          <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                            <i className="fa-brands fa-slack mr-1.5"></i>
-                            Message sent to the channel
-                          </summary>
-                          <pre className="mt-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-[11px] text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-mono">
-                            {formatAlertText(
-                              {
-                                code: alert.code,
-                                severity: alert.severity,
-                                category: alert.category,
-                                title: alert.title,
-                                message: alert.message,
-                                context: alert.context,
-                                source: alert.source
-                              },
-                              { occurrences: alert.occurrences, firstSeenAt: alert.firstSeenAt }
-                            )}
-                          </pre>
-                        </details>
-
-                        <div className="flex flex-wrap gap-4 text-[11px] text-slate-400">
-                          <span>First seen {new Date(alert.firstSeenAt).toLocaleString()}</span>
-                          <span>Last seen {new Date(alert.lastSeenAt).toLocaleString()}</span>
-                          {alert.raisedByEmail && <span>Reported by {alert.raisedByEmail}</span>}
-                          {alert.acknowledgedBy && <span>Acknowledged by {alert.acknowledgedBy}</span>}
-                          {alert.resolvedBy && <span>Resolved by {alert.resolvedBy}</span>}
-                          {alert.resolutionNote && <span className="text-emerald-600 dark:text-emerald-400">“{alert.resolutionNote}”</span>}
+                        <div className="flex flex-wrap gap-4 text-[11px] text-slate-400 pt-1">
+                          <span>First seen: {new Date(alert.firstSeenAt).toLocaleString()}</span>
+                          <span>Last seen: {new Date(alert.lastSeenAt).toLocaleString()}</span>
+                          {alert.raisedByEmail && <span>Reported by: {alert.raisedByEmail}</span>}
+                          {alert.acknowledgedBy && <span>Acknowledged by: {alert.acknowledgedBy}</span>}
+                          {alert.resolvedBy && <span>Resolved by: {alert.resolvedBy}</span>}
+                          {alert.resolutionNote && (
+                            <span className="text-emerald-600 dark:text-emerald-400">“{alert.resolutionNote}”</span>
+                          )}
                         </div>
                       </div>
                     )}

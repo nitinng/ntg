@@ -16,6 +16,9 @@ import {
   formatAlertHtml,
   formatAlertSubject,
   formatAlertText,
+  formatAlertSlackPayload,
+  formatAlertResolvedSlackPayload,
+  SLACK_SEVERITY_COLORS,
   normalizeSosSettings,
   parseChannelEmails,
   shouldNotify
@@ -232,4 +235,57 @@ describe('message formatting', () => {
     const text = formatAlertText({ ...alert, context: {} });
     expect(text).not.toContain('Context:');
   });
+
+  it('formats Slack card with Block Kit inside attachments wrapper and 4-field grid', () => {
+    const payload = formatAlertSlackPayload(alert, {
+      occurrences: 5,
+      environment: 'production',
+      portalUrl: 'https://ng-travel-desk.vercel.app'
+    });
+
+    expect(payload.attachments).toHaveLength(1);
+    expect(payload.attachments[0].color).toBe(SLACK_SEVERITY_COLORS.critical); // #E24B4A
+    const blocks = payload.attachments[0].blocks;
+    expect(blocks.length).toBeGreaterThanOrEqual(4);
+
+    // Title / pill section
+    expect(blocks[0].text.text).toContain('Critical');
+    expect(blocks[0].text.text).toContain(alert.title);
+
+    // 4-field grid section
+    const fieldsSection = blocks[1];
+    expect(fieldsSection.fields).toBeDefined();
+    expect(fieldsSection.fields).toHaveLength(4);
+    const fieldTexts = fieldsSection.fields.map((f: any) => f.text);
+    expect(fieldTexts[0]).toContain('*Service*');
+    expect(fieldTexts[1]).toContain('*Environment*');
+    expect(fieldTexts[1]).toContain('production');
+    expect(fieldTexts[2]).toContain('*Occurrences*');
+    expect(fieldTexts[2]).toContain('5 in recent window');
+    expect(fieldTexts[3]).toContain('*Impact*');
+
+    // Code snippet section
+    const codeSection = blocks[2];
+    expect(codeSection.text.text).toMatch(/^```[\s\S]+```$/);
+
+    // Action buttons section
+    const actionsSection = blocks[3];
+    expect(actionsSection.elements).toBeDefined();
+    expect(actionsSection.elements.some((b: any) => b.action_id === 'ack')).toBe(true);
+    expect(actionsSection.elements.some((b: any) => b.url && b.url.includes('tab=sos'))).toBe(true);
+  });
+
+  it('formats resolved card into a collapsed single line', () => {
+    const resolvedPayload = formatAlertResolvedSlackPayload(
+      alert.title,
+      'Balu',
+      '10:20 AM'
+    );
+    expect(resolvedPayload.replace_original).toBe(true);
+    expect(resolvedPayload.attachments[0].color).toBe('#64748B');
+    expect(resolvedPayload.attachments[0].blocks[0].text.text).toContain('Resolved');
+    expect(resolvedPayload.attachments[0].blocks[0].text.text).toContain('Balu');
+    expect(resolvedPayload.attachments[0].blocks[0].text.text).toContain('10:20 AM');
+  });
 });
+

@@ -1,6 +1,10 @@
 export interface SlackPayload {
   text: string;
   blocks?: any[];
+  attachments?: Array<{
+    color: string;
+    blocks: any[];
+  }>;
 }
 
 /**
@@ -124,7 +128,16 @@ export const formatSlackNewRequest = (
     }
   ];
 
-  return { text, blocks };
+  return {
+    text,
+    blocks,
+    attachments: [
+      {
+        color: '#176AE6',
+        blocks
+      }
+    ]
+  };
 };
 
 /**

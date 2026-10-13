@@ -15,6 +15,9 @@ import {
   SosCategory,
   SosSeverity,
   getSosSpec,
+  getSosSimpleTerms,
+  getSosWhatToCheck,
+  getSosDiagnosticSteps,
   sosCodesByCategory
 } from '../utils/sos/catalog';
 
@@ -98,4 +101,17 @@ describe('the SOS catalogue', () => {
   it('returns nothing for a code it does not know, rather than a wrong answer', () => {
     expect(getSosSpec('NOT_A_REAL_CODE')).toBeUndefined();
   });
+
+  it('provides simple terms, checklist, and diagnostic steps for alerts', () => {
+    const terms = getSosSimpleTerms('CLIENT_UNCAUGHT_ERROR');
+    expect(terms).toContain('user experienced');
+
+    const checklist = getSosWhatToCheck('CLIENT_UNCAUGHT_ERROR');
+    expect(checklist.length).toBeGreaterThan(0);
+    expect(checklist.some(item => item.includes('bundle') || item.includes('stack'))).toBe(true);
+
+    const steps = getSosDiagnosticSteps('CLIENT_UNCAUGHT_ERROR', { route: '/requests' });
+    expect(steps.some(s => s.includes('/requests'))).toBe(true);
+  });
 });
+

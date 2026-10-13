@@ -57,6 +57,12 @@ export interface SosCodeSpec {
   firstCheck: string;
   /** Where in the system it is raised from. */
   raisedBy: SosSource[];
+  /** Plain-English summary of what the issue is in simple terms. */
+  simpleTerms?: string;
+  /** Concrete checklist of items to check immediately. */
+  whatToCheck?: string[];
+  /** Step-by-step diagnostic and investigation path. */
+  diagnosticSteps?: string[];
 }
 
 export const SOS_CATEGORY_LABELS: Record<SosCategory, string> = {
@@ -343,7 +349,19 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'A desk action — status change, booking detail, note — was rejected by the database. The screen said so, but nobody downstream knows the request is stuck.',
     firstCheck: 'The error in the context; most are row-level security refusing the write for that role.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'A change to a travel request (like updating status, details, or notes) could not be saved to the database.',
+    whatToCheck: [
+      'Check if the acting user has permission to update this request (Row Level Security policy).',
+      'Check if the ticket is currently claimed by another PNC staff member.',
+      'Review the database error code and constraint in the alert context.'
+    ],
+    diagnosticSteps: [
+      '1. Search for the Request ID in Travel Desk → Requests.',
+      '2. Inspect the acting user role and ownership of the ticket.',
+      '3. Review table public.travel_requests RLS policies for UPDATE operations.'
+    ]
   }),
   STATUS_TRANSITION_BLOCKED: spec({
     code: 'STATUS_TRANSITION_BLOCKED',
@@ -353,7 +371,17 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'The statement ran and matched no rows — the record exists but this account may not change it, or it has moved past the state that allows the change.',
     firstCheck: 'The acting role against the policy named in the context.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'The requested status change was blocked because the user account or current ticket state does not permit this transition.',
+    whatToCheck: [
+      'Verify the user role (Traveller, Manager, PNC, Admin).',
+      'Check if ticket lifecycle state has already advanced.'
+    ],
+    diagnosticSteps: [
+      '1. Look up the ticket in Requests table and verify current pnc_status.',
+      '2. Check user profile role in Admin → User Management.'
+    ]
   }),
   AUTO_ADVANCE_FAILED: spec({
     code: 'AUTO_ADVANCE_FAILED',
@@ -363,7 +391,17 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'The manager approval saved but the follow-on move to Processing did not, so the request is sitting in a state the desk queue does not pick up.',
     firstCheck: 'Reopen the request and move it on by hand; then read the error in the context.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'A manager approved a travel request, but the automatic advancement to the PNC booking queue failed.',
+    whatToCheck: [
+      'Check if the request is stuck in Approved without moving to Processing.',
+      'Manually advance the ticket status from PNC Admin view.'
+    ],
+    diagnosticSteps: [
+      '1. Open the request detail modal by Ticket ID.',
+      '2. Verify approval status and update PNC Status to "Processing".'
+    ]
   }),
   ASSIGNMENT_FAILED: spec({
     code: 'ASSIGNMENT_FAILED',
@@ -373,7 +411,18 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'Auto-assignment failed, so the request is unowned and will age in the queue with no one accountable for it.',
     firstCheck: 'Whether any PNC accounts are available for assignment, then the error in the context.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'A travel request could not be assigned or claimed by a PNC desk team member.',
+    whatToCheck: [
+      'Check if target user account is active and has PNC or Admin role.',
+      'Check if the request was already claimed by another user.'
+    ],
+    diagnosticSteps: [
+      '1. Open PNC Admin → Claims / Assignment view.',
+      '2. Verify target agent profile in User Management.',
+      '3. Reassign manually using the Reassign action.'
+    ]
   }),
   BOOKING_RECORD_FAILED: spec({
     code: 'BOOKING_RECORD_FAILED',
@@ -384,7 +433,17 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
       'The booking may already exist with the vendor while the desk has no record of it — the most expensive silent failure in the system.',
     firstCheck:
       'Confirm with the vendor before re-booking. The attempted payload is in the alert context.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'A booking was finalized or purchased, but saving the booking confirmation record into the database failed.',
+    whatToCheck: [
+      'Check airline/hotel vendor portal first to avoid duplicate booking or charges!',
+      'Check the attempted booking payload and error in alert context.'
+    ],
+    diagnosticSteps: [
+      '1. Verify PNR / vendor booking reference.',
+      '2. Inspect public.travel_requests booking columns and manually save confirmation.'
+    ]
   }),
   CANCELLATION_FAILED: spec({
     code: 'CANCELLATION_FAILED',
@@ -394,7 +453,17 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'A cancellation request, approval or refund entry was rejected, so the traveller and the desk now disagree about the state of the trip.',
     firstCheck: 'The cancellation queue for that request, and the error in the context.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'A trip cancellation request or approval failed to update in the database.',
+    whatToCheck: [
+      'Verify current ticket status in Cancellation Queue.',
+      'Check refund details and error in alert context.'
+    ],
+    diagnosticSteps: [
+      '1. Open request detail and review cancellation history.',
+      '2. Manually set status to Cancelled if vendor cancellation confirmed.'
+    ]
   }),
 
   // ---------------------------------------------------------------------------
@@ -582,7 +651,19 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'A script error escaped every handler. The user saw a broken screen and, without this, nobody else ever would.',
     firstCheck: 'The stack and the route in the context; reproduce on the same screen.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'A user experienced an unexpected script crash or browser error while navigating the Travel Desk application.',
+    whatToCheck: [
+      'Check if this is a dynamic bundle chunk error (happens after new deployments if the user had an old tab open).',
+      'Inspect the route URL, user email, and error stack trace in the context.',
+      'Verify if hard-refreshing (Ctrl+F5 or Shift+Reload) resolves the issue.'
+    ],
+    diagnosticSteps: [
+      '1. Check route URL and affected user email in Context below.',
+      '2. Review the top 2-3 lines of the stack trace to identify the offending file and line.',
+      '3. Open the same route in an incognito window to verify if it is an active bug or cached bundle hash drift.'
+    ]
   }),
   CLIENT_UNHANDLED_REJECTION: spec({
     code: 'CLIENT_UNHANDLED_REJECTION',
@@ -592,7 +673,19 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'An async operation failed with nothing awaiting it — typically a fire-and-forget write that quietly did not happen.',
     firstCheck: 'The reason in the context, and whichever background call it belongs to.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'An asynchronous background task (like an API call or data fetch) failed without being caught by the user interface.',
+    whatToCheck: [
+      'Read the rejection reason in the context to identify the failing async function.',
+      'Check if network connectivity was interrupted or if Supabase returned a 4xx/5xx status.',
+      'Verify whether any database write was missed or needs retrying.'
+    ],
+    diagnosticSteps: [
+      '1. Search for the error string or API call name in the codebase.',
+      '2. Test the specific action in the UI to see if a retry button or error banner appears.',
+      '3. Check browser network tab for failed fetch or WebSocket calls.'
+    ]
   }),
   DATABASE_UNREACHABLE: spec({
     code: 'DATABASE_UNREACHABLE',
@@ -602,7 +695,19 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     meaning:
       'Requests to Supabase are failing at the network level. Nothing in the desk works while this is true.',
     firstCheck: 'Supabase project status, then the proxy and DNS path described in supabaseClient.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'The Travel Desk frontend cannot connect to the Supabase database. The entire application is unable to load or save data.',
+    whatToCheck: [
+      'Check Supabase status dashboard (status.supabase.com) and project health for bzjzgykbfqfbbqibxexw.',
+      'Verify whether project has hit connection pool limits or paused state.',
+      'Test network connection and DNS resolution to the Supabase host.'
+    ],
+    diagnosticSteps: [
+      '1. Open Supabase Dashboard → Project Health and Database Metrics.',
+      '2. Check connection pooler status (PgBouncer) and active Postgres client connections.',
+      '3. Re-test API queries from local terminal using curl or Supabase CLI.'
+    ]
   }),
   SOS_NOTIFICATION_FAILED: spec({
     code: 'SOS_NOTIFICATION_FAILED',
@@ -613,7 +718,19 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
       'The alert was recorded but its Slack notification did not leave. Alerts delivered by email share the transport they often report on, which is exactly when this fires.',
     firstCheck:
       'Open the SOS console — every alert is there regardless of delivery. Configure the Slack webhook for a path that does not depend on email.',
-    raisedBy: ['database', 'worker']
+    raisedBy: ['database', 'worker'],
+    simpleTerms:
+      'An error alert was stored in the database, but failed to post to the configured Slack notification webhook.',
+    whatToCheck: [
+      'Check if the Slack incoming webhook URL is valid and active in Slack App configuration.',
+      'Check if the Slack channel email address is valid and receiving mail.',
+      'Verify whether pg_net extension is enabled in Supabase Database → Extensions.'
+    ],
+    diagnosticSteps: [
+      '1. Go to SOS Console → Settings tab and test the Slack webhook URL.',
+      '2. In Slack, verify that the incoming webhook integration has not been deleted or revoked.',
+      '3. Trigger a test notification via "Send Test Alert" to verify delivery.'
+    ]
   }),
   DESK_NOTIFICATION_FAILED: spec({
     code: 'DESK_NOTIFICATION_FAILED',
@@ -624,7 +741,18 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
       'A request was raised but the ping to the notifications channel was not queued, so the channel is missing traffic the desk thinks it announced.',
     firstCheck:
       'SOS → Settings: the notifications channel needs at least one address. The request itself was created normally.',
-    raisedBy: ['database']
+    raisedBy: ['database'],
+    simpleTerms:
+      'A notification for a new travel request could not be dispatched to the travel desk channel.',
+    whatToCheck: [
+      'Check if notifications channel webhook or email is configured in SOS Settings.',
+      'Verify if notification trigger notify_new_request fired without error.'
+    ],
+    diagnosticSteps: [
+      '1. Navigate to SOS Console → Settings → Notification Channels.',
+      '2. Verify that notifications channel has an active webhook or destination email.',
+      '3. Check public.travel_requests table for the newly inserted row.'
+    ]
   }),
   DESK_REPORT_RENDER_FAILED: spec({
     code: 'DESK_REPORT_RENDER_FAILED',
@@ -635,7 +763,17 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
       'The daily digest went out without its PDF. The headline numbers are in the message; the per-ticket breakdown is not.',
     firstCheck:
       'The error in the context, then re-send from SOS → Notifications → Send digest now.',
-    raisedBy: ['worker']
+    raisedBy: ['worker'],
+    simpleTerms:
+      'The daily digest report was generated, but the PDF attachment export failed to compile.',
+    whatToCheck: [
+      'Check worker error log in Edge Function process-email-queue.',
+      'Verify if pdf-lib or canvas memory limit was exceeded.'
+    ],
+    diagnosticSteps: [
+      '1. Go to SOS Console → Notifications tab.',
+      '2. Click "Send digest now" to re-trigger compilation and check console logs.'
+    ]
   }),
   SOS_SELF_TEST: spec({
     code: 'SOS_SELF_TEST',
@@ -644,7 +782,16 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     title: 'SOS test alert',
     meaning: 'Someone pressed Send Test Alert in the SOS console. Nothing is wrong.',
     firstCheck: 'No action needed — this confirms the channel is wired up end to end.',
-    raisedBy: ['web']
+    raisedBy: ['web'],
+    simpleTerms:
+      'This is a diagnostic test alert initiated manually by an administrator to verify Slack and email channels.',
+    whatToCheck: [
+      'Verify that the test alert message arrived with the expected card layout in Slack.'
+    ],
+    diagnosticSteps: [
+      '1. Confirm arrival in the designated Slack channel.',
+      '2. Check that the "Acknowledge" button is visible and active on the card.'
+    ]
   })
 };
 
@@ -655,6 +802,50 @@ export const SOS_CODE_LIST: SosCodeSpec[] = Object.values(SOS_CODES);
 
 export const getSosSpec = (code: string): SosCodeSpec | undefined => SOS_CODES[code];
 
+/**
+ * Returns a plain-English explanation of the failure code.
+ */
+export const getSosSimpleTerms = (code: string, fallbackMessage?: string): string => {
+  const s = getSosSpec(code);
+  return (
+    s?.simpleTerms ||
+    s?.meaning ||
+    fallbackMessage ||
+    'An operational error occurred while processing this action.'
+  );
+};
+
+/**
+ * Returns the actionable triage checklist for the failure code.
+ */
+export const getSosWhatToCheck = (code: string): string[] => {
+  const s = getSosSpec(code);
+  if (s?.whatToCheck && s.whatToCheck.length > 0) return s.whatToCheck;
+  if (s?.firstCheck) return [s.firstCheck];
+  return [
+    'Inspect the alert context details and error payload.',
+    'Check user session, role permissions, and network connectivity.'
+  ];
+};
+
+/**
+ * Returns concrete diagnostic, reproduction, or verification steps.
+ */
+export const getSosDiagnosticSteps = (code: string, context?: Record<string, any>): string[] => {
+  const s = getSosSpec(code);
+  const baseSteps =
+    s?.diagnosticSteps && s.diagnosticSteps.length > 0
+      ? [...s.diagnosticSteps]
+      : ['Review recent deployment logs and database policy changes.'];
+
+  const dynamicSteps: string[] = [];
+  if (context?.route) dynamicSteps.push(`Navigate to route path: ${context.route}`);
+  if (context?.ticketId) dynamicSteps.push(`Look up ticket in Requests queue: ${context.ticketId}`);
+  if (context?.source) dynamicSteps.push(`Inspect failure location: ${context.source}`);
+
+  return dynamicSteps.length > 0 ? [...dynamicSteps, ...baseSteps] : baseSteps;
+};
+
 /** Codes grouped by category, for the "what is monitored" table. */
 export const sosCodesByCategory = (): Array<{ category: SosCategory; label: string; codes: SosCodeSpec[] }> =>
   (Object.keys(SOS_CATEGORY_LABELS) as SosCategory[]).map(category => ({
@@ -662,3 +853,4 @@ export const sosCodesByCategory = (): Array<{ category: SosCategory; label: stri
     label: SOS_CATEGORY_LABELS[category],
     codes: SOS_CODE_LIST.filter(c => c.category === category)
   }));
+

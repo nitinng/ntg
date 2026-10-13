@@ -333,3 +333,194 @@ export const formatAlertHtml = (
   }
 </div>`.trim();
 };
+
+export const SLACK_SEVERITY_COLORS: Record<SosSeverity, string> = {
+  critical: '#E24B4A',
+  high: '#EF9F27',
+  warning: '#64748B',
+  info: '#3B82F6'
+};
+
+export const SLACK_SEVERITY_PILLS: Record<SosSeverity, string> = {
+  critical: ':red_circle: Critical',
+  high: ':large_orange_circle: Error',
+  warning: ':warning: Warning',
+  info: ':information_source: Info'
+};
+
+export interface FormatAlertSlackOptions {
+  occurrences?: number;
+  firstSeenAt?: string;
+  portalUrl?: string;
+  environment?: string;
+  alertId?: string;
+  service?: string;
+}
+
+export interface SlackBlockKitPayload {
+  text: string;
+  attachments: Array<{
+    color: string;
+    blocks: any[];
+  }>;
+}
+
+/**
+ * Builds a Slack Block Kit alert card enclosed in a legacy attachments wrapper
+ * for the colored sidebar, consistent 4-field triage grid, truncated stack trace,
+ * and quick-action buttons.
+ */
+export const formatAlertSlackPayload = (
+  alert: SosAlertInput,
+  options: FormatAlertSlackOptions = {}
+): SlackBlockKitPayload => {
+  const color = SLACK_SEVERITY_COLORS[alert.severity] || '#64748B';
+  const pill = SLACK_SEVERITY_PILLS[alert.severity] || ':warning: Warning';
+  const occurrences = options.occurrences || 1;
+  const env = options.environment || 'production';
+  const service =
+    options.service ||
+    (alert.source === 'worker'
+      ? 'travel-desk-worker'
+      : alert.source === 'database'
+      ? 'travel-desk-db'
+      : 'travel-desk-web');
+
+  // Compute impact / affected details
+  const ctx = alert.context || {};
+  let impact = 'Single session';
+  if (ctx.userEmail || ctx.email) {
+    impact = String(ctx.userEmail || ctx.email);
+  } else if (ctx.ticketId || ctx.ticket) {
+    impact = `Ticket ${ctx.ticketId || ctx.ticket}`;
+  } else if (ctx.route) {
+    impact = String(ctx.route);
+  } else if (occurrences > 1) {
+    impact = `~${occurrences} occurrences`;
+  }
+
+  // Extract clean 2-3 lines of error or stack trace
+  let snippet = '';
+  if (typeof ctx.stack === 'string' && ctx.stack.trim()) {
+    snippet = ctx.stack
+      .split(/[\n|]/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('\n  ');
+  } else if (typeof ctx.error === 'string' && ctx.error.trim()) {
+    snippet = ctx.error.split('\n').slice(0, 3).join('\n');
+  } else if (alert.message) {
+    snippet = alert.message.split('\n').slice(0, 3).join('\n');
+  } else {
+    snippet = `${alert.code}: ${alert.title}`;
+  }
+
+  // Cap snippet length to prevent Slack API payload errors
+  if (snippet.length > 350) {
+    snippet = snippet.slice(0, 347) + '...';
+  }
+
+  const basePortal = options.portalUrl ? options.portalUrl.replace(/\/+$/, '') : 'https://ng-travel-desk.vercel.app';
+  const logsUrl = `${basePortal}/?tab=sos${options.alertId ? `&alertId=${encodeURIComponent(options.alertId)}` : ''}`;
+
+  const topLevelText = `${SOS_SEVERITY_ICONS[alert.severity]} [${alert.severity.toUpperCase()}] Travel Desk SOS — ${alert.title}${
+    occurrences > 1 ? ` (×${occurrences})` : ''
+  }`;
+
+  const actionElements: any[] = [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'Acknowledge', emoji: true },
+      style: 'primary',
+      action_id: 'ack',
+      value: options.alertId || alert.code
+    },
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'View logs', emoji: true },
+      url: logsUrl
+    }
+  ];
+
+  // If error is a retryable queue/worker item, add retry button
+  if (
+    alert.code.startsWith('EMAIL_') ||
+    alert.code.startsWith('SMTP_') ||
+    alert.code === 'AUTO_ADVANCE_FAILED'
+  ) {
+    actionElements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: 'Retry', emoji: true },
+      action_id: 'retry',
+      value: options.alertId || alert.code
+    });
+  }
+
+  return {
+    text: topLevelText,
+    attachments: [
+      {
+        color,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${pill} — ${alert.title}*`
+            }
+          },
+          {
+            type: 'section',
+            fields: [
+              { type: 'mrkdwn', text: `*Service*\n${service}` },
+              { type: 'mrkdwn', text: `*Environment*\n${env}` },
+              {
+                type: 'mrkdwn',
+                text: `*Occurrences*\n${occurrences > 1 ? `${occurrences} in recent window` : '1 occurrence'}`
+              },
+              { type: 'mrkdwn', text: `*Impact*\n${impact}` }
+            ]
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `\`\`\`${snippet}\`\`\``
+            }
+          },
+          {
+            type: 'actions',
+            elements: actionElements
+          }
+        ]
+      }
+    ]
+  };
+};
+
+/**
+ * Returns a collapsed single-line card when an alert is resolved or acknowledged.
+ */
+export const formatAlertResolvedSlackPayload = (
+  alertTitle: string,
+  resolvedBy: string,
+  resolvedAt?: string
+) => ({
+  replace_original: true,
+  attachments: [
+    {
+      color: '#64748B',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `:white_check_mark: *Resolved* — ${alertTitle}\n_Handled by ${resolvedBy} · ${resolvedAt || 'Just now'}_`
+          }
+        }
+      ]
+    }
+  ]
+});
+

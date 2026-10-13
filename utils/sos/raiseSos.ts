@@ -183,6 +183,32 @@ export const reportSos = (
   void raiseSos(code, { ...options, error, context });
 };
 
+const isChunkLoadError = (msg?: string): boolean => {
+  if (!msg) return false;
+  return (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('Importing a module script failed')
+  );
+};
+
+const triggerStaleBundleReload = (): boolean => {
+  try {
+    const key = 'last_chunk_reload_ts';
+    const last = sessionStorage.getItem(key);
+    const now = Date.now();
+    // Throttle automatic reload to once every 30s to prevent reload loops
+    if (!last || now - Number(last) > 30000) {
+      sessionStorage.setItem(key, String(now));
+      window.location.reload();
+      return true;
+    }
+  } catch {
+    // sessionStorage blocked or unavailable
+  }
+  return false;
+};
+
 /**
  * Catches what every try/catch in the app misses.
  *
@@ -192,7 +218,17 @@ export const reportSos = (
 export const installGlobalSosHandlers = (): (() => void) => {
   if (typeof window === 'undefined') return () => {};
 
+  const onVitePreloadError = (_event: any) => {
+    console.warn('[Vite] Stale chunk detected after deployment, refreshing application bundle.');
+    triggerStaleBundleReload();
+  };
+
   const onError = (event: ErrorEvent) => {
+    if (isChunkLoadError(event.message)) {
+      console.warn('[App] Dynamic chunk fetch failed (release in progress), reloading...');
+      if (triggerStaleBundleReload()) return;
+    }
+
     void raiseSos('CLIENT_UNCAUGHT_ERROR', {
       message: event.message || 'Uncaught error in the browser',
       context: {
@@ -205,6 +241,11 @@ export const installGlobalSosHandlers = (): (() => void) => {
 
   const onRejection = (event: PromiseRejectionEvent) => {
     const reason = describeError(event.reason);
+    if (isChunkLoadError(reason)) {
+      console.warn('[App] Dynamic chunk promise rejected (release in progress), reloading...');
+      if (triggerStaleBundleReload()) return;
+    }
+
     void raiseSos('CLIENT_UNHANDLED_REJECTION', {
       message: reason || 'Unhandled promise rejection',
       context: { reason },
@@ -212,10 +253,12 @@ export const installGlobalSosHandlers = (): (() => void) => {
     });
   };
 
+  window.addEventListener('vite:preloadError', onVitePreloadError);
   window.addEventListener('error', onError);
   window.addEventListener('unhandledrejection', onRejection);
 
   return () => {
+    window.removeEventListener('vite:preloadError', onVitePreloadError);
     window.removeEventListener('error', onError);
     window.removeEventListener('unhandledrejection', onRejection);
   };

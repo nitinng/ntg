@@ -44,6 +44,9 @@ export const RequestDetailOverlay = ({
   const [employeeResponseInput, setEmployeeResponseInput] = useState('');
   const [isClaiming, setIsClaiming] = useState(false);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>(request.assignedPncId || '');
+  const [reassignReason, setReassignReason] = useState('');
+  const [transferTargetId, setTransferTargetId] = useState('');
+  const [transferReason, setTransferReason] = useState('');
 
   // Keep selectedAssigneeId in sync if request changes
   useEffect(() => {
@@ -53,6 +56,11 @@ export const RequestDetailOverlay = ({
   // Ownership is a desk concern. Employees are shown nothing about it: who on
   // the team holds their request is not information they can act on.
   const isDeskUser = role === UserRole.PNC || role === UserRole.PNC_ADMIN || role === UserRole.ADMIN;
+  const isPncAdminOrAdmin = role === UserRole.PNC_ADMIN || role === UserRole.ADMIN;
+  const isClaimed = Boolean(request.assignedPncId);
+  const isClaimedByMe = Boolean(request.assignedPncId && request.assignedPncId === currentUser?.id);
+  const isClaimedByOther = Boolean(request.assignedPncId && request.assignedPncId !== currentUser?.id);
+  const canUpdateStatus = isDeskUser && isClaimed && (isClaimedByMe || isPncAdminOrAdmin);
 
   // Desk members eligible to hold tickets (PNC, PNC Admin, Admin)
   const eligibleDeskStaff = useMemo(() => {
@@ -63,7 +71,9 @@ export const RequestDetailOverlay = ({
     if (!currentUser) return;
     setIsClaiming(true);
     try {
-      const { request: updated, error } = await assignRequestTo(request, currentUser, currentUser);
+      const { request: updated, error } = await assignRequestTo(request, currentUser, currentUser, {
+        type: 'claim'
+      });
       if (error) {
         toast.error('Could not claim this request: ' + error);
         return;
@@ -80,25 +90,69 @@ export const RequestDetailOverlay = ({
     }
   };
 
-  const handleReassignToSelected = async () => {
+  const handleAssignOrReassign = async () => {
     if (!currentUser || !selectedAssigneeId) return;
     const targetUser = users.find(u => u.id === selectedAssigneeId);
     if (!targetUser) return;
+
+    const isReassign = Boolean(request.assignedPncId);
+    if (isReassign && !reassignReason.trim()) {
+      toast.error('Please provide a reason for reassigning this request.');
+      return;
+    }
+
     setIsClaiming(true);
     try {
-      const { request: updated, error } = await assignRequestTo(request, targetUser, currentUser);
+      const { request: updated, error } = await assignRequestTo(request, targetUser, currentUser, {
+        reason: reassignReason.trim() || undefined,
+        type: isReassign ? 'reassign' : 'assign'
+      });
       if (error) {
-        toast.error('Could not reassign this request: ' + error);
+        toast.error('Could not assign this request: ' + error);
         return;
       }
       await onUpdate(updated);
+      setReassignReason('');
       toast.success(
         targetUser.id === currentUser.id
           ? (request.assignedPncId ? 'Request reassigned to you.' : 'Request claimed.')
-          : `Request reassigned to ${targetUser.name || targetUser.email}.`
+          : (isReassign ? `Request reassigned to ${targetUser.name || targetUser.email}.` : `Request assigned to ${targetUser.name || targetUser.email}.`)
       );
     } catch (err: any) {
-      toast.error('Error reassigning request: ' + (err.message || err));
+      toast.error('Error assigning request: ' + (err.message || err));
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!currentUser || !transferTargetId) {
+      toast.error('Please select a colleague to transfer this request to.');
+      return;
+    }
+    if (!transferReason.trim()) {
+      toast.error('Please state a reason for transferring this request.');
+      return;
+    }
+    const targetUser = users.find(u => u.id === transferTargetId);
+    if (!targetUser) return;
+
+    setIsClaiming(true);
+    try {
+      const { request: updated, error } = await assignRequestTo(request, targetUser, currentUser, {
+        reason: transferReason.trim(),
+        type: 'transfer'
+      });
+      if (error) {
+        toast.error('Could not transfer this request: ' + error);
+        return;
+      }
+      await onUpdate(updated);
+      setTransferReason('');
+      setTransferTargetId('');
+      toast.success(`Request successfully transferred to ${targetUser.name || targetUser.email}.`);
+    } catch (err: any) {
+      toast.error('Error transferring request: ' + (err.message || err));
     } finally {
       setIsClaiming(false);
     }
@@ -229,6 +283,14 @@ export const RequestDetailOverlay = ({
   };
 
   const handleUpdate = async () => {
+    if (!request.assignedPncId) {
+      toast.error('Please claim this request before updating its status.');
+      return;
+    }
+    if (request.assignedPncId !== currentUser?.id && !canReassign(currentUser?.role)) {
+      toast.error(`This request is assigned to ${ownerLabel(request, users)}. You must take it over before updating status.`);
+      return;
+    }
     try {
       let finalStatus = status;
       const isBookingStatus = status === PNCStatus.BOOKED || status === PNCStatus.CLOSED;
@@ -666,8 +728,10 @@ export const RequestDetailOverlay = ({
                     </div>
                   </div>
 
-                  {/* Quick self-claim / take-over button */}
-                  {canClaim(request, currentUser) && (
+                {/* Desk Handler Action Area */}
+                {/* 1. Unclaimed: Quick claim button for any desk staff */}
+                {!isClaimed && (
+                  <div className="flex items-center justify-end">
                     <button
                       type="button"
                       onClick={handleClaim}
@@ -675,17 +739,18 @@ export const RequestDetailOverlay = ({
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-xs"
                     >
                       <i className="fa-solid fa-hand text-[10px]"></i>
-                      <span>{request.assignedPncId ? 'Take Over (Assign to me)' : 'Claim Request'}</span>
+                      <span>Claim Request</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
 
-                {/* Supervisor Reassignment Dropdown (PNC Admin & Admin only) */}
-                {canReassign(currentUser?.role) && (
+                {/* 2. Unclaimed: Supervisor Assign to Colleague */}
+                {!isClaimed && canReassign(currentUser?.role) && (
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <i className="fa-solid fa-arrows-split-up-and-left text-indigo-500"></i>
-                      <span>Reassign to Colleague:</span>
+                      <i className="fa-solid fa-user-plus text-indigo-500"></i>
+                      <span>Assign to Colleague:</span>
                     </div>
 
                     <div className="flex items-center gap-2 flex-1 sm:justify-end">
@@ -705,17 +770,135 @@ export const RequestDetailOverlay = ({
 
                       <button
                         type="button"
-                        onClick={handleReassignToSelected}
-                        disabled={isClaiming || !selectedAssigneeId || selectedAssigneeId === request.assignedPncId}
+                        onClick={handleAssignOrReassign}
+                        disabled={isClaiming || !selectedAssigneeId}
                         className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-indigo-600 dark:bg-slate-700 dark:hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap shadow-xs"
                       >
-                        {isClaiming ? 'Assigning...' : 'Reassign'}
+                        {isClaiming ? 'Assigning...' : 'Assign'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Claimed by Current User: Transfer to Colleague (with mandatory reason) */}
+                {isClaimed && isClaimedByMe && (
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-400">
+                      <i className="fa-solid fa-arrow-right-arrow-left"></i>
+                      <span>Transfer Request to Colleague:</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        value={transferTargetId}
+                        onChange={(e) => setTransferTargetId(e.target.value)}
+                        disabled={isClaiming}
+                        className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-semibold focus:border-indigo-600 outline-none cursor-pointer transition-all"
+                      >
+                        <option value="">Select Colleague to Transfer to...</option>
+                        {eligibleDeskStaff.filter(s => s.id !== currentUser?.id).map((staff) => (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.name || staff.email} ({staff.role === UserRole.PNC_ADMIN ? 'PNC Admin' : staff.role})
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="text"
+                        value={transferReason}
+                        onChange={(e) => setTransferReason(e.target.value)}
+                        placeholder="Reason for Transfer * (Mandatory)"
+                        className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-600 outline-none font-medium"
+                      >
+                      </input>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleTransfer}
+                        disabled={isClaiming || !transferTargetId || !transferReason.trim()}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap shadow-xs"
+                      >
+                        {isClaiming ? 'Transferring...' : 'Transfer Request'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Claimed by Colleague: Supervisor Reassign (with mandatory reason) */}
+                {isClaimed && isClaimedByOther && canReassign(currentUser?.role) && (
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <i className="fa-solid fa-arrows-split-up-and-left text-indigo-500"></i>
+                      <span>Reassign to Colleague:</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        value={selectedAssigneeId}
+                        onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                        disabled={isClaiming}
+                        className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-semibold focus:border-indigo-600 outline-none cursor-pointer transition-all"
+                      >
+                        <option value="">Select New Desk Handler...</option>
+                        {eligibleDeskStaff.map((staff) => (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.name || staff.email} ({staff.role === UserRole.PNC_ADMIN ? 'PNC Admin' : staff.role})
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="text"
+                        value={reassignReason}
+                        onChange={(e) => setReassignReason(e.target.value)}
+                        placeholder="Reason for Reassignment * (Mandatory)"
+                        className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-600 outline-none font-medium"
+                      >
+                      </input>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleAssignOrReassign}
+                        disabled={isClaiming || !selectedAssigneeId || selectedAssigneeId === request.assignedPncId || !reassignReason.trim()}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-indigo-600 dark:bg-slate-700 dark:hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap shadow-xs"
+                      >
+                        {isClaiming ? 'Reassigning...' : 'Reassign'}
                       </button>
                     </div>
                   </div>
                 )}
               </div>
 
+              {/* Update Status Lock Banner */}
+              {!canUpdateStatus && (
+                !isClaimed ? (
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 flex items-center gap-3 shadow-xs">
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 font-bold text-sm">
+                      <i className="fa-solid fa-lock text-xs"></i>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Unclaimed Request</p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">Claim this request above before updating status or entering booking details.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-xs">
+                    <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 font-bold text-sm">
+                      <i className="fa-solid fa-lock text-xs"></i>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Assigned to {ownerLabel(request, users)}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Only the assigned desk handler or a PNC Admin can modify the booking status.</p>
+                    </div>
+                  </div>
+                )
+              )}
+
+              <fieldset disabled={!canUpdateStatus} className={!canUpdateStatus ? 'opacity-60 pointer-events-none select-none space-y-3' : 'space-y-3'}>
               <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Update Status</label>
 
               <div className="relative">
@@ -963,16 +1146,27 @@ export const RequestDetailOverlay = ({
                   )}
                 </>
               )}
+              </fieldset>
 
               <button
                 onClick={handleUpdate}
-                disabled={isUploading}
+                disabled={isUploading || !canUpdateStatus}
                 className="w-full bg-indigo-600 text-white h-11 rounded-lg font-bold uppercase tracking-wide text-xs shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isUploading ? (
                   <>
                     <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> Processing...
                   </>
+                ) : !canUpdateStatus ? (
+                  !isClaimed ? (
+                    <>
+                      <i className="fa-solid fa-lock mr-2"></i> Claim Request to Update Status
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-lock mr-2"></i> Locked (Assigned to {ownerLabel(request, users)})
+                    </>
+                  )
                 ) : (
                   <>
                     <i className="fa-solid fa-check mr-2"></i> Update & Log

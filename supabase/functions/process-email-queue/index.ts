@@ -1367,6 +1367,36 @@ const buildPdfBase64 = (doc: PdfDocument): string => {
   return Buffer.from(raw, 'latin1').toString('base64');
 };
 
+/** Builds a sample ticket PDF attachment for template testing. */
+const buildSampleTicketPdfBase64 = (): string => {
+  const doc: PdfDocument = {
+    title: 'E-Ticket Confirmation (Sample) - NavGurukul Travel Desk',
+    sections: [
+      {
+        heading: 'Booking Details',
+        lines: [
+          'Booking Reference (PNR): IND-88219',
+          'Status: Confirmed',
+          'Traveller: Aditi Sharma',
+          'Route: Pune (PNQ) to Bangalore (BLR)',
+          'Travel Date: 2026-09-15',
+          'Carrier & Flight: IndiGo (6E-442)',
+          'Departure: 07:30 AM | Arrival: 09:00 AM'
+        ]
+      },
+      {
+        heading: 'Instructions & Notice',
+        lines: [
+          'This is a demonstration ticket PDF generated for template testing.',
+          'Please ensure travellers carry a valid government-issued photo ID.',
+          'Baggage allowance: 15kg check-in, 7kg cabin baggage.'
+        ]
+      }
+    ]
+  };
+  return buildPdfBase64(doc);
+};
+
 /**
  * The desk digest: what the travel desk did today.
  *
@@ -2113,7 +2143,19 @@ Deno.serve(async (req: Request) => {
       // by adding the placeholder to its body and nothing else.
       let ticket: TicketDelivery = { url: null, attachment: null };
       if (typeof item.body === 'string' && item.body.includes(TICKET_URL_PLACEHOLDER)) {
-        ticket = await resolveTicketDelivery(supabase, item.ticket_id);
+        if (!item.ticket_id && (item.to_status === 'Test Email' || item.idempotency_key?.startsWith('test-'))) {
+          ticket = {
+            url: 'https://ng-travel-desk.vercel.app',
+            attachment: {
+              filename: 'Sample-Ticket-IND-88219.pdf',
+              content: buildSampleTicketPdfBase64(),
+              contentType: 'application/pdf'
+            },
+            note: 'Sample test ticket attached'
+          };
+        } else {
+          ticket = await resolveTicketDelivery(supabase, item.ticket_id);
+        }
         if (ticket.note) {
           console.log(`[email ${item.id}] ticket delivery: ${ticket.note}`);
         }

@@ -239,6 +239,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
   const [historyLogs, setHistoryLogs] = useState<MailTemplateHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState<string | null>(null);
 
   const canEdit = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.PNC_ADMIN;
 
@@ -656,7 +657,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
     setIsPreviewOpen(true);
   };
 
-  const renderPreviewContent = (content: string) => {
+  const renderPreviewContent = (content: string, isPreviewOnly: boolean = true) => {
     if (!content) return '';
     let processed = content;
     processed = processed.replace(
@@ -678,8 +679,71 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
     processed = processed.replace(/\{\{vendor_name\}\}/g, SAMPLE_REQUEST.vendorName || 'IndiGo');
     processed = processed.replace(/\{\{booking_reference\}\}/g, 'IND-88219');
     processed = processed.replace(/\{\{portal_url\}\}/g, 'https://ng-travel-desk.vercel.app');
-    processed = processed.replace(/https:\/\/ng-travel-desk\.vercel\.app\/navgurukul-brand-logo\.png/g, '/navgurukul-brand-logo.png');
+    processed = processed.replace(/\{\{priority\}\}/g, 'High');
+    processed = processed.replace(/\{\{sla_target_hours\}\}/g, '4');
+    processed = processed.replace(/\{\{days_remaining\}\}/g, '2');
+    processed = processed.replace(/\{\{change_summary\}\}/g, 'Departure date updated to 2026-09-15 (Morning flight confirmed)');
+    processed = processed.replace(/\{\{current_status\}\}/g, 'Processing');
+    processed = processed.replace(/\{\{cancellation_reason\}\}/g, 'Schedule rescheduled due to meeting postponement');
+    processed = processed.replace(/\{\{violation_reasons\}\}/g, 'Booked less than 7 days in advance');
+    processed = processed.replace(/\{\{rejection_reason\}\}/g, 'Budget allocation exhausted for current cycle');
+    processed = processed.replace(/\{\{information_requested\}\}/g, 'Please provide official invitation letter or ID scan');
+    processed = processed.replace(/\{\{support_email\}\}/g, 'travel@navgurukul.org');
+    processed = processed.replace(/\{\{support_slack_channel\}\}/g, '#travel-desk');
+    processed = processed.replace(/\{\{original_fare\}\}/g, '₹4,500');
+
+    if (isPreviewOnly) {
+      processed = processed.replace(/\{\{ticket_download_url\}\}/g, '#preview-ticket-download');
+      processed = processed.replace(/https:\/\/ng-travel-desk\.vercel\.app\/navgurukul-brand-logo\.png/g, '/navgurukul-brand-logo.png');
+    }
     return processed;
+  };
+
+  const handleSendTestEmail = async (template: MailTemplate) => {
+    let targetEmail = currentUser?.email;
+    if (!targetEmail) {
+      const { data: { user } } = await supabase.auth.getUser();
+      targetEmail = user?.email;
+    }
+    if (!targetEmail) {
+      toast.error('Unable to determine logged-in user email.');
+      return;
+    }
+
+    setIsSendingTest(template.id);
+    try {
+      const renderedSubject = renderPreviewContent(template.subject || template.name, false);
+      const renderedBody = renderPreviewContent(template.body, false);
+      const idempotencyKey = `test-${template.templateKey || template.id}-${Date.now()}`;
+
+      const { error } = await supabase.from('email_queue').insert({
+        template_key: template.templateKey || 'test_template',
+        recipients: [targetEmail],
+        subject: `[TEST] ${renderedSubject}`,
+        body: renderedBody,
+        to_status: 'Test Email',
+        idempotency_key: idempotencyKey,
+        status: 'Pending',
+        event: template.event || 'TEST_EMAIL',
+        audience: template.audience || 'employee'
+      });
+
+      if (error) throw error;
+
+      // Proactively invoke edge function to process immediately
+      try {
+        await supabase.functions.invoke('process-email-queue');
+      } catch (invokeErr) {
+        console.warn('Email worker invocation:', invokeErr);
+      }
+
+      toast.success(`Test email dispatched to ${targetEmail}!`);
+    } catch (err: any) {
+      console.error('Test email failed:', err);
+      toast.error('Failed to send test email: ' + (err.message || err));
+    } finally {
+      setIsSendingTest(null);
+    }
   };
 
   // Insert variable helper into editor body
@@ -815,12 +879,33 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
 
         <div className="mt-auto pt-3 border-t dark:border-slate-800 flex justify-between items-center text-xs text-slate-400">
           <span>Updated {new Date(template.updatedAt || template.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-          <button
-            onClick={() => openPreview(template)}
-            className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold text-xs"
-          >
-            Preview →
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleSendTestEmail(template)}
+              disabled={isSendingTest === template.id}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 transition-colors disabled:opacity-50"
+              title={`Send test email to ${currentUser?.email || 'your email'}`}
+            >
+              {isSendingTest === template.id ? (
+                <>
+                  <i className="fa-solid fa-circle-notch fa-spin text-[10px]"></i>
+                  <span>Sending...</span>
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                  <span>Test Mail</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => openPreview(template)}
+              className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold text-xs"
+            >
+              Preview →
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1362,13 +1447,36 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
               />
             </div>
 
-            <footer className="px-8 py-4 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex justify-end">
-              <button
-                onClick={() => setIsPreviewOpen(false)}
-                className="px-6 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold"
-              >
-                Close
-              </button>
+            <footer className="px-8 py-4 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <span className="text-xs text-slate-500">
+                Testing as: <strong className="text-slate-700 dark:text-slate-300">{currentUser?.email || 'Logged-in user'}</strong>
+              </span>
+              <div className="flex items-center gap-3 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleSendTestEmail(previewTemplate)}
+                  disabled={isSendingTest === previewTemplate.id}
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs disabled:opacity-50 transition-colors"
+                >
+                  {isSendingTest === previewTemplate.id ? (
+                    <>
+                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                      <span>Sending Test Email...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-paper-plane"></i>
+                      <span>Send Test Email to Me</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsPreviewOpen(false)}
+                  className="px-6 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </footer>
           </div>
         </div>

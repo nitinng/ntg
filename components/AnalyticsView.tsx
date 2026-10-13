@@ -587,11 +587,12 @@ export const AnalyticsView: React.FC<{
       const assignedUser = resolveUser(r.assignedPncId);
       const assignedUserName = assignedUser?.name || assignedUser?.email || (r.assignedPncId ? 'Assigned Desk Staff' : 'Unassigned');
 
-      // Find desk events (claim, assign, processing, hold, booked)
+      // Find desk events (claim, assign, transfer, processing, hold, booked)
       const deskEvents = timeline.filter(e => {
         const ev = e.event.toLowerCase();
         return ev.includes('claim') ||
           ev.includes('assign') ||
+          ev.includes('transfer') ||
           ev.includes('processing') ||
           ev.includes('on hold') ||
           ev.includes('hold') ||
@@ -604,6 +605,7 @@ export const AnalyticsView: React.FC<{
       const firstClaimEvent = timeline.find(e =>
         e.event.toLowerCase().includes('claimed by') ||
         e.event.toLowerCase().includes('assigned to') ||
+        e.event.toLowerCase().includes('transferred to') ||
         e.event.toLowerCase().includes('processing')
       );
 
@@ -614,6 +616,8 @@ export const AnalyticsView: React.FC<{
           initialActorName = firstClaimEvent.event.replace(/claimed by/i, '').trim();
         } else if (firstClaimEvent.event.toLowerCase().includes('assigned to')) {
           initialActorName = firstClaimEvent.event.replace(/assigned to/i, '').trim();
+        } else if (firstClaimEvent.event.toLowerCase().includes('transferred to')) {
+          initialActorName = firstClaimEvent.event.replace(/transferred to/i, '').trim();
         } else {
           initialActorName = firstClaimEvent.actor || 'PNC Desk';
         }
@@ -635,16 +639,27 @@ export const AnalyticsView: React.FC<{
           newActor = e.event.replace(/claimed by/i, '').trim();
         } else if (ev.includes('assigned to')) {
           newActor = e.event.replace(/assigned to/i, '').trim();
+        } else if (ev.includes('transferred to')) {
+          newActor = e.event.replace(/transferred to/i, '').trim();
         } else if (e.actor && e.actor !== r.requesterName && !e.actor.toLowerCase().includes('system') && !e.actor.toLowerCase().includes('employee')) {
           newActor = e.actor;
         }
 
-        if (newActor && lastDeskActor !== 'Unassigned' && newActor !== lastDeskActor && (ev.includes('reassigned') || ev.includes('claim') || ev.includes('assign') || ev.includes('processing') || ev.includes('booked') || e.details?.toLowerCase().includes('reassigned'))) {
+        if (newActor && lastDeskActor !== 'Unassigned' && newActor !== lastDeskActor && (
+          ev.includes('reassigned') ||
+          ev.includes('transfer') ||
+          ev.includes('claim') ||
+          ev.includes('assign') ||
+          ev.includes('processing') ||
+          ev.includes('booked') ||
+          e.details?.toLowerCase().includes('reassigned') ||
+          e.details?.toLowerCase().includes('transfer')
+        )) {
           handoverEvents.push({
             fromActor: lastDeskActor,
             toActor: newActor,
             timestamp: evTime,
-            reason: e.details || e.event
+            reason: e.details || (ev.includes('transfer') ? 'Transferred to colleague' : (ev.includes('reassign') ? 'Reassigned to colleague' : e.event))
           });
           lastDeskActor = newActor;
           lastDeskTime = evTime;
@@ -657,7 +672,7 @@ export const AnalyticsView: React.FC<{
           fromActor: initialActorName,
           toActor: assignedUser.name || assignedUser.email,
           timestamp: r.assignedAt ? new Date(r.assignedAt).getTime() : (lastDeskTime + 3600000),
-          reason: 'Reassigned desk ownership'
+          reason: r.assignmentReason || (r.assignmentType === 'transfer' ? 'Transferred desk ownership' : 'Reassigned desk ownership')
         });
         lastDeskActor = assignedUser.name || assignedUser.email;
       }
@@ -2348,6 +2363,14 @@ export const AnalyticsView: React.FC<{
                           </div>
                         </div>
                       </div>
+
+                      {/* Handover Reason */}
+                      {hReq.handovers && hReq.handovers[0]?.reason && (
+                        <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-1.5 rounded-lg border border-amber-200/60 dark:border-amber-900/40 line-clamp-2">
+                          <strong className="text-amber-700 dark:text-amber-300 mr-1">Reason:</strong>
+                          <span>{hReq.handovers[0].reason}</span>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between pt-1 text-xs">
                         <div className="text-slate-500 font-mono text-[11px]">

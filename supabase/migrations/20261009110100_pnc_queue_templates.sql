@@ -44,7 +44,7 @@ VALUES
         <div style="margin:4px 0;"><strong style="color:#334155;">Priority:</strong> {{priority}}</div>
         <div style="margin:4px 0;"><strong style="color:#334155;">Booking Target:</strong> {{sla_target_hours}} hours</div>
       </div>
-      <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Open it to claim and book: {{portal_url}}</p>
+      <div style="text-align:center;margin:24px 0;"><a href="{{portal_url}}" style="background-color:#4F46E5;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;">View in Travel Desk Queue</a></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>
@@ -70,7 +70,7 @@ VALUES
         <div style="margin:4px 0;"><strong style="color:#334155;">Priority:</strong> {{priority}}</div>
         <div style="margin:4px 0;"><strong style="color:#334155;">Booking Target:</strong> {{sla_target_hours}} hours from now</div>
       </div>
-      <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Claim and book it here: {{portal_url}}</p>
+      <div style="text-align:center;margin:24px 0;"><a href="{{portal_url}}" style="background-color:#dc2626;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;">View Priority Request in Queue</a></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>
@@ -97,7 +97,7 @@ VALUES
         <div style="margin:4px 0;"><strong style="color:#334155;">Priority:</strong> {{priority}}</div>
         <div style="margin:4px 0;"><strong style="color:#334155;">Booking Target:</strong> {{sla_target_hours}} hours</div>
       </div>
-      <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Open it to claim and book: {{portal_url}}</p>
+      <div style="text-align:center;margin:24px 0;"><a href="{{portal_url}}" style="background-color:#4F46E5;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;">View in Travel Desk Queue</a></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>
@@ -124,7 +124,7 @@ VALUES
         <div style="margin:4px 0;"><strong style="color:#334155;">Priority:</strong> {{priority}}</div>
         <div style="margin:4px 0;"><strong style="color:#334155;">Booking Target:</strong> {{sla_target_hours}} hours from now</div>
       </div>
-      <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Claim and book it here: {{portal_url}}</p>
+      <div style="text-align:center;margin:24px 0;"><a href="{{portal_url}}" style="background-color:#dc2626;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;">View Priority Request in Queue</a></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>

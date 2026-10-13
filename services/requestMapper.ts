@@ -50,6 +50,8 @@ export const mapDbRequest = (r: any): TravelRequest => ({
   bookedBy: r.booked_by || r.bookedBy || '',
   assignedPncId: r.assigned_pnc_id ?? r.assignedPncId ?? null,
   assignedAt: r.assigned_at ?? r.assignedAt ?? null,
+  assignmentReason: r.assignment_reason ?? r.assignmentReason ?? null,
+  assignmentType: r.assignment_type ?? r.assignmentType ?? null,
   resubmissionCount: r.resubmission_count || r.resubmissionCount || 0,
   onHoldSince: r.on_hold_since || r.onHoldSince,
   cancelledReason: r.cancelled_reason || r.cancelledReason,

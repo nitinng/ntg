@@ -338,6 +338,8 @@ export interface TravelRequest {
   /** PNC / PNC Admin who owns this request in the desk queue. */
   assignedPncId?: string | null;
   assignedAt?: string | null;
+  assignmentReason?: string | null;
+  assignmentType?: 'claim' | 'assign' | 'reassign' | 'transfer' | null;
   paymentSource?: 'Advance' | 'Direct' | 'Not Yet Entered';
   bookingStatus?: 'Booked' | 'Cancelled' | 'Partially Cancelled' | 'Reconciled';
 }

@@ -61,14 +61,32 @@ export const assignRequestTo = async (
   request: TravelRequest,
   assignee: User,
   actor: User,
-  options: { silent?: boolean } = {}
+  options: { silent?: boolean; reason?: string; type?: 'claim' | 'assign' | 'reassign' | 'transfer' } = {}
 ): Promise<AssignmentResult> => {
   const assignedAt = new Date().toISOString();
 
-  const event =
-    assignee.id === actor.id
-      ? `Claimed by ${actor.name || actor.email}`
+  const isSelfClaim = assignee.id === actor.id;
+  const isTransfer = options.type === 'transfer' || (request.assignedPncId === actor.id && assignee.id !== actor.id);
+  const isReassign = options.type === 'reassign' || (Boolean(request.assignedPncId) && !isSelfClaim && !isTransfer);
+  const assignmentType: 'claim' | 'assign' | 'reassign' | 'transfer' = options.type || (
+    isSelfClaim ? 'claim' : isTransfer ? 'transfer' : isReassign ? 'reassign' : 'assign'
+  );
+
+  let event = isSelfClaim
+    ? `Claimed by ${actor.name || actor.email}`
+    : isTransfer
+      ? `Transferred to ${assignee.name || assignee.email}`
       : `Assigned to ${assignee.name || assignee.email}`;
+
+  let defaultDetail = isSelfClaim
+    ? (request.assignedPncId ? 'Reassigned to self.' : 'First claim on this request.')
+    : isTransfer
+      ? 'Transferred ownership to colleague.'
+      : isReassign
+        ? 'Reassigned from previous owner.'
+        : 'Initial assignment to desk handler.';
+
+  const details = options.reason ? options.reason.trim() : defaultDetail;
 
   const timeline: TimelineEvent[] = [
     ...(request.timeline || []),
@@ -77,7 +95,7 @@ export const assignRequestTo = async (
       timestamp: assignedAt,
       actor: actor.name || actor.email,
       event,
-      details: request.assignedPncId ? 'Reassigned from a previous owner.' : 'First claim on this request.'
+      details
     }
   ];
 
@@ -86,6 +104,8 @@ export const assignRequestTo = async (
     .update({
       assigned_pnc_id: assignee.id,
       assigned_at: assignedAt,
+      assignment_reason: options.reason?.trim() || null,
+      assignment_type: assignmentType,
       ...(options.silent ? {} : { timeline })
     })
     .eq('id', request.id);
@@ -101,6 +121,8 @@ export const assignRequestTo = async (
       ...request,
       assignedPncId: assignee.id,
       assignedAt,
+      assignmentReason: options.reason?.trim() || null,
+      assignmentType,
       ...(options.silent ? {} : { timeline })
     }
   };

@@ -237,7 +237,7 @@ BEGIN
   v_settings := COALESCE(v_settings, '{}'::jsonb);
   v_window   := GREATEST(COALESCE((v_settings ->> 'dedupeWindowMinutes')::INTEGER, 30), 1);
   v_cap      := GREATEST(COALESCE((v_settings ->> 'dailyNotificationCap')::INTEGER, 200), 1);
-  v_channel  := public.desk_json_text_array(v_settings -> 'channelEmails');
+  v_channel  := public.desk_channel_emails('alerting');
   v_webhook  := COALESCE(NULLIF(btrim(v_settings ->> 'webhookUrl'), ''), '');
 
   SELECT COALESCE(NULLIF(btrim(value #>> '{}'), ''), '')

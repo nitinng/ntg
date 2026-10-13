@@ -99,7 +99,7 @@ export const assignRequestTo = async (
     }
   ];
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('travel_requests')
     .update({
       assigned_pnc_id: assignee.id,
@@ -109,6 +109,19 @@ export const assignRequestTo = async (
       ...(options.silent ? {} : { timeline })
     })
     .eq('id', request.id);
+
+  if (error && (error.message?.includes('assignment_reason') || error.message?.includes('assignment_type'))) {
+    console.warn('Schema cache pending refresh for assignment columns; retrying with core fields.');
+    const retry = await supabase
+      .from('travel_requests')
+      .update({
+        assigned_pnc_id: assignee.id,
+        assigned_at: assignedAt,
+        ...(options.silent ? {} : { timeline })
+      })
+      .eq('id', request.id);
+    error = retry.error;
+  }
 
   if (error) {
     // An unassigned request ages in the queue with nobody accountable for it.

@@ -424,19 +424,9 @@ export const formatAlertSlackPayload = (
   const basePortal = options.portalUrl ? options.portalUrl.replace(/\/+$/, '') : 'https://ng-travel-desk.vercel.app';
   const logsUrl = `${basePortal}/?tab=sos${options.alertId ? `&alertId=${encodeURIComponent(options.alertId)}` : ''}`;
 
-  const topLevelText = [
-    `*${pill} — ${alert.title}*`,
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    `*Service:* \`${service}\`   •   *Environment:* \`${env}\``,
-    `*Occurrences:* \`${occurrences > 1 ? `${occurrences} in recent window` : '1 occurrence'}\`   •   *Impact:* \`${impact}\``,
-    '',
-    '```',
-    snippet,
-    '```',
-    '',
-    `🔗 *Action:* <${logsUrl}|View logs in Travel Desk →>`,
-    '_Navgurukul Travel Desk • Automated SOS Alert_'
-  ].join('\n');
+  // Notification / fallback line. The card itself lives in the attachment —
+  // mrkdwn here would print literally in a Workflow Builder message.
+  const topLevelText = `${SOS_SEVERITY_ICONS[alert.severity]} ${alert.severity.toUpperCase()} — ${alert.title}`;
 
   const actionElements: any[] = [
     {

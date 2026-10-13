@@ -9,6 +9,36 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const encoder = new TextEncoder();
+
+/**
+ * Slack signs every interaction request with the app's signing secret.
+ * Without this check anyone who learns the URL could acknowledge alerts.
+ * https://api.slack.com/authentication/verifying-requests-from-slack
+ */
+const verifySlackSignature = async (req: Request, rawBody: string): Promise<boolean> => {
+  const secret = Deno.env.get('SLACK_SIGNING_SECRET');
+  if (!secret) return false;
+
+  const timestamp = req.headers.get('x-slack-request-timestamp') || '';
+  const signature = req.headers.get('x-slack-signature') || '';
+  if (!timestamp || !signature) return false;
+
+  // Reject replays older than five minutes.
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(`v0:${timestamp}:${rawBody}`));
+  const expected = 'v0=' + Array.from(new Uint8Array(mac)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -19,18 +49,17 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    let payload: any = null;
-    const contentType = req.headers.get('content-type') || '';
-
-    if (contentType.includes('application/x-www-form-urlencoded')) {
-      const formData = await req.formData();
-      const payloadStr = formData.get('payload');
-      if (typeof payloadStr === 'string') {
-        payload = JSON.parse(payloadStr);
-      }
-    } else {
-      payload = await req.json();
+    const rawBody = await req.text();
+    if (!(await verifySlackSignature(req, rawBody))) {
+      return new Response(JSON.stringify({ error: 'Invalid or missing Slack signature' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
+
+    let payload: any = null;
+    const payloadStr = new URLSearchParams(rawBody).get('payload');
+    if (payloadStr) payload = JSON.parse(payloadStr);
 
     if (!payload) {
       return new Response(JSON.stringify({ error: 'Missing interaction payload' }), {

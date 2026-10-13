@@ -96,22 +96,25 @@ const App: React.FC = () => {
   // item so a failure is visible from whichever screen the desk happens to be
   // on.
   const [sosOpenCritical, setSosOpenCritical] = useState(0);
+  const [focusAlertId, setFocusAlertId] = useState<string | null>(null);
 
   useEffect(() => {
     sessionStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
 
-  // Deep link from an alert: the SOS mail posted into Slack links to
-  // /?tab=sos, so a reader lands on the alert feed rather than the dashboard
-  // (?tab=notifications opens the same screen on its other tab).
-  // The parameter is consumed once and stripped, so a refresh does not keep
-  // dragging the user back to it.
+  // Deep link from an alert: the SOS mail or Slack card links to
+  // /?tab=sos&alertId=..., so a reader lands on the alert feed with that specific
+  // alert expanded and focused.
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('tab');
+    const alertId = params.get('alertId');
+    if (alertId) setFocusAlertId(alertId);
     if (!requested) return;
     setActiveTab(requested);
     const url = new URL(window.location.href);
     url.searchParams.delete('tab');
+    url.searchParams.delete('alertId');
     window.history.replaceState({}, '', url.toString());
   }, []);
 
@@ -868,6 +871,7 @@ const App: React.FC = () => {
         return (
           <SOSView
             currentUser={currentUser}
+            focusAlertId={focusAlertId}
             initialTab={
               activeTab === 'notifications'
                 ? 'notifications'

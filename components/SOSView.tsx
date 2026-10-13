@@ -106,6 +106,7 @@ const SOS_TABS: { key: SosTabKey; label: string; icon: string }[] = [
 interface SOSViewProps {
   currentUser: User;
   initialTab?: SosTabKey;
+  focusAlertId?: string | null;
 }
 
 const SEVERITY_STYLES: Record<SosSeverity, { chip: string; bar: string }> = {
@@ -159,7 +160,7 @@ const deliveryLabel = (alert: SosAlert): { text: string; tone: string; icon: str
   }
 };
 
-export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) => {
+export const SOSView = ({ currentUser, initialTab = 'alerts', focusAlertId }: SOSViewProps) => {
   // Admin only — and the database agrees, so this is a UI nicety rather than
   // the control.
   const canTriage = currentUser.role === UserRole.ADMIN;
@@ -176,7 +177,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(focusAlertId || null);
   const [expandedStacks, setExpandedStacks] = useState<Record<string, boolean>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
@@ -189,7 +190,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
   const [isTestingNotif, setIsTestingNotif] = useState(false);
   const [isCreatingDummy, setIsCreatingDummy] = useState(false);
 
-  const [statusFilter, setStatusFilter] = useState<SosStatus | 'all'>('Open');
+  const [statusFilter, setStatusFilter] = useState<SosStatus | 'all'>(focusAlertId ? 'all' : 'Open');
   const [severityFilter, setSeverityFilter] = useState<SosSeverity | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<SosCategory | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -203,6 +204,15 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
       ]);
       setAlerts(rows);
       setSummary(stats);
+
+      // If deep linked with a specific alertId, expand and scroll to it
+      if (focusAlertId) {
+        setExpandedId(focusAlertId);
+        setTimeout(() => {
+          const el = document.getElementById(`sos-alert-${focusAlertId}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
     } catch (err: any) {
       // Never raise an SOS from the SOS console: a console that cannot load is
       // a read problem, and alerting about it would only fill the feed it
@@ -752,7 +762,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
               const isOpen = expandedId === alert.id;
 
               return (
-                <div key={alert.id} className="relative">
+                <div key={alert.id} id={`sos-alert-${alert.id}`} className="relative">
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${SEVERITY_STYLES[alert.severity].bar}`} />
                   <div className="p-4 pl-6">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">

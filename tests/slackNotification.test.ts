@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatSlackNewRequest,
-  formatSlackNotificationTest
+  formatSlackNotificationTest,
+  formatSlackStatusChange,
+  formatSlackRequestResolved
 } from '../utils/desk/slackNotification';
 import { formatSlackDigestPayload } from '../utils/desk/slackDigest';
 import { DeskDigest } from '../utils/desk/digest';
@@ -89,5 +91,35 @@ describe('formatSlackDigestPayload', () => {
     expect(payload.text).toContain('• *Total Open:* 10');
     expect(payload.text).toContain('TRV-O-261012-001');
     expect(payload.blocks).toBeDefined();
+  });
+});
+
+describe('formatSlackStatusChange and formatSlackRequestResolved', () => {
+  it('formats status transition card with 4-field grid', () => {
+    const payload = formatSlackStatusChange(
+      'TRV-O-261012-001',
+      'Pune ➔ Bengaluru',
+      'Approved by Manager',
+      'nitin.s@navgurukul.org',
+      { note: 'Approved for budget cycle Q3' }
+    );
+    expect(payload.text).toContain('STATUS UPDATE');
+    expect(payload.text).toContain('Approved by Manager');
+    expect(payload.blocks).toBeDefined();
+    expect(payload.attachments).toBeDefined();
+    expect(payload.attachments![0].color).toBe('#3B82F6');
+  });
+
+  it('formats collapsed resolved card on booking', () => {
+    const payload = formatSlackRequestResolved(
+      'TRV-O-261012-001',
+      'Pune ➔ Bengaluru',
+      'PNC Team',
+      'Booked'
+    );
+    expect(payload.replace_original).toBe(true);
+    expect(payload.attachments[0].color).toBe('#10B981');
+    expect(payload.attachments[0].blocks[0].text.text).toContain(':white_check_mark: *Booked*');
+    expect(payload.attachments[0].blocks[0].text.text).toContain('TRV-O-261012-001');
   });
 });

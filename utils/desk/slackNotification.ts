@@ -52,6 +52,11 @@ export const formatSlackNewRequest = (
     priority.toLowerCase() === 'urgent' ? '🚨 Urgent' :
     `⚡ ${priority}`;
 
+  const color =
+    priority.toLowerCase() === 'urgent' ? '#E24B4A' :
+    priority.toLowerCase() === 'high' ? '#EF9F27' :
+    '#176AE6';
+
   // 1. Rich mrkdwn text (optimized for Slack Workflow Builder and mobile previews)
   const text = [
     `✈️ *TRAVEL DESK NOTIFICATION · NEW REQUEST*`,
@@ -96,9 +101,7 @@ export const formatSlackNewRequest = (
         { type: 'mrkdwn', text: `*👤 Traveler:*\n${who}` },
         { type: 'mrkdwn', text: `*🏢 Dept / Campus:*\n${dept}` },
         { type: 'mrkdwn', text: `*🛫 Trip Route:*\n${trip}` },
-        { type: 'mrkdwn', text: `*📅 Travel Date:*\n${date}` },
-        { type: 'mrkdwn', text: `*🎫 Mode & Type:*\n${mode}` },
-        { type: 'mrkdwn', text: `*👔 Approving Manager:*\n${manager}` }
+        { type: 'mrkdwn', text: `*📅 Travel Date:*\n${date} · ${mode}` }
       ]
     },
     { type: 'divider' },
@@ -122,7 +125,7 @@ export const formatSlackNewRequest = (
       elements: [
         {
           type: 'mrkdwn',
-          text: 'Navgurukul Travel Desk • Automated Notification'
+          text: `\`${ticket}\` · Navgurukul Travel Desk • Automated Notification`
         }
       ]
     }
@@ -133,12 +136,121 @@ export const formatSlackNewRequest = (
     blocks,
     attachments: [
       {
-        color: '#176AE6',
+        color,
         blocks
       }
     ]
   };
 };
+
+/**
+ * Formats a status transition notification (e.g. Approved by Manager, Assigned to PNC, Booked).
+ */
+export const formatSlackStatusChange = (
+  ticket: string,
+  trip: string,
+  newStatus: string,
+  updatedBy: string,
+  details?: {
+    traveler?: string;
+    date?: string;
+    priority?: string;
+    note?: string;
+  },
+  portalUrl?: string
+): SlackPayload => {
+  const basePortal = portalUrl ? portalUrl.replace(/\/+$/, '') : 'https://ng-travel-desk.vercel.app';
+  const targetUrl = `${basePortal}/?tab=requests`;
+
+  const isApproved = newStatus.toLowerCase().includes('approved');
+  const isBooked = newStatus.toLowerCase().includes('booked');
+  const isRejected = newStatus.toLowerCase().includes('reject');
+
+  const color = isBooked ? '#10B981' : isApproved ? '#3B82F6' : isRejected ? '#E24B4A' : '#EF9F27';
+  const icon = isBooked ? '🎫' : isApproved ? '✅' : isRejected ? '❌' : '🔄';
+
+  const text = [
+    `${icon} *TRAVEL DESK NOTIFICATION · STATUS UPDATE*`,
+    `*Request ID:* \`${ticket}\`  •  *New Status:* *${newStatus}*`,
+    `*Trip Route:* ${trip}`,
+    `*Updated By:* ${updatedBy}`,
+    details?.note ? `*Note:* ${details.note}` : '',
+    '',
+    `🔗 *Action:* <${targetUrl}|View in Travel Desk →>`
+  ].filter(Boolean).join('\n');
+
+  const blocks = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: `${icon} Request ${ticket} — ${newStatus}`,
+        emoji: true
+      }
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Request ID*\n\`${ticket}\`` },
+        { type: 'mrkdwn', text: `*Status*\n*${newStatus}*` },
+        { type: 'mrkdwn', text: `*Trip Route*\n${trip}` },
+        { type: 'mrkdwn', text: `*Updated By*\n${updatedBy}` }
+      ]
+    },
+    ...(details?.note ? [{
+      type: 'section',
+      text: { type: 'mrkdwn', text: `>${details.note}` }
+    }] : []),
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'View in Travel Desk →', emoji: true },
+          url: targetUrl,
+          style: 'primary'
+        }
+      ]
+    }
+  ];
+
+  return {
+    text,
+    blocks,
+    attachments: [
+      {
+        color,
+        blocks
+      }
+    ]
+  };
+};
+
+/**
+ * Returns a collapsed single-line card when a request is Booked or Closed.
+ */
+export const formatSlackRequestResolved = (
+  ticket: string,
+  trip: string,
+  resolvedBy: string,
+  statusLabel = 'Booked'
+) => ({
+  replace_original: true,
+  attachments: [
+    {
+      color: '#10B981',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `:white_check_mark: *${statusLabel}* — \`${ticket}\` (${trip})\n_Handled by ${resolvedBy} · Completed_`
+          }
+        }
+      ]
+    }
+  ]
+});
 
 /**
  * Formats a live test notification to verify Slack workflow webhook connectivity.

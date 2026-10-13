@@ -46,6 +46,7 @@ import {
   sendSosTestAlert,
   SosSummary
 } from '../utils/sos/sosService';
+import SlackCardStudio from './SlackCardStudio';
 
 /**
  * Alerts & Notices — the one screen that answers "has anything failed, and did
@@ -94,11 +95,12 @@ const ChannelEmailsField = ({
 );
 
 /** Which stream the screen opens on. Deep links pick one; the tabs switch. */
-export type SosTabKey = 'alerts' | 'notifications';
+export type SosTabKey = 'alerts' | 'notifications' | 'cards';
 
 const SOS_TABS: { key: SosTabKey; label: string; icon: string }[] = [
   { key: 'alerts', label: 'SOS Alerts', icon: 'fa-tower-broadcast' },
-  { key: 'notifications', label: 'Notifications', icon: 'fa-bell' }
+  { key: 'notifications', label: 'Notifications', icon: 'fa-bell' },
+  { key: 'cards', label: 'Card Design Studio', icon: 'fa-wand-magic-sparkles' }
 ];
 
 interface SOSViewProps {
@@ -432,7 +434,7 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
               Refresh
             </button>
           </>
-        ) : (
+        ) : tab === 'notifications' ? (
           <button
             onClick={() => void loadDigest()}
             disabled={isDigestLoading}
@@ -441,7 +443,18 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
             <i className={`fa-solid ${isDigestLoading ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
             Refresh
           </button>
-        )}
+        ) : null}
+        <button
+          onClick={() => setTab(tab === 'cards' ? 'alerts' : 'cards')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-sm font-bold border transition-all active:scale-95 ${
+            tab === 'cards'
+              ? 'bg-white text-indigo-900 border-white shadow-md'
+              : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+          }`}
+        >
+          <i className="fa-solid fa-wand-magic-sparkles"></i>
+          {tab === 'cards' ? 'Close Studio' : 'Card Design Studio'}
+        </button>
       </PageBanner>
 
       {/* Two streams, one nav item: an alert is something that broke, a
@@ -1258,6 +1271,10 @@ export const SOSView = ({ currentUser, initialTab = 'alerts' }: SOSViewProps) =>
             </Card>
           )}
         </>
+      )}
+
+      {tab === 'cards' && (
+        <SlackCardStudio currentUser={currentUser} />
       )}
     </div>
   );

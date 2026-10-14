@@ -224,9 +224,12 @@ export const installGlobalSosHandlers = (): (() => void) => {
   };
 
   const onError = (event: ErrorEvent) => {
-    if (isChunkLoadError(event.message)) {
+    const errorMsg = event.message || event.error?.message || '';
+    const errorStack = event.error?.stack || '';
+    if (isChunkLoadError(errorMsg) || isChunkLoadError(errorStack)) {
       console.warn('[App] Dynamic chunk fetch failed (release in progress), reloading...');
-      if (triggerStaleBundleReload()) return;
+      triggerStaleBundleReload();
+      return;
     }
 
     void raiseSos('CLIENT_UNCAUGHT_ERROR', {
@@ -241,9 +244,11 @@ export const installGlobalSosHandlers = (): (() => void) => {
 
   const onRejection = (event: PromiseRejectionEvent) => {
     const reason = describeError(event.reason);
-    if (isChunkLoadError(reason)) {
+    const stack = (event.reason as any)?.stack || '';
+    if (isChunkLoadError(reason) || isChunkLoadError(stack)) {
       console.warn('[App] Dynamic chunk promise rejected (release in progress), reloading...');
-      if (triggerStaleBundleReload()) return;
+      triggerStaleBundleReload();
+      return;
     }
 
     void raiseSos('CLIENT_UNHANDLED_REJECTION', {

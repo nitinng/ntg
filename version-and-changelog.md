@@ -46,6 +46,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **Active Only / Show All Stages Toggle**: Default view focuses on active in-flight request stages while allowing instant expansion to view all 22 lifecycle statuses with dedicated badge colorways.
 * **Smart Queue Partitioning**: In the Active Booking Queue banner, tickets automatically partition based on scope, hiding unassigned queues in "Me" mode and keeping stage pipelines focused.
 
+#### 📊 TAT & SLA Analytics Scoping
+* **Me, All & Custom Multi-Select Filter**: Added scoping controls across TAT & SLAs sub-tabs (Staff Workload, Pipeline, and Ledger). Users can toggle between "Me" (personal metrics & requests), "All" (entire team), and "Custom" (multi-select any combination of desk handlers, plus mid-way handovers and unassigned pool).
+* **Synchronized Header & Ledger Controls**: Seamlessly switch or adjust the scope from both the top sub-view pill bar and the individual request SLA audit ledger controls.
+
 #### 🔔 Slack Notifications & SOS Cards
 * **Visual Message Demarcation**: SOS cards now open with distinct header blocks so consecutive alerts from the same bot are easily distinguishable in Slack.
 * **Severity Bar Colors**: Split severity color bars into clear tiers — Amber for warning, Blue for info, Orange for error, Red for critical.

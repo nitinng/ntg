@@ -193,6 +193,301 @@ export interface PncStaffMetrics {
   compliancePct: number;
 }
 
+export type SlaScopeMode = 'all' | 'me' | 'custom';
+
+export function matchSlaRequestStaffScope(
+  request: {
+    assignedPncId?: string;
+    assignedUserName?: string;
+    initialHandlerName?: string;
+    currentHandlerName?: string;
+    stages?: { actorName?: string; actorId?: string }[];
+    hasHandover?: boolean;
+  },
+  mode: SlaScopeMode,
+  customStaff: string[],
+  currentUser?: { id?: string; name?: string; email?: string }
+): boolean {
+  if (mode === 'all') return true;
+  if (mode === 'me') {
+    if (!currentUser) return true;
+    const myId = currentUser.id;
+    const myName = (currentUser.name || '').toLowerCase().trim();
+    const myEmail = (currentUser.email || '').toLowerCase().trim();
+    return (
+      (Boolean(myId) && request.assignedPncId === myId) ||
+      (Boolean(myName) && request.assignedUserName?.toLowerCase().trim() === myName) ||
+      (Boolean(myEmail) && request.assignedUserName?.toLowerCase().trim() === myEmail) ||
+      (Boolean(myName) && request.initialHandlerName?.toLowerCase().trim() === myName) ||
+      (Boolean(myEmail) && request.initialHandlerName?.toLowerCase().trim() === myEmail) ||
+      (Boolean(myName) && request.currentHandlerName?.toLowerCase().trim() === myName) ||
+      (Boolean(myEmail) && request.currentHandlerName?.toLowerCase().trim() === myEmail) ||
+      Boolean(
+        request.stages?.some(st =>
+          (Boolean(myName) && st.actorName?.toLowerCase().trim() === myName) ||
+          (Boolean(myEmail) && st.actorName?.toLowerCase().trim() === myEmail) ||
+          (Boolean(myId) && (st as any).actorId === myId)
+        )
+      )
+    );
+  }
+  if (mode === 'custom') {
+    if (!customStaff || customStaff.length === 0) return true;
+    return customStaff.some(selected => {
+      if (selected === 'handovers') return Boolean(request.hasHandover);
+      if (selected === 'unassigned') {
+        return (
+          !request.assignedPncId &&
+          (request.assignedUserName === 'Unassigned' || request.initialHandlerName === 'Unassigned')
+        );
+      }
+      return (
+        request.assignedUserName === selected ||
+        request.initialHandlerName === selected ||
+        request.currentHandlerName === selected ||
+        Boolean(request.stages?.some(st => st.actorName === selected)) ||
+        request.assignedPncId === selected
+      );
+    });
+  }
+  return true;
+}
+
+export const SlaStaffScopeSelector: React.FC<{
+  mode: SlaScopeMode;
+  onModeChange: (mode: SlaScopeMode) => void;
+  selectedStaff: string[];
+  onSelectedStaffChange: (staff: string[]) => void;
+  staffList: { name: string; email?: string; pickedUpCount: number }[];
+  currentUser: User;
+  align?: 'left' | 'right';
+}> = ({
+  mode,
+  onModeChange,
+  selectedStaff,
+  onSelectedStaffChange,
+  staffList,
+  currentUser,
+  align = 'right'
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggleStaff = (name: string) => {
+    onSelectedStaffChange(
+      selectedStaff.includes(name)
+        ? selectedStaff.filter(s => s !== name)
+        : [...selectedStaff, name]
+    );
+  };
+
+  const filteredStaff = staffList.filter(s =>
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    (s.email && s.email.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  return (
+    <div className="relative inline-block" ref={dropRef}>
+      <div className="inline-flex items-center p-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs gap-1">
+        {/* All */}
+        <button
+          type="button"
+          onClick={() => {
+            onModeChange('all');
+            setIsOpen(false);
+          }}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            mode === 'all'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+          }`}
+          title="Show all requests and handlers"
+        >
+          <i className="fa-solid fa-users text-xs"></i>
+          <span>All</span>
+        </button>
+
+        {/* Me */}
+        <button
+          type="button"
+          onClick={() => {
+            onModeChange('me');
+            setIsOpen(false);
+          }}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            mode === 'me'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+          }`}
+          title="Filter to requests assigned to or handled by you"
+        >
+          <i className="fa-solid fa-user text-xs"></i>
+          <span>Me</span>
+        </button>
+
+        {/* Custom (Multiselect) */}
+        <button
+          type="button"
+          onClick={() => {
+            if (mode !== 'custom') {
+              onModeChange('custom');
+              setIsOpen(true);
+            } else {
+              setIsOpen(prev => !prev);
+            }
+          }}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            mode === 'custom'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+          }`}
+          title="Select multiple staff members"
+        >
+          <i className="fa-solid fa-sliders text-xs"></i>
+          <span>Custom</span>
+          {selectedStaff.length > 0 && (
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                mode === 'custom'
+                  ? 'bg-white/25 text-white'
+                  : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+              }`}
+            >
+              {selectedStaff.length}
+            </span>
+          )}
+          <i
+            className={`fa-solid fa-chevron-down text-[9px] transition-transform duration-150 ${
+              isOpen ? 'rotate-180' : ''
+            }`}
+          ></i>
+        </button>
+      </div>
+
+      {/* Popover */}
+      {isOpen && (
+        <div
+          className={`absolute ${
+            align === 'right' ? 'right-0' : 'left-0'
+          } top-full mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 z-50 animate-in fade-in zoom-in-95 duration-150`}
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700/70 mb-2">
+            <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+              <i className="fa-solid fa-users text-indigo-500"></i>
+              Select Handlers ({selectedStaff.length})
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectedStaffChange(staffList.map(s => s.name))}
+                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                All
+              </button>
+              <span className="text-slate-300 dark:text-slate-600 text-xs">•</span>
+              <button
+                type="button"
+                onClick={() => onSelectedStaffChange([])}
+                className="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Search within staff */}
+          <div className="relative mb-2">
+            <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
+            <input
+              type="text"
+              placeholder="Search desk staff..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-7 pr-2 py-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          {/* Options */}
+          <div className="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            {/* Special filters */}
+            <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={selectedStaff.includes('handovers')}
+                onChange={() => toggleStaff('handovers')}
+                className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600"
+              />
+              <span className="flex-1">🔀 Mid-Way Handovers Only</span>
+            </label>
+            <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={selectedStaff.includes('unassigned')}
+                onChange={() => toggleStaff('unassigned')}
+                className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600"
+              />
+              <span className="flex-1">👤 Unassigned / Desk Pool</span>
+            </label>
+
+            <div className="border-t border-slate-100 dark:border-slate-700/60 my-1 pt-1"></div>
+
+            {filteredStaff.length === 0 ? (
+              <div className="text-center py-3 text-xs text-slate-400">No staff found</div>
+            ) : (
+              filteredStaff.map(st => {
+                const isSelected = selectedStaff.includes(st.name);
+                return (
+                  <label
+                    key={st.name}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
+                      isSelected
+                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-semibold'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleStaff(st.name)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600"
+                    />
+                    <span className="flex-1 truncate">{st.name}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">({st.pickedUpCount})</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-700/70 flex items-center justify-between">
+            <span className="text-[10px] text-slate-400 font-medium">
+              {selectedStaff.length === 0 ? 'All included' : `${selectedStaff.length} selected`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const AnalyticsView: React.FC<{
   requests: TravelRequest[];
   currentUser: User;
@@ -237,6 +532,8 @@ export const AnalyticsView: React.FC<{
   const isPncOrAdmin = currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN;
   const [slaSubView, setSlaSubView] = useState<'staff' | 'pipeline' | 'ledger'>(isPncOrAdmin ? 'staff' : 'pipeline');
   const [slaPncFilter, setSlaPncFilter] = useState<string>('all');
+  const [slaScopeMode, setSlaScopeMode] = useState<SlaScopeMode>('all');
+  const [slaCustomStaff, setSlaCustomStaff] = useState<string[]>([]);
   const [selectedJourneyRequest, setSelectedJourneyRequest] = useState<RequestStageJourney | null>(null);
 
   // Pagination states
@@ -1171,6 +1468,57 @@ export const AnalyticsView: React.FC<{
     };
   }, [pncStaffMetrics, slaData]);
 
+  // Scoped metrics reflecting Me / All / Custom selection
+  const displayedStaffMetrics = useMemo(() => {
+    if (slaScopeMode === 'me') {
+      const myId = currentUser?.id;
+      const myName = (currentUser?.name || '').toLowerCase().trim();
+      const myEmail = (currentUser?.email || '').toLowerCase().trim();
+      const myFiltered = pncStaffMetrics.filter(s =>
+        (myId && s.userId === myId) ||
+        (myName && s.name.toLowerCase().trim() === myName) ||
+        (myEmail && s.email.toLowerCase().trim() === myEmail)
+      );
+      return myFiltered.length > 0 ? myFiltered : pncStaffMetrics;
+    }
+    if (slaScopeMode === 'custom' && slaCustomStaff.length > 0) {
+      const customStaffNames = slaCustomStaff.filter(s => s !== 'handovers' && s !== 'unassigned');
+      if (customStaffNames.length > 0) {
+        const filtered = pncStaffMetrics.filter(s => customStaffNames.includes(s.name));
+        return filtered.length > 0 ? filtered : pncStaffMetrics;
+      }
+    }
+    return pncStaffMetrics;
+  }, [pncStaffMetrics, slaScopeMode, slaCustomStaff, currentUser]);
+
+  const scopedHandoverStats = useMemo(() => {
+    const staffSource = displayedStaffMetrics;
+    const totalPickups = staffSource.reduce((sum, s) => sum + s.pickedUpCount, 0);
+    const scopedRequests = slaData.filter(d => matchSlaRequestStaffScope(d, slaScopeMode, slaCustomStaff, currentUser));
+    const requestsWithHandover = scopedRequests.filter(d => d.hasHandover).length;
+    const totalHandovers = scopedRequests.reduce((sum, d) => sum + (d.handovers?.length || 0), 0);
+    const handoverRate = totalPickups > 0 ? Math.round((requestsWithHandover / totalPickups) * 100) : 0;
+    const totalCompleted = staffSource.reduce((sum, s) => sum + s.completedCount, 0);
+    const totalBreaches = staffSource.reduce((sum, s) => sum + s.breachedCount, 0);
+    const teamCompliancePct = (totalCompleted + totalBreaches) > 0
+      ? Math.round((totalCompleted / (totalCompleted + totalBreaches)) * 100)
+      : 100;
+    const allDeskStages = staffSource.reduce((sum, s) => sum + s.stagesCount, 0);
+    const allDeskHours = staffSource.reduce((sum, s) => sum + s.totalStageHours, 0);
+    const avgStageTatHours = allDeskStages > 0 ? Math.round((allDeskHours / allDeskStages) * 10) / 10 : 0;
+
+    return {
+      totalPickups,
+      requestsWithHandover,
+      totalHandovers,
+      handoverRate,
+      totalCompleted,
+      totalBreaches,
+      teamCompliancePct,
+      avgStageTatHours
+    };
+  }, [displayedStaffMetrics, slaData, slaScopeMode, slaCustomStaff, currentUser]);
+
   // Filtered & Sorted SLA ledger rows
   const sortedSlaRows = useMemo(() => {
     const filtered = slaData.filter(d => {
@@ -1184,17 +1532,7 @@ export const AnalyticsView: React.FC<{
       const matchPriority = slaPriorityFilter === 'all' || d.dynamicPriority === slaPriorityFilter;
       const matchStatus = slaStatusFilter === 'all' || d.slaStatus === slaStatusFilter;
 
-      let matchPnc = true;
-      if (slaPncFilter === 'handovers') {
-        matchPnc = d.hasHandover;
-      } else if (slaPncFilter === 'unassigned') {
-        matchPnc = !d.assignedPncId && (d.assignedUserName === 'Unassigned' || d.initialHandlerName === 'Unassigned');
-      } else if (slaPncFilter !== 'all') {
-        matchPnc = d.assignedUserName === slaPncFilter ||
-          d.initialHandlerName === slaPncFilter ||
-          d.currentHandlerName === slaPncFilter ||
-          d.stages.some(st => st.actorName === slaPncFilter);
-      }
+      const matchPnc = matchSlaRequestStaffScope(d, slaScopeMode, slaCustomStaff, currentUser);
 
       return matchSearch && matchPriority && matchStatus && matchPnc;
     });
@@ -1211,7 +1549,7 @@ export const AnalyticsView: React.FC<{
       if (slaSort.col === 'handovers') return dir * (Number(b.hasHandover) - Number(a.hasHandover));
       return 0;
     });
-  }, [slaData, slaSearch, slaPriorityFilter, slaStatusFilter, slaPncFilter, slaSort]);
+  }, [slaData, slaSearch, slaPriorityFilter, slaStatusFilter, slaScopeMode, slaCustomStaff, currentUser, slaSort]);
 
   const totalSlaPages = Math.ceil(sortedSlaRows.length / itemsPerPage) || 1;
   const paginatedSlaData = useMemo(() => {
@@ -2208,7 +2546,7 @@ export const AnalyticsView: React.FC<{
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                   slaSubView === 'staff' ? 'bg-white/20 text-white' : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
                 }`}>
-                  {pncStaffMetrics.length} Staff
+                  {displayedStaffMetrics.length} Staff
                 </span>
               </button>
 
@@ -2236,16 +2574,37 @@ export const AnalyticsView: React.FC<{
               >
                 <i className="fa-solid fa-list-check text-xs"></i>
                 <span>Request SLA Ledger</span>
-                <span className="text-[10px] font-mono text-slate-400 font-bold">({slaData.length})</span>
+                <span className="text-[10px] font-mono text-slate-400 font-bold">({sortedSlaRows.length})</span>
               </button>
             </div>
 
-            {/* Quick Handover Indicator Badge */}
-            <div className="flex items-center gap-2.5 px-3.5 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300/60 dark:border-amber-700/50 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-300">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              <i className="fa-solid fa-arrow-right-arrow-left text-amber-600 dark:text-amber-400"></i>
-              <span>{teamHandoverStats.totalHandovers} Mid-Way Handovers</span>
-              <span className="text-[11px] font-mono opacity-80 font-normal">({teamHandoverStats.handoverRate}% handover rate across {teamHandoverStats.totalPickups} pickups)</span>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Me | All | Custom Multiselect */}
+              <SlaStaffScopeSelector
+                mode={slaScopeMode}
+                onModeChange={mode => {
+                  setSlaScopeMode(mode);
+                  setSlaPage(1);
+                }}
+                selectedStaff={slaCustomStaff}
+                onSelectedStaffChange={staff => {
+                  setSlaCustomStaff(staff);
+                  setSlaPage(1);
+                }}
+                staffList={pncStaffMetrics}
+                currentUser={currentUser}
+                align="right"
+              />
+
+              {/* Quick Handover Indicator Badge */}
+              <div className="flex items-center gap-2.5 px-3.5 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300/60 dark:border-amber-700/50 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-300">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <i className="fa-solid fa-arrow-right-arrow-left text-amber-600 dark:text-amber-400"></i>
+                <span>{scopedHandoverStats.totalHandovers} Mid-Way Handovers</span>
+                <span className="text-[11px] font-mono opacity-80 font-normal">
+                  ({scopedHandoverStats.handoverRate}% handover rate across {scopedHandoverStats.totalPickups} pickups)
+                </span>
+              </div>
             </div>
           </div>
 
@@ -2255,28 +2614,28 @@ export const AnalyticsView: React.FC<{
               {/* Executive PNC Desk Workload KPI Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
-                  title="Total Desk Pickups"
-                  value={teamHandoverStats.totalPickups}
+                  title={slaScopeMode === 'me' ? 'My Desk Pickups' : 'Total Desk Pickups'}
+                  value={scopedHandoverStats.totalPickups}
                   icon={<i className="fa-solid fa-inbox text-indigo-500"></i>}
-                  description={`${teamHandoverStats.totalCompleted} completed • ${pncStaffMetrics.reduce((s, u) => s + u.inProgressCount, 0)} active queue`}
+                  description={`${scopedHandoverStats.totalCompleted} completed • ${displayedStaffMetrics.reduce((s, u) => s + u.inProgressCount, 0)} active queue`}
                 />
                 <StatCard
-                  title="Mid-Way Handovers"
-                  value={teamHandoverStats.totalHandovers}
+                  title={slaScopeMode === 'me' ? 'My Mid-Way Handovers' : 'Mid-Way Handovers'}
+                  value={scopedHandoverStats.totalHandovers}
                   icon={<i className="fa-solid fa-arrow-right-arrow-left text-amber-500"></i>}
-                  description={`${teamHandoverStats.handoverRate}% handover rate • continued by colleague`}
+                  description={`${scopedHandoverStats.handoverRate}% handover rate • continued by colleague`}
                 />
                 <StatCard
-                  title="Avg Stage TAT"
-                  value={`${teamHandoverStats.avgStageTatHours} hrs`}
+                  title={slaScopeMode === 'me' ? 'My Avg Stage TAT' : 'Avg Stage TAT'}
+                  value={`${scopedHandoverStats.avgStageTatHours} hrs`}
                   icon={<i className="fa-solid fa-stopwatch text-sky-500"></i>}
                   description={`Target: ${tatProcessingTarget}h processing limit`}
                 />
                 <StatCard
-                  title="Desk SLA Compliance"
-                  value={`${teamHandoverStats.teamCompliancePct}%`}
+                  title={slaScopeMode === 'me' ? 'My SLA Compliance' : 'Desk SLA Compliance'}
+                  value={`${scopedHandoverStats.teamCompliancePct}%`}
                   icon={<i className="fa-solid fa-shield-halved text-emerald-500"></i>}
-                  description={`${teamHandoverStats.totalBreaches} breaches across all desk members`}
+                  description={`${scopedHandoverStats.totalBreaches} breaches across active scope`}
                 />
               </div>
 
@@ -2292,13 +2651,25 @@ export const AnalyticsView: React.FC<{
                       Tracking who picked up requests, stage-by-stage turnaround times, SLA compliance, and mid-way handovers.
                     </p>
                   </div>
-                  {slaPncFilter !== 'all' && (
+                  {(slaScopeMode !== 'all' || slaPncFilter !== 'all' || slaCustomStaff.length > 0) && (
                     <button
-                      onClick={() => setSlaPncFilter('all')}
+                      onClick={() => {
+                        setSlaScopeMode('all');
+                        setSlaCustomStaff([]);
+                        setSlaPncFilter('all');
+                      }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-all"
                     >
                       <i className="fa-solid fa-filter-circle-xmark"></i>
-                      <span>Clear Filter ({slaPncFilter})</span>
+                      <span>
+                        Reset Filter (
+                        {slaScopeMode === 'me'
+                          ? 'Me'
+                          : slaScopeMode === 'custom'
+                          ? `${slaCustomStaff.length} selected`
+                          : slaPncFilter}
+                        )
+                      </span>
                     </button>
                   )}
                 </div>
@@ -2319,8 +2690,15 @@ export const AnalyticsView: React.FC<{
                       </tr>
                     </thead>
                     <tbody className="divide-y dark:divide-slate-800">
-                      {pncStaffMetrics.map((staff) => {
-                        const isFiltered = slaPncFilter === staff.name;
+                      {displayedStaffMetrics.map((staff) => {
+                        const isFiltered =
+                          (slaScopeMode === 'me' && (
+                            staff.userId === currentUser.id ||
+                            staff.name.toLowerCase() === (currentUser.name || '').toLowerCase() ||
+                            staff.email.toLowerCase() === currentUser.email.toLowerCase()
+                          )) ||
+                          (slaScopeMode === 'custom' && slaCustomStaff.includes(staff.name)) ||
+                          (slaPncFilter === staff.name);
                         const pickupShare = teamHandoverStats.totalPickups > 0
                           ? Math.round((staff.pickedUpCount / teamHandoverStats.totalPickups) * 100)
                           : 0;
@@ -2457,7 +2835,15 @@ export const AnalyticsView: React.FC<{
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setSlaPncFilter(isFiltered ? 'all' : staff.name);
+                                  if (isFiltered) {
+                                    setSlaScopeMode('all');
+                                    setSlaCustomStaff([]);
+                                    setSlaPncFilter('all');
+                                  } else {
+                                    setSlaScopeMode('custom');
+                                    setSlaCustomStaff([staff.name]);
+                                    setSlaPncFilter(staff.name);
+                                  }
                                   setSlaPage(1);
                                 }}
                                 className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -2474,7 +2860,7 @@ export const AnalyticsView: React.FC<{
                         );
                       })}
 
-                      {pncStaffMetrics.length === 0 && (
+                      {displayedStaffMetrics.length === 0 && (
                         <tr>
                           <td colSpan={9} className="px-6 py-12 text-center text-slate-400 text-sm">
                             No PNC staff activity found in the selected period.
@@ -2852,21 +3238,22 @@ export const AnalyticsView: React.FC<{
                   />
                 </div>
 
-                {/* PNC Handler Filter */}
-                <select
-                  value={slaPncFilter}
-                  onChange={e => { setSlaPncFilter(e.target.value); setSlaPage(1); }}
-                  className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
-                >
-                  <option value="all">All Desk Handlers</option>
-                  <option value="handovers">🔀 Mid-Way Handovers Only</option>
-                  <option value="unassigned">Unassigned / Desk Pool</option>
-                  {pncStaffMetrics.map(st => (
-                    <option key={st.name} value={st.name}>
-                      👤 {st.name} ({st.pickedUpCount} pickups)
-                    </option>
-                  ))}
-                </select>
+                {/* PNC Scope Filter: All | Me | Custom */}
+                <SlaStaffScopeSelector
+                  mode={slaScopeMode}
+                  onModeChange={mode => {
+                    setSlaScopeMode(mode);
+                    setSlaPage(1);
+                  }}
+                  selectedStaff={slaCustomStaff}
+                  onSelectedStaffChange={staff => {
+                    setSlaCustomStaff(staff);
+                    setSlaPage(1);
+                  }}
+                  staffList={pncStaffMetrics}
+                  currentUser={currentUser}
+                  align="left"
+                />
 
                 {/* Urgency Filter */}
                 <select

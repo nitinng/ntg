@@ -127,7 +127,8 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
           employee_owed_amount: split.employeeOwedAmount,
           org_absorbed_amount: split.orgAbsorbedAmount,
           status: 'Pending Refund',
-          advance_id: request.advanceId || null
+          advance_id: request.advanceId || null,
+          credit_card_id: request.creditCardId || null
         });
         if (cancelError) throw cancelError;
 
@@ -211,7 +212,8 @@ const CancellationModal: React.FC<CancellationModalProps> = ({ request, legs, on
           employee_owed_amount: split.employeeOwedAmount,
           org_absorbed_amount: split.orgAbsorbedAmount,
           status: split.netUnrecoveredAmount === 0 ? 'Fully Refunded' : refundAmt > 0 ? 'Partially Refunded' : 'Pending Refund',
-          advance_id: leg.advanceId || request.advanceId || null
+          advance_id: leg.advanceId || request.advanceId || null,
+          credit_card_id: leg.creditCardId || request.creditCardId || null
         };
       });
 

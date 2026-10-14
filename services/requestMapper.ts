@@ -59,4 +59,6 @@ export const mapDbRequest = (r: any): TravelRequest => ({
   infoRequested: r.info_requested || r.infoRequested,
   employeeResponse: r.employee_response || r.employeeResponse,
   advanceId: r.advance_id || r.advanceId,
+  creditCardId: r.credit_card_id || r.creditCardId,
+  paymentSource: r.payment_source || r.paymentSource || 'Not Yet Entered',
 });

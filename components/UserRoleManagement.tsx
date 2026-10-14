@@ -73,6 +73,21 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
     return false;
   };
 
+  const getUserRoleOptions = (targetUser: User) => {
+    const disabled = isSelectDisabled(targetUser);
+    const targetRole = targetUser.role || UserRole.EMPLOYEE;
+    if (disabled) {
+      // When modification is disabled, guarantee the user's actual role is present so the select displays accurately
+      return [targetRole];
+    }
+    // When enabled, provide the roles this caller is allowed to assign.
+    // Ensure target user's current role is included if not already present.
+    if (!allowedRoles.includes(targetRole)) {
+      return [targetRole, ...allowedRoles];
+    }
+    return allowedRoles;
+  };
+
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
       // Role filter tab
@@ -389,8 +404,9 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
                           onChange={(e) => onUpdateRole(user, e.target.value as UserRole)}
                           className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-2xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-2xs hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                           disabled={isSelectDisabled(user)}
+                          title={isSelectDisabled(user) ? (user.id === currentUser.id ? 'You cannot change your own role' : `${currentUser.role} cannot modify ${user.role} accounts`) : undefined}
                         >
-                          {allowedRoles.map(role => (
+                          {getUserRoleOptions(user).map(role => (
                             <option key={role} value={role}>{role}</option>
                           ))}
                         </select>

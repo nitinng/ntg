@@ -279,4 +279,66 @@ describe('Role & Authorization Checks: isUserAuthorizedForAction', () => {
       expect(canPromoteToPncAdmin(UserRole.PNC)).toBe(false);
     });
   });
+
+  describe('User Role Display & Options Resolution across views (UserRoleManagement)', () => {
+    const getAllowedRoles = (callerRole: UserRole) => {
+      if (callerRole === UserRole.PNC) return [UserRole.EMPLOYEE, UserRole.PNC];
+      if (callerRole === UserRole.PNC_ADMIN) return [UserRole.EMPLOYEE, UserRole.PNC, UserRole.PNC_ADMIN];
+      return Object.values(UserRole);
+    };
+
+    const isSelectDisabled = (caller: { id: string; role: UserRole }, target: { id: string; role: UserRole }) => {
+      if (target.id === caller.id) return true;
+      if (caller.role === UserRole.PNC) {
+        return target.role !== UserRole.EMPLOYEE && target.role !== UserRole.PNC;
+      }
+      if (caller.role === UserRole.PNC_ADMIN) {
+        return target.role !== UserRole.EMPLOYEE && target.role !== UserRole.PNC && target.role !== UserRole.PNC_ADMIN;
+      }
+      return false;
+    };
+
+    const getUserRoleOptions = (caller: { id: string; role: UserRole }, target: { id: string; role: UserRole }) => {
+      const allowedRoles = getAllowedRoles(caller.role);
+      const disabled = isSelectDisabled(caller, target);
+      const targetRole = target.role || UserRole.EMPLOYEE;
+      if (disabled) return [targetRole];
+      if (!allowedRoles.includes(targetRole)) return [targetRole, ...allowedRoles];
+      return allowedRoles;
+    };
+
+    const targetAdmin = { id: 'adm-target', role: UserRole.ADMIN };
+    const targetPncAdmin = { id: 'pnca-target', role: UserRole.PNC_ADMIN };
+    const targetPnc = { id: 'pnc-target', role: UserRole.PNC };
+    const targetEmployee = { id: 'emp-target', role: UserRole.EMPLOYEE };
+
+    const callerAdmin = { id: 'caller-admin', role: UserRole.ADMIN };
+    const callerPncAdmin = { id: 'caller-pnca', role: UserRole.PNC_ADMIN };
+    const callerPnc = { id: 'caller-pnc', role: UserRole.PNC };
+
+    it('always includes target user role so Admin displays as Admin in all views (Admin, PNC Admin, PNC)', () => {
+      expect(getUserRoleOptions(callerAdmin, targetAdmin)).toContain(UserRole.ADMIN);
+      expect(getUserRoleOptions(callerPncAdmin, targetAdmin)).toEqual([UserRole.ADMIN]);
+      expect(getUserRoleOptions(callerPnc, targetAdmin)).toEqual([UserRole.ADMIN]);
+    });
+
+    it('always includes target user role so PNC Admin displays as PNC Admin in all views (Admin, PNC Admin, PNC)', () => {
+      expect(getUserRoleOptions(callerAdmin, targetPncAdmin)).toContain(UserRole.PNC_ADMIN);
+      expect(getUserRoleOptions(callerPncAdmin, targetPncAdmin)).toContain(UserRole.PNC_ADMIN);
+      expect(getUserRoleOptions(callerPnc, targetPncAdmin)).toEqual([UserRole.PNC_ADMIN]);
+    });
+
+    it('disables role modification for callers without authorization while keeping exact role display', () => {
+      expect(isSelectDisabled(callerPnc, targetAdmin)).toBe(true);
+      expect(isSelectDisabled(callerPnc, targetPncAdmin)).toBe(true);
+      expect(isSelectDisabled(callerPncAdmin, targetAdmin)).toBe(true);
+
+      expect(isSelectDisabled(callerPncAdmin, targetPncAdmin)).toBe(false);
+      expect(isSelectDisabled(callerPncAdmin, targetPnc)).toBe(false);
+      expect(isSelectDisabled(callerPncAdmin, targetEmployee)).toBe(false);
+
+      expect(isSelectDisabled(callerPnc, targetPnc)).toBe(false);
+      expect(isSelectDisabled(callerPnc, targetEmployee)).toBe(false);
+    });
+  });
 });

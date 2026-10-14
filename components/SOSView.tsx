@@ -100,7 +100,7 @@ export type SosTabKey = 'alerts' | 'notifications' | 'cards';
 const SOS_TABS: { key: SosTabKey; label: string; icon: string }[] = [
   { key: 'alerts', label: 'SOS Alerts', icon: 'fa-tower-broadcast' },
   { key: 'notifications', label: 'Notifications', icon: 'fa-bell' },
-  { key: 'cards', label: 'Card Design Studio', icon: 'fa-wand-magic-sparkles' }
+  { key: 'cards', label: 'Card Previews', icon: 'fa-eye' }
 ];
 
 interface SOSViewProps {
@@ -462,8 +462,8 @@ export const SOSView = ({ currentUser, initialTab = 'alerts', focusAlertId }: SO
               : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
           }`}
         >
-          <i className="fa-solid fa-wand-magic-sparkles"></i>
-          {tab === 'cards' ? 'Close Studio' : 'Card Design Studio'}
+          <i className="fa-solid fa-eye"></i>
+          {tab === 'cards' ? 'Close Previews' : 'Card Previews'}
         </button>
       </PageBanner>
 

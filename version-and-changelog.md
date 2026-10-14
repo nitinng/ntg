@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.12.0 (2026-10-14)](#v2120---2026-10-14)
+* [Current Release — v2.12.1 (2026-10-14)](#v2121---2026-10-14)
+* [v2.12.0 (2026-10-14)](#v2120---2026-10-14)
 * [v2.11.0 (2026-10-14)](#v2110---2026-10-14)
 * [v2.10.1 (2026-10-10)](#v2101---2026-10-10)
 * [v2.10.0 (2026-10-10)](#v2100---2026-10-10)
@@ -31,6 +32,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.12.1] - 2026-10-14
+
+### 🛡️ Analytics TAT & SLA Polish, Me-Scope TypeError Fix & Collapsible Handover Stream
+
+> **Fix & UI Polish** — Resolved client-side unhandled `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` when switching to "Me" scope in TAT and SLAs view. Redesigned the sub-view switcher into a sleek, non-wrapping bar, removed the redundant handover banner from the header, and made the Mid-Way Handover & Continuation Stream collapsible by default.
+
+#### 🐛 Bug Fixes
+* **Me-Scope Null Safety**: Fixed crash in `AnalyticsView` where dynamically added staff members lacked email addresses, causing `staff.email.toLowerCase()` and `s.email.toLowerCase()` to throw unhandled exceptions during `Array.filter` and table rendering.
+* **Safe String Filtering**: Hardened all staff scope matching, search queries, and initial-letter avatars against null or undefined strings.
+
+#### 🎨 TAT & SLAs UI Redesign
+* **Streamlined Sub-View Switcher**: Redesigned the sub-navigation pills (PNC Staff, Pipeline Diagnostics, Request SLA Ledger) so they sit comfortably on a single row without wrapping or squeezing.
+* **Cleaner Header Layout**: Removed the redundant yellow Mid-Way Handovers banner from next to the scope selector, giving the Me/All/Custom control dedicated, uncluttered placement.
+* **Collapsible Handover Stream**: Made the "Mid-Way Handover & Continuation Stream" section collapsed by default with a clean expand/collapse toggle, reducing vertical scrolling and noise.
+
+#### 📝 Commits in this Release
+* `a31ef9d` — `fix(analytics): resolve TypeError on Me scope and redesign TAT/SLA navigation` — Nitin — 2026-10-14
 
 ---
 

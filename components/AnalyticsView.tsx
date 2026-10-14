@@ -216,16 +216,16 @@ export function matchSlaRequestStaffScope(
     const myEmail = (currentUser.email || '').toLowerCase().trim();
     return (
       (Boolean(myId) && request.assignedPncId === myId) ||
-      (Boolean(myName) && request.assignedUserName?.toLowerCase().trim() === myName) ||
-      (Boolean(myEmail) && request.assignedUserName?.toLowerCase().trim() === myEmail) ||
-      (Boolean(myName) && request.initialHandlerName?.toLowerCase().trim() === myName) ||
-      (Boolean(myEmail) && request.initialHandlerName?.toLowerCase().trim() === myEmail) ||
-      (Boolean(myName) && request.currentHandlerName?.toLowerCase().trim() === myName) ||
-      (Boolean(myEmail) && request.currentHandlerName?.toLowerCase().trim() === myEmail) ||
+      (Boolean(myName) && (request.assignedUserName || '').toLowerCase().trim() === myName) ||
+      (Boolean(myEmail) && (request.assignedUserName || '').toLowerCase().trim() === myEmail) ||
+      (Boolean(myName) && (request.initialHandlerName || '').toLowerCase().trim() === myName) ||
+      (Boolean(myEmail) && (request.initialHandlerName || '').toLowerCase().trim() === myEmail) ||
+      (Boolean(myName) && (request.currentHandlerName || '').toLowerCase().trim() === myName) ||
+      (Boolean(myEmail) && (request.currentHandlerName || '').toLowerCase().trim() === myEmail) ||
       Boolean(
         request.stages?.some(st =>
-          (Boolean(myName) && st.actorName?.toLowerCase().trim() === myName) ||
-          (Boolean(myEmail) && st.actorName?.toLowerCase().trim() === myEmail) ||
+          (Boolean(myName) && (st.actorName || '').toLowerCase().trim() === myName) ||
+          (Boolean(myEmail) && (st.actorName || '').toLowerCase().trim() === myEmail) ||
           (Boolean(myId) && (st as any).actorId === myId)
         )
       )
@@ -293,8 +293,8 @@ export const SlaStaffScopeSelector: React.FC<{
   };
 
   const filteredStaff = staffList.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.email && s.email.toLowerCase().includes(search.toLowerCase()))
+    (s.name ? s.name.toLowerCase().includes(search.toLowerCase()) : false) ||
+    (s.email ? s.email.toLowerCase().includes(search.toLowerCase()) : false)
   );
 
   return (
@@ -535,6 +535,7 @@ export const AnalyticsView: React.FC<{
   const [slaScopeMode, setSlaScopeMode] = useState<SlaScopeMode>('all');
   const [slaCustomStaff, setSlaCustomStaff] = useState<string[]>([]);
   const [selectedJourneyRequest, setSelectedJourneyRequest] = useState<RequestStageJourney | null>(null);
+  const [isHandoversCollapsed, setIsHandoversCollapsed] = useState<boolean>(true);
 
   // Pagination states
   const [travelPage, setTravelPage] = useState(1);
@@ -1475,9 +1476,9 @@ export const AnalyticsView: React.FC<{
       const myName = (currentUser?.name || '').toLowerCase().trim();
       const myEmail = (currentUser?.email || '').toLowerCase().trim();
       const myFiltered = pncStaffMetrics.filter(s =>
-        (myId && s.userId === myId) ||
-        (myName && s.name.toLowerCase().trim() === myName) ||
-        (myEmail && s.email.toLowerCase().trim() === myEmail)
+        (Boolean(myId) && s.userId === myId) ||
+        (Boolean(myName) && (s.name || '').toLowerCase().trim() === myName) ||
+        (Boolean(myEmail) && (s.email || '').toLowerCase().trim() === myEmail)
       );
       return myFiltered.length > 0 ? myFiltered : pncStaffMetrics;
     }
@@ -1521,14 +1522,15 @@ export const AnalyticsView: React.FC<{
 
   // Filtered & Sorted SLA ledger rows
   const sortedSlaRows = useMemo(() => {
+    const searchLower = slaSearch.trim().toLowerCase();
     const filtered = slaData.filter(d => {
-      const matchSearch = slaSearch.trim() === '' ||
-        d.submissionId?.toLowerCase().includes(slaSearch.toLowerCase()) ||
-        d.requesterName?.toLowerCase().includes(slaSearch.toLowerCase()) ||
-        d.from?.toLowerCase().includes(slaSearch.toLowerCase()) ||
-        d.to?.toLowerCase().includes(slaSearch.toLowerCase()) ||
-        d.initialHandlerName?.toLowerCase().includes(slaSearch.toLowerCase()) ||
-        d.currentHandlerName?.toLowerCase().includes(slaSearch.toLowerCase());
+      const matchSearch = searchLower === '' ||
+        (d.submissionId ? d.submissionId.toLowerCase().includes(searchLower) : false) ||
+        (d.requesterName ? d.requesterName.toLowerCase().includes(searchLower) : false) ||
+        (d.from ? d.from.toLowerCase().includes(searchLower) : false) ||
+        (d.to ? d.to.toLowerCase().includes(searchLower) : false) ||
+        (d.initialHandlerName ? d.initialHandlerName.toLowerCase().includes(searchLower) : false) ||
+        (d.currentHandlerName ? d.currentHandlerName.toLowerCase().includes(searchLower) : false);
       const matchPriority = slaPriorityFilter === 'all' || d.dynamicPriority === slaPriorityFilter;
       const matchStatus = slaStatusFilter === 'all' || d.slaStatus === slaStatusFilter;
 
@@ -2530,55 +2532,59 @@ export const AnalyticsView: React.FC<{
         // --- TAT AND SLAS SUB-TAB ---
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* Sub-View Switcher Pill Bar */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-2.5 bg-slate-100/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-slate-800/80 p-1 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/60">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-2 bg-slate-100/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
+            <div className="inline-flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 overflow-x-auto max-w-full">
               <button
                 type="button"
                 onClick={() => setSlaSubView('staff')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   slaSubView === 'staff'
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 <i className="fa-solid fa-users-gear text-xs"></i>
-                <span>PNC Staff & Mid-Way Handovers</span>
+                <span>PNC Staff</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                   slaSubView === 'staff' ? 'bg-white/20 text-white' : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
                 }`}>
-                  {displayedStaffMetrics.length} Staff
+                  {displayedStaffMetrics.length}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setSlaSubView('pipeline')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   slaSubView === 'pipeline'
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 <i className="fa-solid fa-chart-line text-xs"></i>
-                <span>Pipeline & Campus Diagnostics</span>
+                <span>Pipeline Diagnostics</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setSlaSubView('ledger')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   slaSubView === 'ledger'
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 <i className="fa-solid fa-list-check text-xs"></i>
                 <span>Request SLA Ledger</span>
-                <span className="text-[10px] font-mono text-slate-400 font-bold">({sortedSlaRows.length})</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  slaSubView === 'ledger' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                }`}>
+                  {sortedSlaRows.length}
+                </span>
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center justify-end">
               {/* Me | All | Custom Multiselect */}
               <SlaStaffScopeSelector
                 mode={slaScopeMode}
@@ -2595,16 +2601,6 @@ export const AnalyticsView: React.FC<{
                 currentUser={currentUser}
                 align="right"
               />
-
-              {/* Quick Handover Indicator Badge */}
-              <div className="flex items-center gap-2.5 px-3.5 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300/60 dark:border-amber-700/50 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-300">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                <i className="fa-solid fa-arrow-right-arrow-left text-amber-600 dark:text-amber-400"></i>
-                <span>{scopedHandoverStats.totalHandovers} Mid-Way Handovers</span>
-                <span className="text-[11px] font-mono opacity-80 font-normal">
-                  ({scopedHandoverStats.handoverRate}% handover rate across {scopedHandoverStats.totalPickups} pickups)
-                </span>
-              </div>
             </div>
           </div>
 
@@ -2691,11 +2687,15 @@ export const AnalyticsView: React.FC<{
                     </thead>
                     <tbody className="divide-y dark:divide-slate-800">
                       {displayedStaffMetrics.map((staff) => {
+                        const myName = (currentUser?.name || '').toLowerCase().trim();
+                        const myEmail = (currentUser?.email || '').toLowerCase().trim();
+                        const staffName = (staff.name || '').toLowerCase().trim();
+                        const staffEmail = (staff.email || '').toLowerCase().trim();
                         const isFiltered =
                           (slaScopeMode === 'me' && (
-                            staff.userId === currentUser.id ||
-                            staff.name.toLowerCase() === (currentUser.name || '').toLowerCase() ||
-                            staff.email.toLowerCase() === currentUser.email.toLowerCase()
+                            (currentUser?.id && staff.userId === currentUser.id) ||
+                            (Boolean(myName) && staffName === myName) ||
+                            (Boolean(myEmail) && staffEmail === myEmail)
                           )) ||
                           (slaScopeMode === 'custom' && slaCustomStaff.includes(staff.name)) ||
                           (slaPncFilter === staff.name);
@@ -2872,112 +2872,132 @@ export const AnalyticsView: React.FC<{
                 </div>
               </Card>
 
-              {/* Mid-Way Handovers & Continuations Stream */}
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-base">
-                      <i className="fa-solid fa-arrow-right-arrow-left text-amber-500"></i>
-                      Mid-Way Handover & Continuation Stream
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Requests where one PNC staff member initiated or held a request, and another colleague picked it up mid-way to continue.
-                    </p>
+              {/* Mid-Way Handovers & Continuations Stream (Collapsible, Default Collapsed) */}
+              <Card className="p-5 border border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-r from-amber-50/20 via-white to-amber-50/10 dark:from-amber-950/10 dark:via-slate-900 dark:to-slate-900">
+                <div 
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none"
+                  onClick={() => setIsHandoversCollapsed(!isHandoversCollapsed)}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <i className="fa-solid fa-arrow-right-arrow-left text-sm"></i>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-base">
+                        <span>Mid-Way Handover & Continuation Stream</span>
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Requests where one PNC staff member initiated or held a request, and another colleague picked it up mid-way to continue.
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">
-                    {slaData.filter(d => d.hasHandover).length} Handover Cases
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {slaData.filter(d => d.hasHandover).slice(0, 6).map((hReq) => (
-                    <div
-                      key={hReq.id}
-                      className="p-4 rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 flex flex-col justify-between gap-3 shadow-xs hover:shadow-md transition-all"
+                  <div className="flex items-center gap-2.5 self-end sm:self-auto flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <span className="text-xs font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-100/70 dark:bg-amber-950/60 border border-amber-300/50 dark:border-amber-800/50 px-3 py-1.5 rounded-xl shadow-2xs">
+                      {slaData.filter(d => d.hasHandover).length} Handover Cases
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsHandoversCollapsed(!isHandoversCollapsed)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-all shadow-2xs"
                     >
-                      <div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400">
-                            {hReq.submissionId || hReq.id}
-                          </span>
-                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${
-                            hReq.slaStatus === 'Met' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600' :
-                            hReq.slaStatus === 'Breached' ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-600' :
-                            'bg-sky-100 dark:bg-sky-950/40 text-sky-600'
-                          }`}>
-                            {hReq.slaStatus}
-                          </span>
-                        </div>
-                        <div className="font-bold text-slate-800 dark:text-white text-sm mt-1">
-                          {hReq.requesterName}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {hReq.from} ➔ {hReq.to} • {hReq.requesterCampus}
-                        </div>
-                      </div>
-
-                      {/* Visual Handover Pipeline */}
-                      <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold text-[10px] flex items-center justify-center">
-                            {hReq.initialHandlerName.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] leading-tight">
-                              {hReq.initialHandlerName}
-                            </span>
-                            <span className="text-[10px] text-slate-400">Initial Handler</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-center flex-shrink-0">
-                          <i className="fa-solid fa-arrow-right text-amber-500 text-xs"></i>
-                          <span className="text-[9px] uppercase font-black text-amber-600 dark:text-amber-400 tracking-wider">Handover</span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 text-right justify-end">
-                          <div>
-                            <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] leading-tight">
-                              {hReq.currentHandlerName}
-                            </span>
-                            <span className="text-[10px] text-slate-400">Continued By</span>
-                          </div>
-                          <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] flex items-center justify-center">
-                            {hReq.currentHandlerName.charAt(0).toUpperCase()}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Handover Reason */}
-                      {hReq.handovers && hReq.handovers[0]?.reason && (
-                        <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-1.5 rounded-lg border border-amber-200/60 dark:border-amber-900/40 line-clamp-2">
-                          <strong className="text-amber-700 dark:text-amber-300 mr-1">Reason:</strong>
-                          <span>{hReq.handovers[0].reason}</span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between pt-1 text-xs">
-                        <div className="text-slate-500 font-mono text-[11px]">
-                          TAT: <strong>{hReq.actualTatHours.toFixed(1)}h</strong> (Target: {hReq.targetSlaHours}h)
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedJourneyRequest(hReq)}
-                          className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-bold text-xs"
-                        >
-                          <span>Inspect Journey</span>
-                          <i className="fa-solid fa-chevron-right text-[10px]"></i>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {slaData.filter(d => d.hasHandover).length === 0 && (
-                    <div className="col-span-2 py-10 text-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
-                      No mid-way handovers recorded in the selected period. All requests were processed end-to-end by single desk owners.
-                    </div>
-                  )}
+                      <span>{isHandoversCollapsed ? 'Expand' : 'Collapse'}</span>
+                      <i className={`fa-solid fa-chevron-${isHandoversCollapsed ? 'down' : 'up'} text-[10px]`}></i>
+                    </button>
+                  </div>
                 </div>
+
+                {!isHandoversCollapsed && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in fade-in duration-200">
+                    {slaData.filter(d => d.hasHandover).slice(0, 6).map((hReq) => (
+                      <div
+                        key={hReq.id}
+                        className="p-4 rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 flex flex-col justify-between gap-3 shadow-xs hover:shadow-md transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400">
+                              {hReq.submissionId || hReq.id}
+                            </span>
+                            <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${
+                              hReq.slaStatus === 'Met' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600' :
+                              hReq.slaStatus === 'Breached' ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-600' :
+                              'bg-sky-100 dark:bg-sky-950/40 text-sky-600'
+                            }`}>
+                              {hReq.slaStatus}
+                            </span>
+                          </div>
+                          <div className="font-bold text-slate-800 dark:text-white text-sm mt-1">
+                            {hReq.requesterName}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {hReq.from} ➔ {hReq.to} • {hReq.requesterCampus}
+                          </div>
+                        </div>
+
+                        {/* Visual Handover Pipeline */}
+                        <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold text-[10px] flex items-center justify-center">
+                              {((hReq.initialHandlerName || '?').charAt(0)).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] leading-tight">
+                                {hReq.initialHandlerName || 'Unassigned'}
+                              </span>
+                              <span className="text-[10px] text-slate-400">Initial Handler</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-center flex-shrink-0">
+                            <i className="fa-solid fa-arrow-right text-amber-500 text-xs"></i>
+                            <span className="text-[9px] uppercase font-black text-amber-600 dark:text-amber-400 tracking-wider">Handover</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-right justify-end">
+                            <div>
+                              <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] leading-tight">
+                                {hReq.currentHandlerName || 'Unassigned'}
+                              </span>
+                              <span className="text-[10px] text-slate-400">Continued By</span>
+                            </div>
+                            <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] flex items-center justify-center">
+                              {((hReq.currentHandlerName || '?').charAt(0)).toUpperCase()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Handover Reason */}
+                        {hReq.handovers && hReq.handovers[0]?.reason && (
+                          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-1.5 rounded-lg border border-amber-200/60 dark:border-amber-900/40 line-clamp-2">
+                            <strong className="text-amber-700 dark:text-amber-300 mr-1">Reason:</strong>
+                            <span>{hReq.handovers[0].reason}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-1 text-xs">
+                          <div className="text-slate-500 font-mono text-[11px]">
+                            TAT: <strong>{hReq.actualTatHours.toFixed(1)}h</strong> (Target: {hReq.targetSlaHours}h)
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedJourneyRequest(hReq)}
+                            className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-bold text-xs"
+                          >
+                            <span>Inspect Journey</span>
+                            <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {slaData.filter(d => d.hasHandover).length === 0 && (
+                      <div className="col-span-2 py-10 text-center text-slate-400 text-sm italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl">
+                        No mid-way handovers recorded in the selected period. All requests were processed end-to-end by single desk owners.
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card>
             </div>
           )}

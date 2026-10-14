@@ -264,7 +264,7 @@ export const formatSlackNotificationTest = (
 
   const text = [
     `🔔 *TRAVEL DESK NOTIFICATION · LIVE WORKFLOW TEST*`,
-    `*Status:* 🟢 Operational  •  *Channel:* #alert-team-automation`,
+    `*Status:* 🟢 Operational`,
     '',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     `👤 *Triggered By:* ${actorEmail}`,
@@ -300,7 +300,6 @@ export const formatSlackNotificationTest = (
       fields: [
         { type: 'mrkdwn', text: `*👤 Triggered By:*\n${actorEmail}` },
         { type: 'mrkdwn', text: `*🕒 Sent At:*\n${new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata' })} IST` },
-        { type: 'mrkdwn', text: `*📡 Channel:*\n#alert-team-automation` },
         { type: 'mrkdwn', text: `*🎨 Design System:*\nMail Template Aligned` }
       ]
     },

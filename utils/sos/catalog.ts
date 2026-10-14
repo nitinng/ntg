@@ -489,6 +489,26 @@ export const SOS_CODES: Record<string, SosCodeSpec> = {
     firstCheck: 'The advances table and its read policy for the acting role.',
     raisedBy: ['web']
   }),
+  CREDIT_CARD_DEDUCTION_FAILED: spec({
+    code: 'CREDIT_CARD_DEDUCTION_FAILED',
+    category: 'finance',
+    severity: 'critical',
+    title: 'Credit card deduction did not post',
+    meaning:
+      'A booking was paid on a desk credit card but the deduction did not write, so the card shows more available balance than it has and the next booking can overshoot the limit.',
+    firstCheck: 'Credit Cards → the card in the context; reconcile its balance against the booking by hand.',
+    raisedBy: ['web']
+  }),
+  CREDIT_CARD_FETCH_FAILED: spec({
+    code: 'CREDIT_CARD_FETCH_FAILED',
+    category: 'finance',
+    severity: 'warning',
+    title: 'Credit card balances could not be loaded',
+    meaning:
+      'The screen rendered without card data, so the desk may book against a card balance it cannot see.',
+    firstCheck: 'The credit_cards table and its read policy for the acting role.',
+    raisedBy: ['web']
+  }),
   SETTLEMENT_WRITE_FAILED: spec({
     code: 'SETTLEMENT_WRITE_FAILED',
     category: 'finance',

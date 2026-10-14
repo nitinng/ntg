@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TravelRequest, PNCStatus, TravelModePolicy } from '../types';
+import { TravelRequest, PNCStatus, TravelModePolicy, User } from '../types';
 import StatusBadge from './StatusBadge';
 import Card from './Card';
 import { supabase } from '../supabaseClient';
@@ -14,9 +14,11 @@ interface PNCDashboardProps {
   onView: (request: TravelRequest) => void;
   policies?: TravelModePolicy[];
   policy?: any;
+  currentUser?: User | null;
 }
 
-export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], policy }: PNCDashboardProps) => {
+export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], policy, currentUser }: PNCDashboardProps) => {
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'me'>('all');
   const [timeFilter, setTimeFilter] = useState<'all' | '24h' | '7d' | '30d' | 'thisMonth' | 'lastMonth'>('all');
   const [selectedStage, setSelectedStage] = useState<PNCStatus | null>(null);
   const [viewType, setViewType] = useState<'cards' | 'funnel' | 'flowchart'>('cards');
@@ -24,6 +26,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [showZeroCards, setShowZeroCards] = useState<boolean>(false);
 
   const [slaConfigs, setSlaConfigs] = useState<any[]>([]);
   const [statusHistory, setStatusHistory] = useState<any[]>([]);
@@ -114,25 +117,49 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       edgeMap[key].count++;
     };
 
-    // Primary: status history rows
-    statusHistory.forEach(h => {
-      const d = new Date(h.created_at);
-      if (startTime && d < startTime) return;
-      if (endTime && d > endTime) return;
-      addEdge(normStatus(h.from_status), normStatus(h.to_status));
-    });
-
-    // Fallback: parse timeline events from request objects
-    if (Object.keys(edgeMap).length === 0) {
-      filteredRequests.forEach(r => {
-        let prev = 'Received';
-        (r.timeline || []).forEach((evt: any) => {
-          if (evt.event.includes('Status changed to:')) {
-            const next = normStatus(evt.event.replace('Status changed to: ', '').trim());
-            if (prev !== next) { addEdge(prev, next); prev = next; }
-          }
+    if (scopeFilter === 'me') {
+      const myTicketIds = new Set(filteredRequests.map(r => r.id));
+      statusHistory
+        .filter(h => myTicketIds.has(h.ticket_id))
+        .forEach(h => {
+          const d = new Date(h.created_at);
+          if (startTime && d < startTime) return;
+          if (endTime && d > endTime) return;
+          addEdge(normStatus(h.from_status), normStatus(h.to_status));
         });
+
+      if (Object.keys(edgeMap).length === 0) {
+        filteredRequests.forEach(r => {
+          let prev = 'Received';
+          (r.timeline || []).forEach((evt: any) => {
+            if (evt.event.includes('Status changed to:')) {
+              const next = normStatus(evt.event.replace('Status changed to: ', '').trim());
+              if (prev !== next) { addEdge(prev, next); prev = next; }
+            }
+          });
+        });
+      }
+    } else {
+      // Primary: status history rows
+      statusHistory.forEach(h => {
+        const d = new Date(h.created_at);
+        if (startTime && d < startTime) return;
+        if (endTime && d > endTime) return;
+        addEdge(normStatus(h.from_status), normStatus(h.to_status));
       });
+
+      // Fallback: parse timeline events from request objects
+      if (Object.keys(edgeMap).length === 0) {
+        filteredRequests.forEach(r => {
+          let prev = 'Received';
+          (r.timeline || []).forEach((evt: any) => {
+            if (evt.event.includes('Status changed to:')) {
+              const next = normStatus(evt.event.replace('Status changed to: ', '').trim());
+              if (prev !== next) { addEdge(prev, next); prev = next; }
+            }
+          });
+        });
+      }
     }
 
     return Object.values(edgeMap).filter(e => e.count > 0);
@@ -195,15 +222,17 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       setFlowchartLoading(true);
       const { startTime, endTime } = getTimeFilterDates();
       try {
-        const { data, error } = await supabase.rpc('get_flowchart_edges', {
-          start_time: startTime ? startTime.toISOString() : null,
-          end_time: endTime ? endTime.toISOString() : null
-        });
-        if (!error && data?.edges?.length) {
-          setFlowchartEdges((data.edges as any[]).filter((e: any) => e.count > 0));
-        } else {
-          setFlowchartEdges(getFlowchartEdgesClientSide(startTime, endTime));
+        if (scopeFilter === 'all') {
+          const { data, error } = await supabase.rpc('get_flowchart_edges', {
+            start_time: startTime ? startTime.toISOString() : null,
+            end_time: endTime ? endTime.toISOString() : null
+          });
+          if (!error && data?.edges?.length) {
+            setFlowchartEdges((data.edges as any[]).filter((e: any) => e.count > 0));
+            return;
+          }
         }
+        setFlowchartEdges(getFlowchartEdgesClientSide(startTime, endTime));
       } catch {
         setFlowchartEdges(getFlowchartEdgesClientSide(startTime, endTime));
       } finally {
@@ -211,13 +240,13 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       }
     };
     load();
-  }, [timeFilter, statusHistory, requests]);
+  }, [timeFilter, statusHistory, requests, scopeFilter]);
 
   // End flowchart section ────────────────────────────────────────────────────
 
 
   // Filter requests based on time period
-  const getFilteredRequests = () => {
+  const getTimeFilteredRequests = () => {
     const now = new Date();
 
     return requests.filter((r: TravelRequest) => {
@@ -254,21 +283,53 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
     });
   };
 
-  const filteredRequests = getFilteredRequests();
+  const timeFilteredRequests = getTimeFilteredRequests();
+
+  // Apply scope filter ('all' vs 'me' claimed by current user)
+  const filteredRequests = scopeFilter === 'me'
+    ? timeFilteredRequests.filter(r => Boolean(currentUser?.id && r.assignedPncId === currentUser.id))
+    : timeFilteredRequests;
+
+  const allTimeCount = timeFilteredRequests.length;
+  const myTimeCount = timeFilteredRequests.filter(r => Boolean(currentUser?.id && r.assignedPncId === currentUser.id)).length;
+
+  const handleScopeChange = (scope: 'all' | 'me') => {
+    setScopeFilter(scope);
+    setCurrentPage(1);
+  };
 
   // Count requests by status
-  const statusCounts = {
-    [PNCStatus.NOT_STARTED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.NOT_STARTED).length,
-    [PNCStatus.APPROVAL_PENDING]: filteredRequests.filter(r => r.pncStatus === PNCStatus.APPROVAL_PENDING).length,
-    [PNCStatus.REJECTED_BY_MANAGER]: filteredRequests.filter(r => r.pncStatus === PNCStatus.REJECTED_BY_MANAGER).length,
-    [PNCStatus.APPROVED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.APPROVED).length,
-    [PNCStatus.PROCESSING]: filteredRequests.filter(r => r.pncStatus === PNCStatus.PROCESSING).length,
-    [PNCStatus.ON_HOLD]: filteredRequests.filter(r => r.pncStatus === PNCStatus.ON_HOLD).length,
-    [PNCStatus.REJECTED_BY_PNC]: filteredRequests.filter(r => r.pncStatus === PNCStatus.REJECTED_BY_PNC).length,
-    [PNCStatus.BOOKED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.BOOKED).length,
-    [PNCStatus.CANCELLED_BY_EMPLOYEE]: filteredRequests.filter(r => r.pncStatus === PNCStatus.CANCELLED_BY_EMPLOYEE).length,
-    [PNCStatus.CANCELLED_BY_PNC]: filteredRequests.filter(r => r.pncStatus === PNCStatus.CANCELLED_BY_PNC).length,
-    [PNCStatus.CLOSED]: filteredRequests.filter(r => r.pncStatus === PNCStatus.CLOSED).length,
+  const countStatus = (status: PNCStatus | string) => {
+    return filteredRequests.filter(r => {
+      if (r.pncStatus === status) return true;
+      if (status === PNCStatus.PARTIALLY_CANCELLED && (r.pncStatus as any) === 'Partially Booked') return true;
+      return false;
+    }).length;
+  };
+
+  const statusCounts: Record<string, number> = {
+    [PNCStatus.NOT_STARTED]: countStatus(PNCStatus.NOT_STARTED),
+    [PNCStatus.APPROVAL_PENDING]: countStatus(PNCStatus.APPROVAL_PENDING),
+    [PNCStatus.REJECTED_BY_MANAGER]: countStatus(PNCStatus.REJECTED_BY_MANAGER),
+    [PNCStatus.APPROVED]: countStatus(PNCStatus.APPROVED),
+    [PNCStatus.PROCESSING]: countStatus(PNCStatus.PROCESSING),
+    [PNCStatus.ON_HOLD]: countStatus(PNCStatus.ON_HOLD),
+    [PNCStatus.ON_HOLD_ESCALATED]: countStatus(PNCStatus.ON_HOLD_ESCALATED),
+    [PNCStatus.REJECTED_BY_PNC]: countStatus(PNCStatus.REJECTED_BY_PNC),
+    [PNCStatus.BOOKED]: countStatus(PNCStatus.BOOKED),
+    [PNCStatus.PARTIALLY_CANCELLED]: countStatus(PNCStatus.PARTIALLY_CANCELLED),
+    [PNCStatus.CANCELLATION_REQUESTED]: countStatus(PNCStatus.CANCELLATION_REQUESTED),
+    [PNCStatus.CANCELLED_BY_EMPLOYEE]: countStatus(PNCStatus.CANCELLED_BY_EMPLOYEE),
+    [PNCStatus.CANCELLED_BY_PNC]: countStatus(PNCStatus.CANCELLED_BY_PNC),
+    [PNCStatus.CANCELLED_BY_SYSTEM]: countStatus(PNCStatus.CANCELLED_BY_SYSTEM),
+    [PNCStatus.PENDING_REFUND]: countStatus(PNCStatus.PENDING_REFUND),
+    [PNCStatus.PARTIALLY_REFUNDED]: countStatus(PNCStatus.PARTIALLY_REFUNDED),
+    [PNCStatus.FULLY_REFUNDED]: countStatus(PNCStatus.FULLY_REFUNDED),
+    [PNCStatus.WRITTEN_OFF]: countStatus(PNCStatus.WRITTEN_OFF),
+    [PNCStatus.DISPUTED]: countStatus(PNCStatus.DISPUTED),
+    [PNCStatus.RECONCILED]: countStatus(PNCStatus.RECONCILED),
+    [PNCStatus.CLOSED]: countStatus(PNCStatus.CLOSED),
+    [PNCStatus.CLOSED_RECORDED]: countStatus(PNCStatus.CLOSED_RECORDED),
   };
 
   const totalInflow = filteredRequests.length;
@@ -604,8 +665,10 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
   ];
 
   const cardConfigs = [
+    // 1. Intake & Submitted
     {
       status: PNCStatus.NOT_STARTED,
+      label: 'Not Started',
       icon: <i className="fa-solid fa-circle-dot"></i>,
       color: {
         bg: 'bg-slate-100 dark:bg-slate-800',
@@ -613,8 +676,10 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
         border: 'border-slate-200 dark:border-slate-700'
       }
     },
+    // 2. Approvals
     {
       status: PNCStatus.APPROVAL_PENDING,
+      label: 'Approval Pending',
       icon: <i className="fa-solid fa-clock"></i>,
       color: {
         bg: 'bg-amber-100 dark:bg-amber-900/30',
@@ -623,16 +688,8 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       }
     },
     {
-      status: PNCStatus.REJECTED_BY_MANAGER,
-      icon: <i className="fa-solid fa-user-xmark"></i>,
-      color: {
-        bg: 'bg-rose-100 dark:bg-rose-900/30',
-        text: 'text-rose-700 dark:text-rose-400',
-        border: 'border-rose-200 dark:border-rose-800/50'
-      }
-    },
-    {
       status: PNCStatus.APPROVED,
+      label: 'Approved',
       icon: <i className="fa-solid fa-circle-check"></i>,
       color: {
         bg: 'bg-emerald-100 dark:bg-emerald-900/30',
@@ -641,7 +698,19 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       }
     },
     {
+      status: PNCStatus.REJECTED_BY_MANAGER,
+      label: 'Rejected by Manager',
+      icon: <i className="fa-solid fa-user-xmark"></i>,
+      color: {
+        bg: 'bg-rose-100 dark:bg-rose-900/30',
+        text: 'text-rose-700 dark:text-rose-400',
+        border: 'border-rose-200 dark:border-rose-800/50'
+      }
+    },
+    // 3. Desk Fulfillment
+    {
       status: PNCStatus.PROCESSING,
+      label: 'Processing',
       icon: <i className="fa-solid fa-spinner fa-spin"></i>,
       color: {
         bg: 'bg-indigo-100 dark:bg-indigo-900/30',
@@ -651,6 +720,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
     },
     {
       status: PNCStatus.ON_HOLD,
+      label: 'On Hold',
       icon: <i className="fa-solid fa-circle-pause"></i>,
       color: {
         bg: 'bg-orange-100 dark:bg-orange-900/30',
@@ -659,7 +729,18 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       }
     },
     {
+      status: PNCStatus.ON_HOLD_ESCALATED,
+      label: 'On Hold / Escalated',
+      icon: <i className="fa-solid fa-triangle-exclamation"></i>,
+      color: {
+        bg: 'bg-amber-100 dark:bg-amber-950/40',
+        text: 'text-amber-800 dark:text-amber-300',
+        border: 'border-amber-300 dark:border-amber-700/60'
+      }
+    },
+    {
       status: PNCStatus.REJECTED_BY_PNC,
+      label: 'Rejected by PNC',
       icon: <i className="fa-solid fa-ban"></i>,
       color: {
         bg: 'bg-red-100 dark:bg-red-900/30',
@@ -667,8 +748,10 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
         border: 'border-red-200 dark:border-red-800/50'
       }
     },
+    // 4. Booking & Partial
     {
       status: PNCStatus.BOOKED,
+      label: 'Booked',
       icon: <i className="fa-solid fa-ticket"></i>,
       color: {
         bg: 'bg-blue-100 dark:bg-blue-900/30',
@@ -677,7 +760,29 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       }
     },
     {
+      status: PNCStatus.PARTIALLY_CANCELLED,
+      label: 'Partially Booked / Cancelled',
+      icon: <i className="fa-solid fa-ticket-simple"></i>,
+      color: {
+        bg: 'bg-cyan-100 dark:bg-cyan-900/30',
+        text: 'text-cyan-800 dark:text-cyan-300',
+        border: 'border-cyan-200 dark:border-cyan-800/50'
+      }
+    },
+    // 5. Cancellations
+    {
+      status: PNCStatus.CANCELLATION_REQUESTED,
+      label: 'Cancellation Requested',
+      icon: <i className="fa-solid fa-file-circle-xmark"></i>,
+      color: {
+        bg: 'bg-violet-100 dark:bg-violet-900/30',
+        text: 'text-violet-700 dark:text-violet-400',
+        border: 'border-violet-200 dark:border-violet-800/50'
+      }
+    },
+    {
       status: PNCStatus.CANCELLED_BY_EMPLOYEE,
+      label: 'Cancelled by Employee',
       icon: <i className="fa-solid fa-user-slash"></i>,
       color: {
         bg: 'bg-zinc-150 dark:bg-zinc-900/30',
@@ -687,6 +792,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
     },
     {
       status: PNCStatus.CANCELLED_BY_PNC,
+      label: 'Cancelled by PNC',
       icon: <i className="fa-solid fa-plane-slash"></i>,
       color: {
         bg: 'bg-pink-100 dark:bg-pink-900/30',
@@ -695,17 +801,102 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
       }
     },
     {
+      status: PNCStatus.CANCELLED_BY_SYSTEM,
+      label: 'Cancelled by System',
+      icon: <i className="fa-solid fa-robot"></i>,
+      color: {
+        bg: 'bg-stone-150 dark:bg-stone-900/30',
+        text: 'text-stone-600 dark:text-stone-400',
+        border: 'border-stone-200 dark:border-stone-800/50'
+      }
+    },
+    // 6. Refunds & Settlement
+    {
+      status: PNCStatus.PENDING_REFUND,
+      label: 'Pending Refund',
+      icon: <i className="fa-solid fa-money-bill-transfer"></i>,
+      color: {
+        bg: 'bg-amber-100 dark:bg-amber-900/30',
+        text: 'text-amber-800 dark:text-amber-300',
+        border: 'border-amber-300 dark:border-amber-800/50'
+      }
+    },
+    {
+      status: PNCStatus.PARTIALLY_REFUNDED,
+      label: 'Partially Refunded',
+      icon: <i className="fa-solid fa-coins"></i>,
+      color: {
+        bg: 'bg-teal-100 dark:bg-teal-900/30',
+        text: 'text-teal-800 dark:text-teal-300',
+        border: 'border-teal-200 dark:border-teal-800/50'
+      }
+    },
+    {
+      status: PNCStatus.FULLY_REFUNDED,
+      label: 'Fully Refunded',
+      icon: <i className="fa-solid fa-hand-holding-dollar"></i>,
+      color: {
+        bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+        text: 'text-emerald-800 dark:text-emerald-300',
+        border: 'border-emerald-300 dark:border-emerald-800/50'
+      }
+    },
+    {
+      status: PNCStatus.WRITTEN_OFF,
+      label: 'Written Off',
+      icon: <i className="fa-solid fa-file-invoice"></i>,
+      color: {
+        bg: 'bg-gray-100 dark:bg-gray-800/50',
+        text: 'text-gray-700 dark:text-gray-400',
+        border: 'border-gray-300 dark:border-gray-700'
+      }
+    },
+    {
+      status: PNCStatus.DISPUTED,
+      label: 'Disputed',
+      icon: <i className="fa-solid fa-scale-unbalanced"></i>,
+      color: {
+        bg: 'bg-purple-100 dark:bg-purple-900/30',
+        text: 'text-purple-800 dark:text-purple-300',
+        border: 'border-purple-200 dark:border-purple-800/50'
+      }
+    },
+    {
+      status: PNCStatus.RECONCILED,
+      label: 'Reconciled',
+      icon: <i className="fa-solid fa-receipt"></i>,
+      color: {
+        bg: 'bg-sky-100 dark:bg-sky-900/30',
+        text: 'text-sky-800 dark:text-sky-300',
+        border: 'border-sky-300 dark:border-sky-800/50'
+      }
+    },
+    // 7. Closed
+    {
       status: PNCStatus.CLOSED,
+      label: 'Closed',
       icon: <i className="fa-solid fa-flag-checkered"></i>,
       color: {
         bg: 'bg-slate-500 dark:bg-slate-700',
         text: 'text-white',
         border: 'border-slate-600 dark:border-slate-600'
       }
+    },
+    {
+      status: PNCStatus.CLOSED_RECORDED,
+      label: 'Closed / Self-Booked',
+      icon: <i className="fa-solid fa-bookmark"></i>,
+      color: {
+        bg: 'bg-slate-600 dark:bg-slate-800',
+        text: 'text-white',
+        border: 'border-slate-700 dark:border-slate-600'
+      }
     }
   ];
 
-  const visibleCards = cardConfigs.filter(card => statusCounts[card.status] > 0);
+  const visibleCards = showZeroCards
+    ? cardConfigs
+    : cardConfigs.filter(card => (statusCounts[card.status] || 0) > 0);
 
   const timeFilterOptions = [
     { value: 'all', label: 'All Time' },
@@ -716,7 +907,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
     { value: 'lastMonth', label: 'Last Month' },
   ];
 
-  const StageCard = ({ status, count, icon, color, onClick }: any) => (
+  const StageCard = ({ status, label, count, icon, color, onClick }: any) => (
     <div
       onClick={onClick}
       className={`bg-white dark:bg-slate-900 border-2 ${color.border} rounded-lg p-6 transition-all hover:shadow-lg hover:-translate-y-1 cursor-pointer group`}
@@ -729,7 +920,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
           {count}
         </div>
       </div>
-      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{status}</h3>
+      <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{label || status}</h3>
       <p className="text-xs text-slate-500 mt-1 font-medium">
         {count === 0 ? 'No requests' : count === 1 ? '1 request' : `${count} requests`}
       </p>
@@ -739,7 +930,11 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
   // Get requests for selected stage
   const getStageRequests = () => {
     if (!selectedStage) return [];
-    const filtered = filteredRequests.filter(r => r.pncStatus === selectedStage);
+    const filtered = filteredRequests.filter(r => {
+      if (r.pncStatus === selectedStage) return true;
+      if (selectedStage === PNCStatus.PARTIALLY_CANCELLED && (r.pncStatus as any) === 'Partially Booked') return true;
+      return false;
+    });
 
     // Sort by timestamp
     return filtered.sort((a, b) => {
@@ -829,7 +1024,7 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
         </div>
       </PageBanner>
 
-      {/* Time Filter Buttons Bar */}
+      {/* Time & Ownership Filter Buttons Bar */}
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div className="flex flex-wrap gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
           {timeFilterOptions.map(option => (
@@ -844,6 +1039,44 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
               {option.label}
             </button>
           ))}
+        </div>
+
+        {/* Ownership Scope Filter: All vs Me */}
+        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+          <button
+            onClick={() => handleScopeChange('all')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-1.5 ${scopeFilter === 'all'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+          >
+            <i className="fa-solid fa-layer-group text-xs"></i>
+            <span>All</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+              scopeFilter === 'all'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+            }`}>
+              {allTimeCount}
+            </span>
+          </button>
+          <button
+            onClick={() => handleScopeChange('me')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-1.5 ${scopeFilter === 'me'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+          >
+            <i className="fa-solid fa-user-check text-xs"></i>
+            <span>Me</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+              scopeFilter === 'me'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+            }`}>
+              {myTimeCount}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -1169,27 +1402,64 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
           )}
         </div>
       ) : (
-        /* Stage Cards Grid - Non-Zero Only */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 animate-in fade-in duration-300">
-          {visibleCards.length > 0 ? (
-            visibleCards.map(card => (
-              <StageCard
-                key={card.status}
-                status={card.status}
-                count={statusCounts[card.status]}
-                icon={card.icon}
-                onClick={() => handleStageClick(card.status)}
-                color={card.color}
-              />
-            ))
-          ) : (
-            <div className="col-span-full py-16 text-center bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-lg">
-              <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-800 text-slate-400">
-                <i className="fa-solid fa-inbox text-xl"></i>
-              </div>
-              <p className="text-slate-500 font-black text-sm uppercase tracking-wider">No active requests for this filter</p>
+        /* Stage Cards Grid with Active vs All Toggle */
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1 flex-wrap gap-2">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              {showZeroCards ? `All Lifecycle Stages (${visibleCards.length})` : `Active Stages (${visibleCards.length})`}
+            </span>
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+              <button
+                onClick={() => setShowZeroCards(false)}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  !showZeroCards
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                Active Only ({cardConfigs.filter(c => (statusCounts[c.status] || 0) > 0).length})
+              </button>
+              <button
+                onClick={() => setShowZeroCards(true)}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  showZeroCards
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                Show All Stages ({cardConfigs.length})
+              </button>
             </div>
-          )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 animate-in fade-in duration-300">
+            {visibleCards.length > 0 ? (
+              visibleCards.map(card => (
+                <StageCard
+                  key={card.status}
+                  status={card.status}
+                  label={card.label}
+                  count={statusCounts[card.status] || 0}
+                  icon={card.icon}
+                  onClick={() => handleStageClick(card.status)}
+                  color={card.color}
+                />
+              ))
+            ) : (
+              <div className="col-span-full py-16 text-center bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-lg">
+                <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-800 text-slate-400">
+                  <i className="fa-solid fa-inbox text-xl"></i>
+                </div>
+                <p className="text-slate-500 font-black text-sm uppercase tracking-wider">No active requests for this filter</p>
+                <button
+                  onClick={() => setShowZeroCards(true)}
+                  className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-700 underline"
+                >
+                  View all lifecycle stages
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1269,7 +1539,9 @@ export const PNCDashboard = ({ requests, onTabChange, onView, policies = [], pol
                   <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
                     <i className="fa-solid fa-inbox text-2xl text-slate-400"></i>
                   </div>
-                  <p className="text-slate-500 font-medium">No requests in this stage</p>
+                  <p className="text-slate-500 font-medium">
+                    {scopeFilter === 'me' ? 'No tickets claimed by you in this stage' : 'No requests in this stage'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">

@@ -33,9 +33,24 @@ const StatusBadge: React.FC<BadgeProps> = ({ type, value, audience = 'staff' }) 
         case PNCStatus.REJECTED_BY_MANAGER: return 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800/50';
         case PNCStatus.APPROVED: return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/50';
         case PNCStatus.PROCESSING: return 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800/50';
-        case PNCStatus.BOOKED: return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50';
+        case PNCStatus.ON_HOLD: return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50';
+        case PNCStatus.ON_HOLD_ESCALATED: return 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700/60';
         case PNCStatus.REJECTED_BY_PNC: return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50';
+        case PNCStatus.BOOKED: return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50';
+        case PNCStatus.PARTIALLY_CANCELLED:
+        case 'Partially Booked': return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800/50';
+        case PNCStatus.CANCELLATION_REQUESTED: return 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800/50';
+        case PNCStatus.CANCELLED_BY_EMPLOYEE: return 'bg-zinc-150 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
+        case PNCStatus.CANCELLED_BY_PNC: return 'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800/50';
+        case PNCStatus.CANCELLED_BY_SYSTEM: return 'bg-stone-150 text-stone-700 border-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700';
+        case PNCStatus.PENDING_REFUND: return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50';
+        case PNCStatus.PARTIALLY_REFUNDED: return 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/50';
+        case PNCStatus.FULLY_REFUNDED: return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/50';
+        case PNCStatus.WRITTEN_OFF: return 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700';
+        case PNCStatus.DISPUTED: return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/50';
+        case PNCStatus.RECONCILED: return 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800/50';
         case PNCStatus.CLOSED: return 'bg-slate-500 text-white border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600';
+        case PNCStatus.CLOSED_RECORDED: return 'bg-slate-600 text-white border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700';
         default: return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
       }
     }

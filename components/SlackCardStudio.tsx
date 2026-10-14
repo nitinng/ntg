@@ -149,48 +149,64 @@ interface NotificationScenario {
 
 const NOTIFICATION_SCENARIOS: NotificationScenario[] = [
   {
-    id: 'urgent_req',
-    label: '🚨 Urgent Request (Flight)',
+    id: 'flight_req',
+    label: '✈️ Flight Request',
     ticket: 'TRV-O-261014-001',
     who: 'Nitin Sudarshan',
     dept: 'CEO Office',
     campus: 'Remote',
     trip: 'Pune ➔ Bengaluru',
-    date: '16 Oct 2026',
-    mode: 'Flight (One-way)',
+    date: '15 Oct 2026',
+    mode: 'Flight · Indigo 6E-204 (One-way)',
     priority: 'Urgent',
     manager: 'abhishek@navgurukul.org',
     status: 'Pending PNC',
-    note: 'Board meeting attendance required at Bengaluru HQ.'
+    note: 'Executive quarterly review attendance (1 day to departure · <2d policy).'
   },
   {
-    id: 'normal_req',
-    label: '✈️ Standard Request (Train)',
+    id: 'train_req',
+    label: '🚆 Train Request',
     ticket: 'TRV-R-261014-002',
     who: 'Pooja Sharma',
     dept: 'Academics',
     campus: 'Dharamshala Campus',
     trip: 'Delhi ➔ Dharamshala',
     date: '20 Oct 2026',
-    mode: 'Train · 3AC (Round-trip)',
-    priority: 'Normal',
+    mode: 'Train · Vande Bharat 3AC (Round-trip)',
+    priority: 'High',
     manager: 'nitin.s@navgurukul.org',
-    status: 'Pending Manager Approval'
+    status: 'Pending Manager Approval',
+    note: 'Cohort curriculum orientation (6 days to departure · 2-10d policy).'
   },
   {
-    id: 'approved_req',
-    label: '✅ Status Update: Approved',
-    ticket: 'TRV-O-261014-003',
+    id: 'bus_req',
+    label: '🚌 Bus Request',
+    ticket: 'TRV-B-261014-005',
     who: 'Rohan Verma',
     dept: 'Operations',
     campus: 'Pune Campus',
-    trip: 'Pune ➔ Mumbai',
+    trip: 'Pune ➔ Goa',
+    date: '28 Oct 2026',
+    mode: 'Bus · Volvo Multi-Axle AC Sleeper',
+    priority: 'Normal',
+    manager: 'anuradha@navgurukul.org',
+    status: 'Pending PNC',
+    note: 'Campus operational meetup coordination (14 days to departure · 10-20d policy).'
+  },
+  {
+    id: 'approved_req',
+    label: '🚕 Cab Status Update: Approved',
+    ticket: 'TRV-O-261014-003',
+    who: 'Priyanka Das',
+    dept: 'Partnerships',
+    campus: 'Mumbai Campus',
+    trip: 'Mumbai ➔ Pune',
     date: '18 Oct 2026',
     mode: 'Cab · Sedan',
     priority: 'Normal',
     manager: 'anuradha@navgurukul.org',
     status: 'Approved by Manager',
-    note: 'Approved. Vendor quotes can be secured.'
+    note: 'Approved. Cab vendor quotes can be secured.'
   },
   {
     id: 'booked_req',
@@ -544,6 +560,23 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
               slackTheme === 'dark' ? 'border-[#2C3136]' : 'border-slate-200'
             }`}
           >
+            {/* Slack Header */}
+            <div
+              className={`px-4 py-2.5 border-b flex items-center justify-between text-xs font-bold ${
+                slackTheme === 'dark'
+                  ? 'bg-[#1F2328] border-[#2C3136] text-white'
+                  : 'bg-slate-50 border-slate-200 text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-mono">#</span>
+                <span>{category === 'sos' ? 'alert-team-automation' : 'alert-traveldesk-notifications'}</span>
+              </div>
+              <span className="text-slate-400 text-[11px] font-normal">
+                <i className="fa-solid fa-lock text-[9px] mr-1"></i> internal
+              </span>
+            </div>
+
             {/* The frame is the simulated channel. What sits inside it is drawn
                 with only what Slack's API can express -- see BlockKitPreview. */}
             <BlockKitPreview

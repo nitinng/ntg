@@ -46,6 +46,28 @@ describe('formatSlackNewRequest', () => {
     expect(payload.text).toContain('Not Started');
     expect(payload.blocks).toBeDefined();
   });
+
+  it('formats train and bus requests with matching mode icons and policy urgency', () => {
+    const trainPayload = formatSlackNewRequest({
+      submission_id: 'TRV-R-261014-002',
+      travel_mode: 'Train',
+      date_of_travel: '2026-10-20'
+    });
+    expect(trainPayload.text).toContain('🚆 *TRAVEL DESK NOTIFICATION · NEW REQUEST*');
+    expect(trainPayload.text).toContain('🚆 *Trip Route:*');
+    const trainHeader = trainPayload.blocks!.find(b => b.type === 'header');
+    expect(trainHeader.text.text).toContain('🚆 New Travel Request');
+
+    const busPayload = formatSlackNewRequest({
+      submission_id: 'TRV-B-261014-005',
+      travel_mode: 'Bus',
+      date_of_travel: '2026-10-28'
+    });
+    expect(busPayload.text).toContain('🚌 *TRAVEL DESK NOTIFICATION · NEW REQUEST*');
+    expect(busPayload.text).toContain('🚌 *Trip Route:*');
+    const busHeader = busPayload.blocks!.find(b => b.type === 'header');
+    expect(busHeader.text.text).toContain('🚌 New Travel Request');
+  });
 });
 
 describe('formatSlackNotificationTest', () => {

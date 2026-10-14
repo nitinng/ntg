@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry, User } from '../types';
+import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry, CreditCard, CreditCardChangelogEntry, User } from '../types';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
@@ -255,7 +255,15 @@ export const RequestDetailOverlay = ({
   const [activeAdvances, setActiveAdvances] = useState<Advance[]>([]);
   const [selectedAdvanceId, setSelectedAdvanceId] = useState<string>(request.advanceId || '');
 
+  // Credit card tracking state — the second funding rail. A booking is paid
+  // from an advance or from a card, never both, so the two toggles below clear
+  // each other.
+  const [purchasedOnCreditCard, setPurchasedOnCreditCard] = useState(!!request.creditCardId);
+  const [activeCreditCards, setActiveCreditCards] = useState<CreditCard[]>([]);
+  const [selectedCreditCardId, setSelectedCreditCardId] = useState<string>(request.creditCardId || '');
+
   const isAnyAdvanceRequired = purchasedAgainstAdvance || (isSplitTravel && legs.some(t => t.purchasedAgainstAdvance));
+  const isAnyCreditCardRequired = purchasedOnCreditCard || (isSplitTravel && legs.some(t => t.purchasedOnCreditCard));
 
   React.useEffect(() => {
     if (isAnyAdvanceRequired && activeAdvances.length === 0) {
@@ -275,6 +283,60 @@ export const RequestDetailOverlay = ({
       fetchAdvances();
     }
   }, [isAnyAdvanceRequired]);
+
+  React.useEffect(() => {
+    if (isAnyCreditCardRequired && activeCreditCards.length === 0) {
+      const fetchCreditCards = async () => {
+        const { data, error } = await supabase.from('credit_cards').select('*');
+        if (error) {
+          // Same failure mode as advances: the desk could charge a card whose
+          // real balance it cannot see.
+          reportSos('CREDIT_CARD_FETCH_FAILED', error, { ticketId: request?.id });
+        }
+        if (data) {
+          const validCards = data.filter(card => card.is_active !== false && card.amount_left > 0);
+          setActiveCreditCards(validCards);
+        }
+      }
+      fetchCreditCards();
+    }
+  }, [isAnyCreditCardRequired]);
+
+  /** One rail at a time: picking an advance drops the card, and vice versa. */
+  const selectAdvanceRail = (checked: boolean) => {
+    setPurchasedAgainstAdvance(checked);
+    if (checked) {
+      setPurchasedOnCreditCard(false);
+      setSelectedCreditCardId('');
+    }
+  };
+
+  const selectCreditCardRail = (checked: boolean) => {
+    setPurchasedOnCreditCard(checked);
+    if (checked) {
+      setPurchasedAgainstAdvance(false);
+      setSelectedAdvanceId('');
+    }
+  };
+
+  /** Mirrors selectAdvanceRail/selectCreditCardRail for one split-travel leg. */
+  const setLegFundingRail = (index: number, rail: 'advance' | 'card', checked: boolean) => {
+    const newLegs = [...legs];
+    if (rail === 'advance') {
+      newLegs[index].purchasedAgainstAdvance = checked;
+      if (checked) {
+        newLegs[index].purchasedOnCreditCard = false;
+        newLegs[index].creditCardId = '';
+      }
+    } else {
+      newLegs[index].purchasedOnCreditCard = checked;
+      if (checked) {
+        newLegs[index].purchasedAgainstAdvance = false;
+        newLegs[index].advanceId = '';
+      }
+    }
+    setLegs(newLegs);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -318,6 +380,7 @@ export const RequestDetailOverlay = ({
       let finalVendorName = vendorName;
       let finalInvoiceUrl = invoiceUrl;
       let advanceIdToSave = request.advanceId;
+      let creditCardIdToSave = request.creditCardId;
 
       if (isBookingStatus) {
         if (isSplitTravel) {
@@ -329,6 +392,21 @@ export const RequestDetailOverlay = ({
           const hasEmptyFields = legs.some(t => !t.fromLocation || !t.toLocation || !t.travelMode || !t.ticketCost || !t.vendorName || !t.invoiceUrl);
           if (hasEmptyFields) {
             toast.error("Please fill all fields and upload invoices for all split tickets.");
+            setIsUploading(false);
+            return;
+          }
+          
+          // A funding rail ticked but left unpicked would book the leg and
+          // quietly skip the deduction, so stop here instead.
+          const unpickedAdvanceLeg = legs.find(t => t.purchasedAgainstAdvance && !t.advanceId);
+          if (unpickedAdvanceLeg) {
+            toast.error(`Select an advance for the ${unpickedAdvanceLeg.fromLocation || 'first'} → ${unpickedAdvanceLeg.toLocation || 'next'} leg, or untick "Purchased against advance".`);
+            setIsUploading(false);
+            return;
+          }
+          const unpickedCardLeg = legs.find(t => t.purchasedOnCreditCard && !t.creditCardId);
+          if (unpickedCardLeg) {
+            toast.error(`Select a credit card for the ${unpickedCardLeg.fromLocation || 'first'} → ${unpickedCardLeg.toLocation || 'next'} leg, or untick "Purchased on credit card".`);
             setIsUploading(false);
             return;
           }
@@ -381,12 +459,66 @@ export const RequestDetailOverlay = ({
                 }
               }
             }
+
+            // The credit card rail, deducted the same way. processed_credit_card
+            // is the card's own guard against a second deduction on re-save.
+            if (ticket.purchasedOnCreditCard && ticket.creditCardId && !ticket.processed_credit_card) {
+              const selectedCard = activeCreditCards.find(c => c.id === ticket.creditCardId);
+              if (selectedCard) {
+                const cost = Number(ticket.ticketCost);
+
+                const newCardEntry: CreditCardChangelogEntry = {
+                  timestamp: new Date().toISOString(),
+                  user: userEmail,
+                  action: 'Ticket Purchased',
+                  details: `Leg (${ticket.fromLocation} to ${ticket.toLocation}) for Ticket ${request.submissionId || request.id} charged for ₹${cost}.`,
+                  relatedTicketId: request.id,
+                  relatedTicketSubmissionId: request.submissionId
+                };
+
+                const { data: updatedCardBalance, error: cardError } = await supabase.rpc('update_credit_card_balance', {
+                  p_card_id: ticket.creditCardId,
+                  p_amount_delta: -cost,
+                  p_changelog_entry: newCardEntry,
+                  p_adjust_limit: false
+                });
+
+                if (cardError) {
+                  // The booking stands but the card balance does not reflect
+                  // it: the next booking can overshoot the limit.
+                  reportSos('CREDIT_CARD_DEDUCTION_FAILED', cardError, {
+                    ticketId: request?.id,
+                    cardId: ticket.creditCardId,
+                    amount: cost,
+                    leg: `${ticket.fromLocation}-${ticket.toLocation}`
+                  });
+                  toast.error(`Failed to charge the card for leg ${ticket.fromLocation}-${ticket.toLocation}`);
+                } else {
+                  selectedCard.amount_left = Number(updatedCardBalance);
+                  selectedCard.changelog = [...(selectedCard.changelog || []), {
+                    ...newCardEntry,
+                    details: newCardEntry.details + ` Available balance: ₹${updatedCardBalance}.`
+                  }];
+                  ticket.processed_credit_card = true; // prevent double deduction if re-saved
+                }
+              }
+            }
           }
           
           // Removed auto-close logic
         } else {
           if (!ticketCost || !vendorName || !invoiceUrl) {
             toast.error("Please provide ticket cost, vendor name, and upload the invoice before setting status to Booked or Closed.");
+            setIsUploading(false);
+            return;
+          }
+          if (purchasedAgainstAdvance && !selectedAdvanceId) {
+            toast.error('Select the advance this ticket was purchased against, or untick the option.');
+            setIsUploading(false);
+            return;
+          }
+          if (purchasedOnCreditCard && !selectedCreditCardId) {
+            toast.error('Select the credit card this ticket was charged to, or untick the option.');
             setIsUploading(false);
             return;
           }
@@ -432,6 +564,48 @@ export const RequestDetailOverlay = ({
               }
             }
           }
+
+          if (purchasedOnCreditCard && selectedCreditCardId && ticketCost && !request.creditCardId) {
+            creditCardIdToSave = selectedCreditCardId;
+            const selectedCard = activeCreditCards.find(c => c.id === selectedCreditCardId);
+            if (selectedCard) {
+              const cost = parseFloat(ticketCost.toString());
+
+              const { data: { user } } = await supabase.auth.getUser();
+              const userEmail = user?.email || 'Unknown User';
+
+              const newCardEntry: CreditCardChangelogEntry = {
+                timestamp: new Date().toISOString(),
+                user: userEmail,
+                action: 'Ticket Purchased',
+                details: `Ticket ${request.submissionId || request.id} charged for ₹${cost}. Ticket booked on ${new Date().toLocaleDateString()}.`,
+                relatedTicketId: request.id,
+                relatedTicketSubmissionId: request.submissionId
+              };
+
+              const { data: updatedCardBalance, error: cardError } = await supabase.rpc('update_credit_card_balance', {
+                p_card_id: selectedCreditCardId,
+                p_amount_delta: -cost,
+                p_changelog_entry: newCardEntry,
+                p_adjust_limit: false
+              });
+
+              if (cardError) {
+                reportSos('CREDIT_CARD_DEDUCTION_FAILED', cardError, {
+                  ticketId: request?.id,
+                  cardId: selectedCard?.id,
+                  amount: cost
+                });
+                toast.error("Failed to charge the credit card.");
+              } else {
+                selectedCard.amount_left = Number(updatedCardBalance);
+                selectedCard.changelog = [...(selectedCard.changelog || []), {
+                  ...newCardEntry,
+                  details: newCardEntry.details + ` Available balance: ₹${updatedCardBalance}.`
+                }];
+              }
+            }
+          }
         }
       }
 
@@ -455,7 +629,11 @@ export const RequestDetailOverlay = ({
         vendorName: isBookingStatus ? finalVendorName : request.vendorName,
         invoiceUrl: isBookingStatus ? finalInvoiceUrl : request.invoiceUrl,
         travelLegs: isBookingStatus && isSplitTravel ? legs : request.travelLegs,
-        advanceId: advanceIdToSave
+        advanceId: advanceIdToSave,
+        creditCardId: creditCardIdToSave,
+        paymentSource: isBookingStatus
+          ? (advanceIdToSave ? 'Advance' : creditCardIdToSave ? 'Credit Card' : 'Direct')
+          : request.paymentSource
       });
 
       setIsUploading(false);
@@ -998,24 +1176,41 @@ export const RequestDetailOverlay = ({
                             )}
                           </div>
 
-                          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                            <label className="flex items-center gap-2 cursor-pointer mb-3">
-                              <input type="checkbox" checked={ticket.purchasedAgainstAdvance || false} onChange={e => { const newT = [...legs]; newT[index].purchasedAgainstAdvance = e.target.checked; setLegs(newT); }} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600" />
-                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased against advance</span>
-                            </label>
-                            {ticket.purchasedAgainstAdvance && (
-                              <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none cursor-pointer" value={ticket.advanceId || ''} onChange={e => { const newT = [...legs]; newT[index].advanceId = e.target.value; setLegs(newT); }}>
-                                <option value="">-- Select an Active Advance --</option>
-                                {activeAdvances.map(adv => (
-                                  <option key={adv.id} value={adv.id}>{adv.advance_code || adv.id.substring(0,8)} - Balance ₹{adv.amount_left.toLocaleString()}</option>
-                                ))}
-                              </select>
-                            )}
+                          <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                            <div>
+                              <label className="flex items-center gap-2 cursor-pointer mb-3">
+                                <input type="checkbox" checked={ticket.purchasedAgainstAdvance || false} onChange={e => setLegFundingRail(index, 'advance', e.target.checked)} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600" />
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased against advance</span>
+                              </label>
+                              {ticket.purchasedAgainstAdvance && (
+                                <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none cursor-pointer" value={ticket.advanceId || ''} onChange={e => { const newT = [...legs]; newT[index].advanceId = e.target.value; setLegs(newT); }}>
+                                  <option value="">-- Select an Active Advance --</option>
+                                  {activeAdvances.map(adv => (
+                                    <option key={adv.id} value={adv.id}>{adv.advance_code || adv.id.substring(0,8)} - Balance ₹{adv.amount_left.toLocaleString()}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="flex items-center gap-2 cursor-pointer mb-3">
+                                <input type="checkbox" checked={ticket.purchasedOnCreditCard || false} onChange={e => setLegFundingRail(index, 'card', e.target.checked)} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600" />
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased on credit card</span>
+                              </label>
+                              {ticket.purchasedOnCreditCard && (
+                                <select className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none cursor-pointer" value={ticket.creditCardId || ''} onChange={e => { const newT = [...legs]; newT[index].creditCardId = e.target.value; setLegs(newT); }}>
+                                  <option value="">-- Select an Active Credit Card --</option>
+                                  {activeCreditCards.map(card => (
+                                    <option key={card.id} value={card.id}>xxxx-{card.last_four} ({card.bank_name}) - Available ₹{Number(card.amount_left).toLocaleString()}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
                       
-                      <button onClick={() => setLegs([...legs, { id: Date.now().toString(), travelMode: 'Flight', purchasedAgainstAdvance: false }])} className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-slate-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm">
+                      <button onClick={() => setLegs([...legs, { id: Date.now().toString(), travelMode: 'Flight', purchasedAgainstAdvance: false, purchasedOnCreditCard: false }])} className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-slate-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm">
                         <i className="fa-solid fa-plus-circle text-lg"></i> Add Next Ticket
                       </button>
                     </div>
@@ -1075,35 +1270,73 @@ export const RequestDetailOverlay = ({
                         )}
                       </div>
 
-                      <div className="pt-2 border-t dark:border-slate-800">
-                        <label className="flex items-center gap-2 cursor-pointer mb-2">
-                          <input 
-                            type="checkbox" 
-                            checked={purchasedAgainstAdvance}
-                            onChange={(e) => setPurchasedAgainstAdvance(e.target.checked)}
-                            disabled={!!request.advanceId}
-                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600"
-                          />
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased against advance</span>
-                        </label>
+                      <div className="pt-2 border-t dark:border-slate-800 space-y-3">
+                        <div>
+                          <label className="flex items-center gap-2 cursor-pointer mb-2">
+                            <input 
+                              type="checkbox" 
+                              checked={purchasedAgainstAdvance}
+                              onChange={(e) => selectAdvanceRail(e.target.checked)}
+                              disabled={!!request.advanceId || !!request.creditCardId}
+                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600"
+                            />
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased against advance</span>
+                          </label>
 
-                        {purchasedAgainstAdvance && (
-                          <div className="animate-in slide-in-from-top-2">
-                            <select
-                              className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all cursor-pointer disabled:opacity-50"
-                              value={selectedAdvanceId}
-                              onChange={(e) => setSelectedAdvanceId(e.target.value)}
-                              disabled={!!request.advanceId}
-                            >
-                              <option value="">-- Select an Active Advance --</option>
-                              {activeAdvances.map(adv => (
-                                <option key={adv.id} value={adv.id}>
-                                  {adv.advance_code || adv.id.substring(0,8)} - Balance ₹{adv.amount_left.toLocaleString()} / (Total ₹{adv.amount_received.toLocaleString()})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
+                          {purchasedAgainstAdvance && (
+                            <div className="animate-in slide-in-from-top-2">
+                              <select
+                                className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all cursor-pointer disabled:opacity-50"
+                                value={selectedAdvanceId}
+                                onChange={(e) => setSelectedAdvanceId(e.target.value)}
+                                disabled={!!request.advanceId}
+                              >
+                                <option value="">-- Select an Active Advance --</option>
+                                {activeAdvances.map(adv => (
+                                  <option key={adv.id} value={adv.id}>
+                                    {adv.advance_code || adv.id.substring(0,8)} - Balance ₹{adv.amount_left.toLocaleString()} / (Total ₹{adv.amount_received.toLocaleString()})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="flex items-center gap-2 cursor-pointer mb-2">
+                            <input
+                              type="checkbox"
+                              checked={purchasedOnCreditCard}
+                              onChange={(e) => selectCreditCardRail(e.target.checked)}
+                              disabled={!!request.advanceId || !!request.creditCardId}
+                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-600"
+                            />
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Purchased on credit card</span>
+                          </label>
+
+                          {purchasedOnCreditCard && (
+                            <div className="animate-in slide-in-from-top-2">
+                              <select
+                                className="w-full h-10 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-lg px-3 font-medium text-sm text-slate-800 dark:text-white focus:border-indigo-600 outline-none transition-all cursor-pointer disabled:opacity-50"
+                                value={selectedCreditCardId}
+                                onChange={(e) => setSelectedCreditCardId(e.target.value)}
+                                disabled={!!request.creditCardId}
+                              >
+                                <option value="">-- Select an Active Credit Card --</option>
+                                {activeCreditCards.map(card => (
+                                  <option key={card.id} value={card.id}>
+                                    xxxx-{card.last_four} ({card.bank_name}) - Available ₹{Number(card.amount_left).toLocaleString()} / (Balance ₹{Number(card.opening_balance).toLocaleString()})
+                                  </option>
+                                ))}
+                              </select>
+                              {activeCreditCards.length === 0 && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-2">
+                                  No active credit card with a balance. Add one under Credit Cards.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

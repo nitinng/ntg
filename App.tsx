@@ -50,6 +50,7 @@ const WELCOME_NOTES = [
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 const PNCDashboard = React.lazy(() => import('./components/PNCDashboard'));
 const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagement'));
+const CreditCardManagement = React.lazy(() => import('./components/CreditCardManagement'));
 const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
 const CancellationRequestsQueue = React.lazy(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
 const DepartmentManagement = React.lazy(() => import('./components/DepartmentManagement').then(module => ({ default: module.DepartmentManagement })));
@@ -825,7 +826,7 @@ const App: React.FC = () => {
         return <AdminDashboard requests={requests} users={users} onTabChange={handleTabChange} />;
       }
       if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) {
-        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} />;
+        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} currentUser={currentUser} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
         return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} users={users} />;
@@ -889,13 +890,23 @@ const App: React.FC = () => {
           r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
           r.pncStatus !== PNCStatus.CLOSED
         );
-        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} users={users} />;
+        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} users={users} currentUser={currentUser} />;
       case 'all-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} users={users} />;
+        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} users={users} currentUser={currentUser} />;
       case 'advances':
         if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN) {
           return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
+            const req = requests.find((r: TravelRequest) => r.id === id);
+            if (req) {
+              setSelectedRequest(req);
+            }
+          }} />;
+        }
+        return renderDashboard();
+      case 'credit-cards':
+        if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN) {
+          return <CreditCardManagement currentUser={currentUser} users={users} onViewRequest={(id) => {
             const req = requests.find((r: TravelRequest) => r.id === id);
             if (req) {
               setSelectedRequest(req);
@@ -1228,6 +1239,7 @@ const App: React.FC = () => {
                   <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                   <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
                   <SidebarLink icon="fa-wallet" label="Advances" active={activeTab === 'advances'} onClick={() => handleTabChange('advances')} />
+                  <SidebarLink icon="fa-credit-card" label="Credit Cards" active={activeTab === 'credit-cards'} onClick={() => handleTabChange('credit-cards')} />
                   <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                   <SidebarLink
                     icon="fa-circle-exclamation"
@@ -1611,7 +1623,9 @@ const App: React.FC = () => {
                     on_hold_since: updated.onHoldSince || null,
                     resubmission_count: updated.resubmissionCount || 0,
                     cancelled_reason: updated.cancelledReason || null,
-                    advance_id: updated.advanceId || null
+                    advance_id: updated.advanceId || null,
+                    credit_card_id: updated.creditCardId || null,
+                    payment_source: updated.paymentSource || 'Not Yet Entered'
                   })
                   .eq('id', updated.id);
 

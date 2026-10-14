@@ -149,7 +149,7 @@ interface NotificationScenario {
 const NOTIFICATION_SCENARIOS: NotificationScenario[] = [
   {
     id: 'flight_req',
-    label: '✈️ Flight Request (Urgent)',
+    label: '✈️ Flight Request',
     ticket: 'TRV-O-261014-001',
     who: 'Nitin Sudarshan',
     dept: 'CEO Office',
@@ -164,7 +164,7 @@ const NOTIFICATION_SCENARIOS: NotificationScenario[] = [
   },
   {
     id: 'train_req',
-    label: '🚆 Train Request (High Priority)',
+    label: '🚆 Train Request',
     ticket: 'TRV-R-261014-002',
     who: 'Pooja Sharma',
     dept: 'Academics',
@@ -179,7 +179,7 @@ const NOTIFICATION_SCENARIOS: NotificationScenario[] = [
   },
   {
     id: 'bus_req',
-    label: '🚌 Bus Request (Normal Priority)',
+    label: '🚌 Bus Request',
     ticket: 'TRV-B-261014-005',
     who: 'Rohan Verma',
     dept: 'Operations',

@@ -334,18 +334,46 @@ export const formatAlertHtml = (
 </div>`.trim();
 };
 
+/**
+ * The card's visual spec. These four values are the ONLY place severity styling
+ * is decided on the client, and each one is mirrored by sos_webhook_payload()
+ * in SQL. If you change a colour or an icon here, change it there in the same
+ * commit -- a preview that disagrees with the channel is worse than no preview.
+ */
 export const SLACK_SEVERITY_COLORS: Record<SosSeverity, string> = {
   critical: '#E24B4A',
   high: '#EF9F27',
-  warning: '#64748B',
-  info: '#3B82F6'
+  warning: '#ECB22E',
+  info: '#2F80ED'
 };
+
+/** Leading glyph in the header block. Matches the bar colour at a glance. */
+export const SLACK_SEVERITY_ICONS: Record<SosSeverity, string> = {
+  critical: '\u{1F534}',
+  high: '\u{1F7E0}',
+  warning: '\u{1F7E1}',
+  info: '\u{1F535}'
+};
+
+/** Word shown after the glyph. 'high' reads as Error, as it always has. */
+export const SLACK_SEVERITY_WORDS: Record<SosSeverity, string> = {
+  critical: 'Critical',
+  high: 'Error',
+  warning: 'Warning',
+  info: 'Info'
+};
+
+/** Slack rejects a header block over 150 characters. */
+export const SLACK_HEADER_LIMIT = 150;
+
+export const clampHeader = (text: string): string =>
+  text.length > SLACK_HEADER_LIMIT ? `${text.slice(0, SLACK_HEADER_LIMIT - 3)}...` : text;
 
 export const SLACK_SEVERITY_PILLS: Record<SosSeverity, string> = {
   critical: ':red_circle: Critical',
   high: ':large_orange_circle: Error',
-  warning: ':warning: Warning',
-  info: ':information_source: Info'
+  warning: ':large_yellow_circle: Warning',
+  info: ':large_blue_circle: Info'
 };
 
 export interface FormatAlertSlackOptions {
@@ -388,7 +416,7 @@ export const formatAlertSlackPayload = (
 
   // Compute impact / affected details
   const ctx = alert.context || {};
-  let impact = 'Single session';
+  let impact = 'Unknown user';
   if (ctx.userEmail || ctx.email) {
     impact = String(ctx.userEmail || ctx.email);
   } else if (ctx.ticketId || ctx.ticket) {
@@ -464,20 +492,22 @@ export const formatAlertSlackPayload = (
         color,
         blocks: [
           {
-            type: 'section',
+            type: 'header',
             text: {
-              type: 'mrkdwn',
-              text: `*${pill} — ${alert.title}*`
+              type: 'plain_text',
+              text: clampHeader(
+                `${SLACK_SEVERITY_ICONS[alert.severity]}  ${SLACK_SEVERITY_WORDS[alert.severity]} — ${alert.title}`
+              ),
+              emoji: true
             }
           },
           {
             type: 'section',
             fields: [
               { type: 'mrkdwn', text: `*Service*\n${service}` },
-              { type: 'mrkdwn', text: `*Environment*\n${env}` },
               {
                 type: 'mrkdwn',
-                text: `*Occurrences*\n${occurrences > 1 ? `${occurrences} in recent window` : '1 occurrence'}`
+                text: `*Occurrences*\n${occurrences > 1 ? `${occurrences} times` : 'First occurrence'}`
               },
               { type: 'mrkdwn', text: `*Impact*\n${impact}` }
             ]
@@ -492,6 +522,12 @@ export const formatAlertSlackPayload = (
           {
             type: 'actions',
             elements: actionElements
+          },
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: `\`${alert.code}\` · ${env} · Travel Desk SOS` }
+            ]
           }
         ]
       }

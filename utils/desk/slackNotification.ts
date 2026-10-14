@@ -318,7 +318,7 @@ export const formatSlackNotificationTest = (
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     `👤 *Triggered By:* ${actorEmail}`,
     `🕒 *Sent At:* ${new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata' })} IST`,
-    `📡 *Delivery Mode:* Slack Workflow Webhook`,
+    `📡 *Delivery Mode:* Slack App webhook`,
     `🎨 *Template Styling:* NavGurukul Brand Alignment Active`,
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     '',
@@ -338,21 +338,11 @@ export const formatSlackNotificationTest = (
     },
     {
       type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Status:* 🟢 *Operational*   |   *Delivery:* *Slack Workflow Webhook*`
-      }
-    },
-    { type: 'divider' },
-    {
-      type: 'section',
       fields: [
         { type: 'mrkdwn', text: `*👤 Triggered By:*\n${actorEmail}` },
-        { type: 'mrkdwn', text: `*🕒 Sent At:*\n${new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata' })} IST` },
-        { type: 'mrkdwn', text: `*🎨 Design System:*\nMail Template Aligned` }
+        { type: 'mrkdwn', text: `*🕒 Sent At:*\n${new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata' })} IST` }
       ]
     },
-    { type: 'divider' },
     {
       type: 'actions',
       elements: [
@@ -373,7 +363,9 @@ export const formatSlackNotificationTest = (
       elements: [
         {
           type: 'mrkdwn',
-          text: 'Navgurukul Travel Desk • Automated Notification'
+          // send_desk_notification_test() derives this from the configured URL.
+          // The preview has no URL, so it shows the shape the live card takes.
+          text: '🟢 Operational · Slack App webhook · Navgurukul Travel Desk'
         }
       ]
     }

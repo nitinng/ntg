@@ -513,3 +513,31 @@ foreignObject > div, foreignObject > div > span, .edgeLabel, .edgeLabel span { b
 
 .funnel-trapezoid { position: relative; z-index: 1; } .funnel-trapezoid::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 0.5rem; transform: perspective(200px) rotateX(-15deg); transform-origin: top; }
 
+
+/* ── Slack card preview ──────────────────────────────────────────────────────
+   Scoped to .slack-surface so the gallery's own Slack-light / Slack-dark
+   toggle is independent of the app's theme. Values follow what Slack actually
+   renders, because a preview that flatters the payload is how the gallery and
+   the channel drifted apart in the first place. */
+.slack-surface .slack-link { color: #1264A3; text-decoration: none; }
+.slack-surface .slack-link:hover { text-decoration: underline; }
+.slack-surface .slack-field strong,
+.slack-surface strong { font-weight: 700; }
+.slack-surface .slack-code {
+  font-family: Monaco, Menlo, Consolas, "Courier New", monospace;
+  font-size: 12px; padding: 1px 3px; border-radius: 3px;
+  background: #F6F6F6; border: 1px solid #DDD; color: #E01E5A;
+}
+.slack-surface .slack-pre {
+  font-family: Monaco, Menlo, Consolas, "Courier New", monospace;
+  font-size: 12px; line-height: 1.5; margin: 8px 0; padding: 8px;
+  border-radius: 4px; background: #F6F6F6; border: 1px solid #DDD;
+  color: #1D1C1D; white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+}
+.slack-surface.slack-theme-dark .slack-code {
+  background: rgba(255,255,255,0.06); border-color: #35373B; color: #E8912D;
+}
+.slack-surface.slack-theme-dark .slack-pre {
+  background: rgba(255,255,255,0.04); border-color: #35373B; color: #D1D2D3;
+}
+.slack-surface.slack-theme-dark .slack-link { color: #1D9BD1; }

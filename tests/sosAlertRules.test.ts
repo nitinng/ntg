@@ -236,7 +236,7 @@ describe('message formatting', () => {
     expect(text).not.toContain('Context:');
   });
 
-  it('formats Slack card with Block Kit inside attachments wrapper and 4-field grid', () => {
+  it('builds the card the SQL payload builder ships: header, 3-field grid, snippet, actions, footer', () => {
     const payload = formatAlertSlackPayload(alert, {
       occurrences: 5,
       environment: 'production',
@@ -244,35 +244,50 @@ describe('message formatting', () => {
     });
 
     expect(payload.attachments).toHaveLength(1);
-    expect(payload.attachments[0].color).toBe(SLACK_SEVERITY_COLORS.critical); // #E24B4A
+    expect(payload.attachments[0].color).toBe(SLACK_SEVERITY_COLORS.critical);
     const blocks = payload.attachments[0].blocks;
-    expect(blocks.length).toBeGreaterThanOrEqual(4);
+    expect(blocks).toHaveLength(5);
 
-    // Title / pill section
+    // A header block, not a bold section: this is what separates one card from
+    // the next when Slack stacks consecutive messages from the same app.
+    expect(blocks[0].type).toBe('header');
+    expect(blocks[0].text.type).toBe('plain_text');
     expect(blocks[0].text.text).toContain('Critical');
     expect(blocks[0].text.text).toContain(alert.title);
 
-    // 4-field grid section
-    const fieldsSection = blocks[1];
-    expect(fieldsSection.fields).toBeDefined();
-    expect(fieldsSection.fields).toHaveLength(4);
-    const fieldTexts = fieldsSection.fields.map((f: any) => f.text);
+    // Environment is a constant and lives in the footer, not a grid slot.
+    const fields = blocks[1].fields;
+    expect(fields).toHaveLength(3);
+    const fieldTexts = fields.map((f: any) => f.text);
     expect(fieldTexts[0]).toContain('*Service*');
-    expect(fieldTexts[1]).toContain('*Environment*');
-    expect(fieldTexts[1]).toContain('production');
-    expect(fieldTexts[2]).toContain('*Occurrences*');
-    expect(fieldTexts[2]).toContain('5 in recent window');
-    expect(fieldTexts[3]).toContain('*Impact*');
+    expect(fieldTexts[1]).toContain('*Occurrences*');
+    expect(fieldTexts[1]).toContain('5 times');
+    expect(fieldTexts[2]).toContain('*Impact*');
+    expect(fieldTexts.join(' ')).not.toContain('*Environment*');
 
-    // Code snippet section
-    const codeSection = blocks[2];
-    expect(codeSection.text.text).toMatch(/^```[\s\S]+```$/);
+    expect(blocks[2].text.text).toMatch(/^```[\s\S]+```$/);
 
-    // Action buttons section
-    const actionsSection = blocks[3];
-    expect(actionsSection.elements).toBeDefined();
-    expect(actionsSection.elements.some((b: any) => b.action_id === 'ack')).toBe(true);
-    expect(actionsSection.elements.some((b: any) => b.url && b.url.includes('tab=sos'))).toBe(true);
+    expect(blocks[3].elements.some((b: any) => b.action_id === 'ack')).toBe(true);
+    expect(blocks[3].elements.some((b: any) => b.url && b.url.includes('tab=sos'))).toBe(true);
+
+    expect(blocks[4].type).toBe('context');
+    expect(blocks[4].elements[0].text).toContain(alert.code);
+    expect(blocks[4].elements[0].text).toContain('production');
+  });
+
+  it('clamps a long header to the 150 characters Slack accepts', () => {
+    const payload = formatAlertSlackPayload(
+      { ...alert, title: 'A very long failure title '.repeat(12) },
+      { occurrences: 1 }
+    );
+    const header = payload.attachments[0].blocks[0].text.text;
+    expect(header.length).toBeLessThanOrEqual(150);
+    expect(header.endsWith('...')).toBe(true);
+  });
+
+  it('gives every severity its own colour, so the bar actually signals severity', () => {
+    const colours = Object.values(SLACK_SEVERITY_COLORS);
+    expect(new Set(colours).size).toBe(colours.length);
   });
 
   it('formats resolved card into a collapsed single line', () => {

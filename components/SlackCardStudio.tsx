@@ -21,6 +21,7 @@ import {
   formatSlackRequestResolved
 } from '../utils/desk/slackNotification';
 import { sendSosTestAlert, sendNotificationTest } from '../utils/sos/sosService';
+import { BlockKitPreview } from './slack/BlockKitPreview';
 
 export type CardCategory = 'sos' | 'notifications';
 
@@ -555,10 +556,8 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
           </div>
 
           <div
-            className={`rounded-2xl border shadow-xl overflow-hidden transition-colors ${
-              slackTheme === 'dark'
-                ? 'bg-[#1A1D21] border-[#2C3136] text-[#D1D2D3]'
-                : 'bg-white border-slate-200 text-slate-800'
+            className={`rounded-xl overflow-hidden border ${
+              slackTheme === 'dark' ? 'border-[#2C3136]' : 'border-slate-200'
             }`}
           >
             {/* Slack Header */}
@@ -578,272 +577,14 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
               </span>
             </div>
 
-            {/* Slack Message Body */}
-            <div className="p-4 sm:p-5">
-              <div className="flex items-start gap-3">
-                {/* Bot Avatar */}
-                <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-black text-sm shadow-sm ${
-                    category === 'sos' ? 'bg-rose-600' : 'bg-indigo-600'
-                  }`}
-                >
-                  <i className={`fa-solid ${category === 'sos' ? 'fa-tower-broadcast' : 'fa-paper-plane'}`}></i>
-                </div>
-
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-black text-sm text-slate-900 dark:text-white">
-                      {category === 'sos' ? 'Travel Desk Alert' : 'Travel Desk Notification'}
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                      APP
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Today at 2:04 AM
-                    </span>
-                  </div>
-
-                  {deliveryMode === 'block_kit' ? (
-                    <div
-                      className={`rounded-lg p-4 space-y-3 ${
-                        slackTheme === 'dark' ? 'bg-[#222529]' : 'bg-slate-50'
-                      }`}
-                      style={{
-                        borderLeft: `4px solid ${
-                          category === 'sos'
-                            ? (activeSos.isResolved ? '#64748B' : sosColor)
-                            : (activeNotif.isResolved ? '#10B981' : notifColor)
-                        }`
-                      }}
-                    >
-                      {/* --- SOS CARD --- */}
-                      {category === 'sos' && !activeSos.isResolved && (
-                        <>
-                          <p className="font-black text-sm text-slate-900 dark:text-white">
-                            {sosPill} — {activeSos.title}
-                          </p>
-
-                          {/* 4-Field Grid */}
-                          <div
-                            className={`grid grid-cols-2 gap-3 p-3 rounded-lg text-xs ${
-                              slackTheme === 'dark' ? 'bg-[#1A1D21]' : 'bg-white border border-slate-200'
-                            }`}
-                          >
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Service</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeSos.service}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Environment</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeSos.environment}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Occurrences</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                                {activeSos.occurrences > 1 ? `${activeSos.occurrences} in recent window` : '1st occurrence'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Impact</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">{activeSos.impact}</p>
-                            </div>
-                          </div>
-
-                          {/* Code Snippet */}
-                          {activeSos.stackSnippet && (
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                                <span>Error Log Snippet:</span>
-                                <button
-                                  onClick={() => setShowFullStack(v => !v)}
-                                  className="text-indigo-400 hover:underline font-bold"
-                                >
-                                  {showFullStack ? 'Truncate to 3 lines' : 'Show full trace'}
-                                </button>
-                              </div>
-                              <pre
-                                className={`p-3 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto ${
-                                  slackTheme === 'dark' ? 'bg-[#121417] text-slate-200' : 'bg-slate-900 text-slate-100'
-                                }`}
-                              >
-                                <code>{showFullStack ? activeSos.stackSnippet : activeSos.stackSnippet.split('\n').slice(0, 3).join('\n')}</code>
-                              </pre>
-                            </div>
-                          )}
-
-                          {/* Action Buttons */}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <span className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white shadow-sm flex items-center gap-1.5">
-                              <i className="fa-solid fa-check"></i> Acknowledge
-                            </span>
-                            <span className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                              <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> View logs
-                            </span>
-                            {(activeSos.code.startsWith('EMAIL_') || activeSos.code.startsWith('SMTP_')) && (
-                              <span className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
-                                <i className="fa-solid fa-rotate-right"></i> Retry
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-200/50 dark:border-slate-800">
-                            `{activeSos.code}` · Travel Desk SOS
-                          </p>
-                        </>
-                      )}
-
-                      {/* --- SOS COLLAPSED RESOLVED CARD --- */}
-                      {category === 'sos' && activeSos.isResolved && (
-                        <div className="space-y-0.5 py-1">
-                          <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                            <span className="text-emerald-500 font-bold">✅ Resolved</span>
-                            <span className="text-slate-400 font-normal">—</span>
-                            <span>{activeSos.title}</span>
-                          </p>
-                          <p className="text-[11px] text-slate-400 italic">
-                            Handled by {currentUser?.name || 'Nitin Sudarshan'} · Just now
-                          </p>
-                        </div>
-                      )}
-
-                      {/* --- NOTIFICATION ACTIVE CARD --- */}
-                      {category === 'notifications' && !activeNotif.isResolved && (() => {
-                        const notifModeLower = (activeNotif.mode || '').toLowerCase();
-                        const notifModeIcon =
-                          notifModeLower.includes('train') || notifModeLower.includes('rail') ? '🚆' :
-                          notifModeLower.includes('bus') ? '🚌' :
-                          notifModeLower.includes('cab') || notifModeLower.includes('taxi') ? '🚕' :
-                          '✈️';
-
-                        const notifRouteIcon =
-                          notifModeLower.includes('train') ? '🚆' :
-                          notifModeLower.includes('bus') ? '🚌' :
-                          notifModeLower.includes('cab') ? '🚕' :
-                          '🛫';
-
-                        const notifPrioEmoji =
-                          activeNotif.priority === 'Urgent'
-                            ? '🚨 Urgent (1d to travel · <2d policy)'
-                            : activeNotif.priority === 'High'
-                            ? '🔴 High (6d to travel · policy 2-10d)'
-                            : activeNotif.priority === 'Normal'
-                            ? '⚡ Normal (14d to travel · policy 10-20d)'
-                            : '🟢 Low (>20d to travel · policy >20d)';
-
-                        return (
-                          <>
-                            <p className="font-black text-sm text-slate-900 dark:text-white">
-                              {notifModeIcon} New Travel Request — {activeNotif.ticket}
-                            </p>
-                            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                              <span>*Status:* 🟡 <strong>{activeNotif.status}</strong></span>
-                              <span className="mx-2 text-slate-400">|</span>
-                              <span>*Priority:* <strong>{notifPrioEmoji}</strong></span>
-                            </div>
-
-                            {/* 4-Field Notification Grid */}
-                            <div
-                              className={`grid grid-cols-2 gap-3 p-3 rounded-lg text-xs ${
-                                slackTheme === 'dark' ? 'bg-[#1A1D21]' : 'bg-white border border-slate-200'
-                              }`}
-                            >
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">👤 Traveler</p>
-                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.who}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">🏢 Dept / Campus</p>
-                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.dept} ({activeNotif.campus})</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{notifRouteIcon} Trip Route</p>
-                                <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeNotif.trip}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">📅 Date & Mode</p>
-                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.date} · {activeNotif.mode}</p>
-                              </div>
-                            </div>
-
-                            {activeNotif.note && (
-                              <div className="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-slate-600 dark:text-slate-300">
-                                <span className="font-bold text-indigo-700 dark:text-indigo-300 mr-1.5">Note:</span>
-                                {activeNotif.note}
-                              </div>
-                            )}
-
-                            <div className="pt-1">
-                              <span className="px-4 py-2 rounded-lg text-xs font-black bg-indigo-600 text-white shadow-sm inline-block">
-                                View in Travel Desk →
-                              </span>
-                            </div>
-
-                            <p className="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-200/50 dark:border-slate-800">
-                              `{activeNotif.ticket}` · Navgurukul Travel Desk • Automated Notification
-                            </p>
-                          </>
-                        );
-                      })()}
-
-                      {/* --- NOTIFICATION COLLAPSED BOOKED CARD --- */}
-                      {category === 'notifications' && activeNotif.isResolved && (
-                        <div className="space-y-0.5 py-1">
-                          <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                            <span className="text-emerald-500 font-bold">✅ Booked</span>
-                            <span className="text-slate-400 font-normal">—</span>
-                            <span>`{activeNotif.ticket}` ({activeNotif.trip})</span>
-                          </p>
-                          <p className="text-[11px] text-slate-400 italic">
-                            Handled by PNC Desk Team · Completed
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    /* Workflow Text View */
-                    <div
-                      className={`p-4 rounded-lg font-mono text-xs whitespace-pre-wrap leading-relaxed border ${
-                        slackTheme === 'dark'
-                          ? 'bg-[#121417] text-slate-200 border-[#2C3136]'
-                          : 'bg-white text-slate-800 border-slate-200'
-                      }`}
-                    >
-                      {category === 'sos' ? (
-                        [
-                          `${SOS_SEVERITY_ICONS[activeSos.severity]}  ${activeSos.severity.toUpperCase()}  ·  ${activeSos.title}`,
-                          '',
-                          `Service        ${activeSos.service}`,
-                          `Environment    ${activeSos.environment}`,
-                          `Occurrences    ${activeSos.occurrences > 1 ? `${activeSos.occurrences} times` : 'First occurrence'}`,
-                          `Impact         ${activeSos.impact}`,
-                          '',
-                          activeSos.stackSnippet.split('\n').slice(0, 3).join('\n'),
-                          '',
-                          `View logs: https://ng-travel-desk.vercel.app/?tab=sos`
-                        ].join('\n')
-                      ) : (
-                        [
-                          `✈️  TRAVEL DESK NOTIFICATION · NEW REQUEST`,
-                          `Request ID: ${activeNotif.ticket}  •  Status: ${activeNotif.status}`,
-                          '',
-                          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-                          `Traveler:          ${activeNotif.who}`,
-                          `Dept / Campus:     ${activeNotif.dept} (${activeNotif.campus})`,
-                          `Trip Route:        ${activeNotif.trip}`,
-                          `Travel Date:       ${activeNotif.date}`,
-                          `Mode:              ${activeNotif.mode}`,
-                          `Priority:          ${activeNotif.priority}`,
-                          `Approving Manager: ${activeNotif.manager}`,
-                          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-                          '',
-                          `Action: View in Travel Desk → https://ng-travel-desk.vercel.app/?tab=requests`
-                        ].join('\n')
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            {/* The frame is the simulated channel. What sits inside it is drawn
+                with only what Slack's API can express -- see BlockKitPreview. */}
+            <BlockKitPreview
+              payload={category === 'sos' ? generatedSosPayload : generatedNotifPayload}
+              theme={slackTheme}
+              appName={category === 'sos' ? 'Travel Desk Alert' : 'Travel Desk Notification'}
+              asWorkflowText={deliveryMode !== 'block_kit'}
+            />
           </div>
         </div>
 

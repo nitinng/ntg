@@ -47,25 +47,74 @@ export const formatSlackNewRequest = (
   const basePortal = portalUrl ? portalUrl.replace(/\/+$/, '') : 'https://ng-travel-desk.vercel.app';
   const targetUrl = `${basePortal}/?tab=requests`;
 
-  const priorityEmoji =
-    priority.toLowerCase() === 'high' ? '🔴 High' :
-    priority.toLowerCase() === 'urgent' ? '🚨 Urgent' :
-    `⚡ ${priority}`;
+  const modeLower = (request.travel_mode || '').toLowerCase();
+  const modeIcon =
+    modeLower.includes('train') || modeLower.includes('rail') ? '🚆' :
+    modeLower.includes('bus') ? '🚌' :
+    modeLower.includes('cab') || modeLower.includes('taxi') || modeLower.includes('car') ? '🚕' :
+    '✈️';
+
+  const routeIcon =
+    modeLower.includes('train') ? '🚆' :
+    modeLower.includes('bus') ? '🚌' :
+    modeLower.includes('cab') ? '🚕' :
+    '🛫';
+
+  // Calculate dynamic urgency from days remaining as per policy thresholds
+  // Critical: <2d, High: 2-10d, Medium/Normal: 10-20d, Low: >20d
+  let daysRemaining: number | null = null;
+  if (request.date_of_travel) {
+    const travelDate = new Date(request.date_of_travel);
+    if (!isNaN(travelDate.getTime())) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      travelDate.setHours(0, 0, 0, 0);
+      daysRemaining = Math.ceil((travelDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+  }
+
+  const rawPriority =
+    request.priority ||
+    (daysRemaining !== null
+      ? daysRemaining < 2 ? 'Urgent' : daysRemaining <= 10 ? 'High' : daysRemaining <= 20 ? 'Normal' : 'Low'
+      : 'Normal');
+
+  const prioLower = String(rawPriority).toLowerCase();
+
+  let priorityEmoji = `⚡ ${rawPriority}`;
+  if (prioLower === 'urgent' || prioLower === 'critical') {
+    priorityEmoji = daysRemaining !== null
+      ? `🚨 Urgent (${daysRemaining}d to travel · <2d policy)`
+      : '🚨 Urgent';
+  } else if (prioLower === 'high') {
+    priorityEmoji = daysRemaining !== null
+      ? `🔴 High (${daysRemaining}d to travel · 2-10d policy)`
+      : '🔴 High';
+  } else if (prioLower === 'medium' || prioLower === 'normal') {
+    priorityEmoji = daysRemaining !== null
+      ? `⚡ Normal (${daysRemaining}d to travel · 10-20d policy)`
+      : '⚡ Normal';
+  } else if (prioLower === 'low') {
+    priorityEmoji = daysRemaining !== null
+      ? `🟢 Low (${daysRemaining}d to travel · >20d policy)`
+      : '🟢 Low';
+  }
 
   const color =
-    priority.toLowerCase() === 'urgent' ? '#E24B4A' :
-    priority.toLowerCase() === 'high' ? '#EF9F27' :
+    prioLower === 'urgent' || prioLower === 'critical' ? '#E24B4A' :
+    prioLower === 'high' ? '#EF9F27' :
+    prioLower === 'low' ? '#10B981' :
     '#176AE6';
 
   // 1. Rich mrkdwn text (optimized for Slack Workflow Builder and mobile previews)
   const text = [
-    `✈️ *TRAVEL DESK NOTIFICATION · NEW REQUEST*`,
+    `${modeIcon} *TRAVEL DESK NOTIFICATION · NEW REQUEST*`,
     `*Request ID:* \`${ticket}\`  •  *Status:* 🟡 ${status}`,
     '',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     `👤 *Traveler:* ${who}`,
     `🏢 *Dept / Campus:* ${dept}`,
-    `🛫 *Trip Route:* ${trip}`,
+    `${routeIcon} *Trip Route:* ${trip}`,
     `📅 *Travel Date:* ${date}`,
     `🎫 *Mode & Type:* ${mode}`,
     `⚡ *Priority:* ${priorityEmoji}`,
@@ -83,7 +132,7 @@ export const formatSlackNewRequest = (
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `✈️ New Travel Request — ${ticket}`,
+        text: `${modeIcon} New Travel Request — ${ticket}`,
         emoji: true
       }
     },
@@ -100,7 +149,7 @@ export const formatSlackNewRequest = (
       fields: [
         { type: 'mrkdwn', text: `*👤 Traveler:*\n${who}` },
         { type: 'mrkdwn', text: `*🏢 Dept / Campus:*\n${dept}` },
-        { type: 'mrkdwn', text: `*🛫 Trip Route:*\n${trip}` },
+        { type: 'mrkdwn', text: `*${routeIcon} Trip Route:*\n${trip}` },
         { type: 'mrkdwn', text: `*📅 Travel Date:*\n${date} · ${mode}` }
       ]
     },

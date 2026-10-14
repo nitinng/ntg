@@ -148,48 +148,64 @@ interface NotificationScenario {
 
 const NOTIFICATION_SCENARIOS: NotificationScenario[] = [
   {
-    id: 'urgent_req',
-    label: '🚨 Urgent Request (Flight)',
+    id: 'flight_req',
+    label: '✈️ Flight Request (Urgent)',
     ticket: 'TRV-O-261014-001',
     who: 'Nitin Sudarshan',
     dept: 'CEO Office',
     campus: 'Remote',
     trip: 'Pune ➔ Bengaluru',
-    date: '16 Oct 2026',
-    mode: 'Flight (One-way)',
+    date: '15 Oct 2026',
+    mode: 'Flight · Indigo 6E-204 (One-way)',
     priority: 'Urgent',
     manager: 'abhishek@navgurukul.org',
     status: 'Pending PNC',
-    note: 'Board meeting attendance required at Bengaluru HQ.'
+    note: 'Executive quarterly review attendance (1 day to departure · <2d policy).'
   },
   {
-    id: 'normal_req',
-    label: '✈️ Standard Request (Train)',
+    id: 'train_req',
+    label: '🚆 Train Request (High Priority)',
     ticket: 'TRV-R-261014-002',
     who: 'Pooja Sharma',
     dept: 'Academics',
     campus: 'Dharamshala Campus',
     trip: 'Delhi ➔ Dharamshala',
     date: '20 Oct 2026',
-    mode: 'Train · 3AC (Round-trip)',
-    priority: 'Normal',
+    mode: 'Train · Vande Bharat 3AC (Round-trip)',
+    priority: 'High',
     manager: 'nitin.s@navgurukul.org',
-    status: 'Pending Manager Approval'
+    status: 'Pending Manager Approval',
+    note: 'Cohort curriculum orientation (6 days to departure · 2-10d policy).'
   },
   {
-    id: 'approved_req',
-    label: '✅ Status Update: Approved',
-    ticket: 'TRV-O-261014-003',
+    id: 'bus_req',
+    label: '🚌 Bus Request (Normal Priority)',
+    ticket: 'TRV-B-261014-005',
     who: 'Rohan Verma',
     dept: 'Operations',
     campus: 'Pune Campus',
-    trip: 'Pune ➔ Mumbai',
+    trip: 'Pune ➔ Goa',
+    date: '28 Oct 2026',
+    mode: 'Bus · Volvo Multi-Axle AC Sleeper',
+    priority: 'Normal',
+    manager: 'anuradha@navgurukul.org',
+    status: 'Pending PNC',
+    note: 'Campus operational meetup coordination (14 days to departure · 10-20d policy).'
+  },
+  {
+    id: 'approved_req',
+    label: '🚕 Cab Status Update: Approved',
+    ticket: 'TRV-O-261014-003',
+    who: 'Priyanka Das',
+    dept: 'Partnerships',
+    campus: 'Mumbai Campus',
+    trip: 'Mumbai ➔ Pune',
     date: '18 Oct 2026',
     mode: 'Cab · Sedan',
     priority: 'Normal',
     manager: 'anuradha@navgurukul.org',
     status: 'Approved by Manager',
-    note: 'Approved. Vendor quotes can be secured.'
+    note: 'Approved. Cab vendor quotes can be secured.'
   },
   {
     id: 'booked_req',
@@ -691,59 +707,83 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                       )}
 
                       {/* --- NOTIFICATION ACTIVE CARD --- */}
-                      {category === 'notifications' && !activeNotif.isResolved && (
-                        <>
-                          <p className="font-black text-sm text-slate-900 dark:text-white">
-                            ✈️ New Travel Request — {activeNotif.ticket}
-                          </p>
-                          <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                            <span>*Status:* 🟡 <strong>{activeNotif.status}</strong></span>
-                            <span className="mx-2 text-slate-400">|</span>
-                            <span>*Priority:* <strong>{activeNotif.priority === 'Urgent' ? '🚨 Urgent' : activeNotif.priority === 'High' ? '🔴 High' : '⚡ Normal'}</strong></span>
-                          </div>
+                      {category === 'notifications' && !activeNotif.isResolved && (() => {
+                        const notifModeLower = (activeNotif.mode || '').toLowerCase();
+                        const notifModeIcon =
+                          notifModeLower.includes('train') || notifModeLower.includes('rail') ? '🚆' :
+                          notifModeLower.includes('bus') ? '🚌' :
+                          notifModeLower.includes('cab') || notifModeLower.includes('taxi') ? '🚕' :
+                          '✈️';
 
-                          {/* 4-Field Notification Grid */}
-                          <div
-                            className={`grid grid-cols-2 gap-3 p-3 rounded-lg text-xs ${
-                              slackTheme === 'dark' ? 'bg-[#1A1D21]' : 'bg-white border border-slate-200'
-                            }`}
-                          >
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">👤 Traveler</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.who}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">🏢 Dept / Campus</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.dept} ({activeNotif.campus})</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">🛫 Trip Route</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeNotif.trip}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">📅 Date & Mode</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.date} · {activeNotif.mode}</p>
-                            </div>
-                          </div>
+                        const notifRouteIcon =
+                          notifModeLower.includes('train') ? '🚆' :
+                          notifModeLower.includes('bus') ? '🚌' :
+                          notifModeLower.includes('cab') ? '🚕' :
+                          '🛫';
 
-                          {activeNotif.note && (
-                            <div className="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-slate-600 dark:text-slate-300">
-                              <span className="font-bold text-indigo-700 dark:text-indigo-300 mr-1.5">Note:</span>
-                              {activeNotif.note}
+                        const notifPrioEmoji =
+                          activeNotif.priority === 'Urgent'
+                            ? '🚨 Urgent (1d to travel · <2d policy)'
+                            : activeNotif.priority === 'High'
+                            ? '🔴 High (6d to travel · policy 2-10d)'
+                            : activeNotif.priority === 'Normal'
+                            ? '⚡ Normal (14d to travel · policy 10-20d)'
+                            : '🟢 Low (>20d to travel · policy >20d)';
+
+                        return (
+                          <>
+                            <p className="font-black text-sm text-slate-900 dark:text-white">
+                              {notifModeIcon} New Travel Request — {activeNotif.ticket}
+                            </p>
+                            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                              <span>*Status:* 🟡 <strong>{activeNotif.status}</strong></span>
+                              <span className="mx-2 text-slate-400">|</span>
+                              <span>*Priority:* <strong>{notifPrioEmoji}</strong></span>
                             </div>
-                          )}
 
-                          <div className="pt-1">
-                            <span className="px-4 py-2 rounded-lg text-xs font-black bg-indigo-600 text-white shadow-sm inline-block">
-                              View in Travel Desk →
-                            </span>
-                          </div>
+                            {/* 4-Field Notification Grid */}
+                            <div
+                              className={`grid grid-cols-2 gap-3 p-3 rounded-lg text-xs ${
+                                slackTheme === 'dark' ? 'bg-[#1A1D21]' : 'bg-white border border-slate-200'
+                              }`}
+                            >
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">👤 Traveler</p>
+                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.who}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">🏢 Dept / Campus</p>
+                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.dept} ({activeNotif.campus})</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{notifRouteIcon} Trip Route</p>
+                                <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeNotif.trip}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">📅 Date & Mode</p>
+                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.date} · {activeNotif.mode}</p>
+                              </div>
+                            </div>
 
-                          <p className="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-200/50 dark:border-slate-800">
-                            `{activeNotif.ticket}` · Navgurukul Travel Desk • Automated Notification
-                          </p>
-                        </>
-                      )}
+                            {activeNotif.note && (
+                              <div className="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-slate-600 dark:text-slate-300">
+                                <span className="font-bold text-indigo-700 dark:text-indigo-300 mr-1.5">Note:</span>
+                                {activeNotif.note}
+                              </div>
+                            )}
+
+                            <div className="pt-1">
+                              <span className="px-4 py-2 rounded-lg text-xs font-black bg-indigo-600 text-white shadow-sm inline-block">
+                                View in Travel Desk →
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-200/50 dark:border-slate-800">
+                              `{activeNotif.ticket}` · Navgurukul Travel Desk • Automated Notification
+                            </p>
+                          </>
+                        );
+                      })()}
 
                       {/* --- NOTIFICATION COLLAPSED BOOKED CARD --- */}
                       {category === 'notifications' && activeNotif.isResolved && (

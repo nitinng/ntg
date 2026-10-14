@@ -547,7 +547,7 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
         <div className="lg:col-span-7 space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
             <span>
-              Slack View ({category === 'sos' ? '#alert-team-automation' : '#travel-desk-notifications'})
+              Slack View ({category === 'sos' ? '#alert-team-automation' : '#alert-traveldesk-notifications'})
             </span>
             <span className="font-normal font-mono text-[11px] text-slate-400">
               {deliveryMode === 'block_kit' ? 'Block Kit Attachment' : 'Plain Text'}
@@ -571,7 +571,7 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
             >
               <div className="flex items-center gap-2">
                 <span className="text-slate-400 font-mono">#</span>
-                <span>{category === 'sos' ? 'alert-team-automation' : 'travel-desk-notifications'}</span>
+                <span>{category === 'sos' ? 'alert-team-automation' : 'alert-traveldesk-notifications'}</span>
               </div>
               <span className="text-slate-400 text-[11px] font-normal">
                 <i className="fa-solid fa-lock text-[9px] mr-1"></i> internal

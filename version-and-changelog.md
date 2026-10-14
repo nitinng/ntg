@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.11.0 (2026-10-14)](#v2110---2026-10-14)
+* [Current Release — v2.12.0 (2026-10-14)](#v2120---2026-10-14)
+* [v2.11.0 (2026-10-14)](#v2110---2026-10-14)
 * [v2.10.1 (2026-10-10)](#v2101---2026-10-10)
 * [v2.10.0 (2026-10-10)](#v2100---2026-10-10)
 * [v2.9.0 (2026-10-10)](#v290---2026-10-10)
@@ -30,6 +31,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.12.0] - 2026-10-14
+
+### 🎯 PNC Ticket Scoping, Lifecycle Stage Parity & Slack Card Polish
+
+> **Workflow & Operations** — Introduced "Me" vs "All" ticket filters across PNC Dashboard and Active Booking Queue for instant personal ownership isolation. Added all 22 lifecycle stage cards to PNC Dashboard with an active/all toggle and dedicated status styling. Streamlined Slack alerting cards with clear headers, dynamic delivery badges, and severity-specific colors.
+
+#### 🗂️ PNC Dashboard & Queue Scoping
+* **Me vs All Ownership Filter**: Single-click toggle in both the PNC Dashboard and Active Booking Queue to switch between tickets assigned to the logged-in desk member (`assignedPncId`) and organization-wide tickets.
+* **Full 22 Lifecycle Stage Cards**: Restored missing lifecycle stages in the PNC Dashboard (including *Partially Booked / Cancelled*, *Pending Refund*, *On Hold*, and *Cancellation Requested*).
+* **Active Only / Show All Stages Toggle**: Default view focuses on active in-flight request stages while allowing instant expansion to view all 22 lifecycle statuses with dedicated badge colorways.
+* **Smart Queue Partitioning**: In the Active Booking Queue banner, tickets automatically partition based on scope, hiding unassigned queues in "Me" mode and keeping stage pipelines focused.
+
+#### 🔔 Slack Notifications & SOS Cards
+* **Visual Message Demarcation**: SOS cards now open with distinct header blocks so consecutive alerts from the same bot are easily distinguishable in Slack.
+* **Severity Bar Colors**: Split severity color bars into clear tiers — Amber for warning, Blue for info, Orange for error, Red for critical.
+* **Channel-Agnostic Test Delivery**: Desk notification test cards dynamically detect delivery mode (Slack App vs Workflow Builder) and avoid hardcoded channel assumptions.
+* **Dedicated Channel Email Fallbacks**: Notification stream fallbacks point directly to `#alert-traveldesk-notifications` to prevent spillover into system error channels.
+
+#### 📝 Commits in this Release
+* `da0639f` — `feat(pnc): add Me/All scope filters and missing lifecycle stage cards to dashboard and queue` — Nitin — 2026-10-14
+* `a7b5c59` — `feat(sos): make one card visibly end before the next begins` — Nitin — 2026-10-14
+* `80b145d` — `fix(notifications): point the email fallback at its own channel` — Nitin — 2026-10-14
+* `1eedacf` — `chore(cards): point the preview gallery at the real notification channel` — Nitin — 2026-10-14
 
 ---
 

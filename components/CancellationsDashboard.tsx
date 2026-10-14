@@ -4,7 +4,7 @@ import { CancellationRecord, User, UserRole, RefundEntry } from '../types';
 import Card from './Card';
 import PageBanner from './PageBanner';
 import { toast } from 'sonner';
-import { calculateCancellationSplit, applyRefundToAdvance } from '../utils/cancellation';
+import { calculateCancellationSplit, applyRefundToAdvance, applyRefundToCreditCard } from '../utils/cancellation';
 import {
   SETTLEMENT_OPTIONS,
   settlementStatusToPncStatus,
@@ -40,7 +40,7 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
       .from('cancellation_records')
       .select(`
         *,
-        travel_requests ( submission_id, purpose, split_tickets, advance_id, requester_name )
+        travel_requests ( submission_id, purpose, split_tickets, advance_id, credit_card_id, requester_name )
       `)
       .order('cancellation_date', { ascending: false });
 
@@ -163,11 +163,22 @@ const CancellationsDashboard: React.FC<CancellationsDashboardProps> = ({ current
         if (refundError) throw refundError;
       }
 
-      // 4. Apply refund to advance (unchanged)
+      // 4. Return the recovery to whichever rail funded the booking. A ticket
+      // is paid from an advance or from a card, never both, so at most one of
+      // these fires.
       const advId = settlingRecord.advance_id || settlingRecord.travel_requests?.advance_id;
+      const cardId = settlingRecord.credit_card_id || settlingRecord.travel_requests?.credit_card_id;
       if (advId && totalRecovered > 0) {
         await applyRefundToAdvance(
           advId,
+          totalRecovered,
+          currentUser?.email || 'System',
+          settlingRecord.travel_request_id,
+          settlingRecord.travel_requests?.submission_id
+        );
+      } else if (cardId && totalRecovered > 0) {
+        await applyRefundToCreditCard(
+          cardId,
           totalRecovered,
           currentUser?.email || 'System',
           settlingRecord.travel_request_id,

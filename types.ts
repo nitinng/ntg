@@ -300,6 +300,8 @@ export interface TravelRequest {
 
   // Added for linking to Advances
   advanceId?: string;
+  /** Set when the booking was paid on one of the desk's credit cards. */
+  creditCardId?: string;
 
   // Finance & PNC Tracker Data
   costCenter?: string;
@@ -340,7 +342,7 @@ export interface TravelRequest {
   assignedAt?: string | null;
   assignmentReason?: string | null;
   assignmentType?: 'claim' | 'assign' | 'reassign' | 'transfer' | null;
-  paymentSource?: 'Advance' | 'Direct' | 'Not Yet Entered';
+  paymentSource?: 'Advance' | 'Credit Card' | 'Direct' | 'Not Yet Entered';
   bookingStatus?: 'Booked' | 'Cancelled' | 'Partially Cancelled' | 'Reconciled';
 }
 
@@ -359,6 +361,7 @@ export interface TravelLeg {
   cancelledBy?: 'Employee' | 'Org' | 'Vendor';
   cancellationReason?: string;
   advanceId?: string;
+  creditCardId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -377,6 +380,7 @@ export interface CancellationRecord {
   orgAbsorbedAmount: number;
   status: 'Pending Refund' | 'Partially Refunded' | 'Fully Refunded' | 'Written Off' | 'Reconciled' | 'Disputed';
   advanceId?: string;
+  creditCardId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -597,6 +601,45 @@ export interface Advance {
   receipt_id?: string;
   comments?: string;
   changelog: AdvanceChangelogEntry[];
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * A card's history, mirroring AdvanceChangelogEntry. 'Limit Increased' and
+ * 'Limit Reduced' are the two actions an advance has no equivalent for: a
+ * card's sanctioned balance can be topped up or cut back after it is added.
+ */
+export interface CreditCardChangelogEntry {
+  timestamp: string;
+  user: string;
+  action: 'Created' | 'Edited' | 'Limit Increased' | 'Limit Reduced' | 'Ticket Purchased' | 'Refund Received';
+  details: string;
+  relatedTicketId?: string;
+  relatedTicketSubmissionId?: string;
+}
+
+/**
+ * A desk credit card. The twin of {@link Advance}: a balance that bookings
+ * draw down and refunds restore, with every movement in the changelog.
+ * Only the last four digits of the card number are ever stored.
+ */
+export interface CreditCard {
+  id: string;
+  card_code?: string;
+  /** Exactly four digits — the tail of the card number shown as xxxx-xxxx-xxxx-NNNN. */
+  last_four: string;
+  bank_name: string;
+  /** Optional nickname, e.g. "Ops Travel Card". */
+  card_label?: string;
+  approver_name: string;
+  approver_id?: string;
+  /** The sanctioned limit as it stands today; later increases/reductions move it. */
+  opening_balance: number;
+  amount_left: number;
+  is_active: boolean;
+  comments?: string;
+  changelog: CreditCardChangelogEntry[];
   created_at: string;
   updated_at: string;
 }

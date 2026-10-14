@@ -227,8 +227,9 @@ export const AnalyticsView: React.FC<{
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const [activeSubTab, setActiveSubTab] = useState<'travel' | 'advances' | 'cancellations' | 'tat-sla'>('travel');
+  const [activeSubTab, setActiveSubTab] = useState<'travel' | 'advances' | 'credit-cards' | 'cancellations' | 'tat-sla'>('travel');
   const [advances, setAdvances] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<any[]>([]);
   const [cancellations, setCancellations] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -241,6 +242,7 @@ export const AnalyticsView: React.FC<{
   // Pagination states
   const [travelPage, setTravelPage] = useState(1);
   const [advancesPage, setAdvancesPage] = useState(1);
+  const [creditCardsPage, setCreditCardsPage] = useState(1);
   const [cancellationsPage, setCancellationsPage] = useState(1);
   const [slaPage, setSlaPage] = useState(1);
   const [slaSearch, setSlaSearch] = useState('');
@@ -251,6 +253,7 @@ export const AnalyticsView: React.FC<{
 
   // Sorting state for Advances & Cancellations
   const [advSort, setAdvSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'received_on', dir: 'desc' });
+  const [cardSort, setCardSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'created_at', dir: 'desc' });
   const [cancelSort, setCancelSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'cancellation_date', dir: 'desc' });
 
   // Fetch advances and cancellations
@@ -264,6 +267,17 @@ export const AnalyticsView: React.FC<{
           .order('received_on', { ascending: false });
         if (advError) throw advError;
         setAdvances(advData || []);
+
+        // Cards are the newest rail, so a failure here is reported but not
+        // thrown: the rest of the page (advances, cancellations) still loads.
+        const { data: cardData, error: cardError } = await supabase
+          .from('credit_cards')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (cardError) {
+          reportSos('CREDIT_CARD_FETCH_FAILED', cardError, { screen: 'analytics' });
+        }
+        setCreditCards(cardData || []);
 
         const { data: cancelData, error: cancelError } = await supabase
           .from('cancellation_records')
@@ -372,6 +386,18 @@ export const AnalyticsView: React.FC<{
     });
   };
 
+  // Cards are filtered on when they were registered, the way advances are
+  // filtered on when they were received.
+  const applyCreditCardFilters = (data: any[], range: { start: Date | null; end: Date | null }) => {
+    return data.filter(c => {
+      const cardDate = new Date(c.created_at);
+      let matchDate = true;
+      if (range.start) matchDate = matchDate && cardDate >= range.start;
+      if (range.end) matchDate = matchDate && cardDate <= range.end;
+      return matchDate;
+    });
+  };
+
   const applyCancellationFilters = (data: any[], range: { start: Date | null; end: Date | null }) => {
     return data.filter(c => {
       const matchCampus = filters.campuses.length === 0 || filters.campuses.includes(c.travel_requests?.requester_campus || '');
@@ -388,6 +414,7 @@ export const AnalyticsView: React.FC<{
   const prevPeriodData = useMemo(() => showComparison ? applyFilters(requests, getPreviousRange) : [], [requests, filters, showComparison, getPreviousRange]);
 
   const filteredAdvances = useMemo(() => applyAdvanceFilters(advances, getCurrentRange), [advances, getCurrentRange]);
+  const filteredCreditCards = useMemo(() => applyCreditCardFilters(creditCards, getCurrentRange), [creditCards, getCurrentRange]);
   const filteredCancellations = useMemo(() => applyCancellationFilters(cancellations, getCurrentRange), [cancellations, getCurrentRange]);
 
   const computeChange = (curr: number, prev: number): { pct: string; up: boolean } | null => {
@@ -402,6 +429,7 @@ export const AnalyticsView: React.FC<{
   useEffect(() => {
     setTravelPage(1);
     setAdvancesPage(1);
+    setCreditCardsPage(1);
     setCancellationsPage(1);
     setSlaPage(1);
   }, [activeSubTab]);
@@ -431,6 +459,14 @@ export const AnalyticsView: React.FC<{
   const totalAdvSpent = Math.max(0, totalAdvReceived - totalAdvRemaining);
   const advUtilPct = totalAdvReceived > 0 ? (totalAdvSpent / totalAdvReceived) * 100 : 0;
   const advSettledCount = filteredAdvances.filter(a => a.is_settled).length;
+
+  // Credit card KPI aggregations. opening_balance is the sanctioned balance as
+  // it stands today, so utilisation is opening_balance - amount_left.
+  const totalCardLimit = useMemo(() => filteredCreditCards.reduce((acc, c) => acc + (Number(c.opening_balance) || 0), 0), [filteredCreditCards]);
+  const totalCardRemaining = useMemo(() => filteredCreditCards.reduce((acc, c) => acc + (Number(c.amount_left) || 0), 0), [filteredCreditCards]);
+  const totalCardSpent = Math.max(0, totalCardLimit - totalCardRemaining);
+  const cardUtilPct = totalCardLimit > 0 ? (totalCardSpent / totalCardLimit) * 100 : 0;
+  const cardActiveCount = filteredCreditCards.filter(c => c.is_active).length;
 
   // Cancellations KPI Aggregations
   const totalCancelOriginalFare = useMemo(() => filteredCancellations.reduce((acc, c) => acc + (Number(c.original_fare || c.originalFare) || 0), 0), [filteredCancellations]);
@@ -523,6 +559,19 @@ export const AnalyticsView: React.FC<{
     });
   }, [filteredAdvances, advSort]);
 
+  // Credit cards Sorting
+  const sortedCreditCards = useMemo(() => {
+    return [...filteredCreditCards].sort((a, b) => {
+      const dir = cardSort.dir === 'asc' ? 1 : -1;
+      if (cardSort.col === 'created_at') return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      if (cardSort.col === 'bank_name') return dir * String(a.bank_name || '').localeCompare(String(b.bank_name || ''));
+      if (cardSort.col === 'approver_name') return dir * String(a.approver_name || '').localeCompare(String(b.approver_name || ''));
+      if (cardSort.col === 'opening_balance') return dir * (Number(a.opening_balance) - Number(b.opening_balance));
+      if (cardSort.col === 'amount_left') return dir * (Number(a.amount_left) - Number(b.amount_left));
+      return 0;
+    });
+  }, [filteredCreditCards, cardSort]);
+
   // Cancellations Sorting
   const sortedCancellations = useMemo(() => {
     return [...filteredCancellations].sort((a, b) => {
@@ -538,6 +587,7 @@ export const AnalyticsView: React.FC<{
 
   const toggleDeptSort = (col: typeof deptSort.col) => setDeptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
   const toggleAdvSort = (col: string) => setAdvSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+  const toggleCardSort = (col: string) => setCardSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
   const toggleCancelSort = (col: string) => setCancelSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
   const toggleSlaSort = (col: string) => setSlaSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
 
@@ -1314,6 +1364,8 @@ export const AnalyticsView: React.FC<{
 
   const totalAdvancesPages = Math.ceil(sortedAdvances.length / itemsPerPage) || 1;
   const paginatedAdvancesData = useMemo(() => sortedAdvances.slice((advancesPage - 1) * itemsPerPage, advancesPage * itemsPerPage), [sortedAdvances, advancesPage]);
+  const totalCreditCardsPages = Math.ceil(sortedCreditCards.length / itemsPerPage) || 1;
+  const paginatedCreditCardsData = useMemo(() => sortedCreditCards.slice((creditCardsPage - 1) * itemsPerPage, creditCardsPage * itemsPerPage), [sortedCreditCards, creditCardsPage]);
 
   const totalCancellationsPages = Math.ceil(sortedCancellations.length / itemsPerPage) || 1;
   const paginatedCancellationsData = useMemo(() => sortedCancellations.slice((cancellationsPage - 1) * itemsPerPage, cancellationsPage * itemsPerPage), [sortedCancellations, cancellationsPage]);
@@ -1332,6 +1384,8 @@ export const AnalyticsView: React.FC<{
               csv = [['Request ID', 'Traveler', 'Department', 'Campus', 'Route', 'Date', 'Status', 'Cost', 'Vendor', 'Invoice'], ...filteredData.map(r => [r.submissionId || r.id, r.requesterName, r.requesterDepartment, r.requesterCampus, `${r.from} -> ${r.to}`, new Date(r.dateOfTravel).toLocaleDateString(), r.pncStatus, r.ticketCost || 0, r.vendorName || '', r.invoiceUrl || ''])].map(e => e.join(',')).join('\n');
             } else if (activeSubTab === 'advances') {
               csv = [['Advance ID', 'Received On', 'Received From', 'Amount Received', 'Amount Left', 'Settled Status', 'Comments'], ...filteredAdvances.map(a => [a.receipt_id || a.id, a.received_on, a.received_from, a.amount_received, a.amount_left, a.is_settled ? 'Settled' : 'Unsettled', a.comments || ''])].map(e => e.join(',')).join('\n');
+            } else if (activeSubTab === 'credit-cards') {
+              csv = [['Card Code', 'Card Number', 'Bank', 'Approver', 'Opening Balance', 'Available', 'Utilised', 'Status'], ...filteredCreditCards.map(c => [c.card_code || c.id, `xxxx-xxxx-xxxx-${c.last_four}`, c.bank_name, c.approver_name, c.opening_balance, c.amount_left, Number(c.opening_balance) - Number(c.amount_left), c.is_active ? 'Active' : 'Inactive'])].map(e => e.join(',')).join('\n');
             } else if (activeSubTab === 'cancellations') {
               csv = [['Cancellation ID', 'Request ID', 'Traveler', 'Cancellation Date', 'Original Fare', 'Net Loss', 'Status', 'Owed By Employee', 'Absorbed By Org'], ...filteredCancellations.map(c => [c.id, c.travel_requests?.submission_id || c.travel_request_id, c.travel_requests?.requester_name || '', new Date(c.cancellation_date).toLocaleDateString(), c.original_fare || c.originalFare, c.net_unrecovered_amount || c.netUnrecoveredAmount, c.status, c.employee_owed_amount || c.employeeOwedAmount, c.org_absorbed_amount || c.orgAbsorbedAmount])].map(e => e.join(',')).join('\n');
             } else {
@@ -1352,7 +1406,8 @@ export const AnalyticsView: React.FC<{
         <div className="bg-slate-100/90 dark:bg-slate-900/90 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-1.5 shadow-xs">
           {[
             { id: 'travel', label: 'Travel & Spend', icon: 'fa-plane', badge: filteredData.length },
-            { id: 'advances', label: 'PNC Advances & Funds', icon: 'fa-wallet', badge: filteredAdvances.length },
+            { id: 'advances', label: 'PNC Advances', icon: 'fa-wallet', badge: filteredAdvances.length },
+            { id: 'credit-cards', label: 'Credit Cards', icon: 'fa-credit-card', badge: filteredCreditCards.length },
             { id: 'cancellations', label: 'Cancellations & Recovery', icon: 'fa-rectangle-xmark', badge: filteredCancellations.length },
             { id: 'tat-sla', label: 'TAT and SLAs', icon: 'fa-stopwatch', badge: `${overallCompliancePct}% Met` }
           ].map(tab => {
@@ -1388,6 +1443,7 @@ export const AnalyticsView: React.FC<{
           <span>
             {activeSubTab === 'travel' && `Showing ${filteredData.length} bookings across ${uniqueCampuses.length} campuses`}
             {activeSubTab === 'advances' && `Showing ${filteredAdvances.length} advance records • ₹${totalAdvReceived.toLocaleString()} total pool`}
+            {activeSubTab === 'credit-cards' && `Showing ${filteredCreditCards.length} cards • ₹${totalCardLimit.toLocaleString()} total balance • ₹${totalCardRemaining.toLocaleString()} available`}
             {activeSubTab === 'cancellations' && `Showing ${filteredCancellations.length} cancellation cases • ₹${totalCancelOrgAbsorbed.toLocaleString()} absorbed loss`}
             {activeSubTab === 'tat-sla' && `SLA Compliance: ${overallCompliancePct}% • Mode: ${enableUrgencySla ? 'Urgency-Tiered' : `${tatBookingTarget}h Fixed`}`}
           </span>
@@ -1836,6 +1892,148 @@ export const AnalyticsView: React.FC<{
                 </button>
                 <span className="text-xs font-bold text-slate-400">Page {advancesPage} of {totalAdvancesPages}</span>
                 <button disabled={advancesPage === totalAdvancesPages} onClick={() => setAdvancesPage(p => p + 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  Next<i className="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : activeSubTab === 'credit-cards' ? (
+        // --- CREDIT CARDS SUB-TAB ---
+        // The advances tab's twin: a card's opening_balance is the sanctioned
+        // balance as it stands today, so utilisation reads the same way.
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard title="Total Card Balance" value={`₹ ${totalCardLimit.toLocaleString()}`} icon={<i className="fa-solid fa-credit-card text-indigo-500"></i>} description="Sanctioned across all cards" />
+            <StatCard title="Available Now" value={`₹ ${totalCardRemaining.toLocaleString()}`} icon={<i className="fa-solid fa-money-bill-wave text-emerald-500"></i>} description="Unspent card balance" />
+            <StatCard title="Total Charged" value={`₹ ${totalCardSpent.toLocaleString()}`} icon={<i className="fa-solid fa-receipt text-amber-500"></i>} description="Charged to cards on tickets" />
+            <StatCard title="Active Cards" value={`${cardActiveCount} / ${filteredCreditCards.length}`} icon={<i className="fa-solid fa-circle-check text-sky-500"></i>} description="Usable at the booking screen" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="p-6 flex flex-col items-center justify-center">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-6 w-full text-left">Card Utilization Gauge</h4>
+              <div className="relative flex items-center justify-center h-48 w-full">
+                {(() => {
+                  const radius = 50;
+                  const circ = 2 * Math.PI * radius;
+                  const offset = circ - (Math.min(100, cardUtilPct) / 100) * circ;
+                  return (
+                    <>
+                      <svg className="w-40 h-40 transform -rotate-90">
+                        <circle cx="80" cy="80" r={radius} stroke="#e2e8f0" strokeWidth="10" fill="transparent" className="dark:stroke-slate-800" />
+                        <circle cx="80" cy="80" r={radius} stroke="url(#cardGaugeGrad)" strokeWidth="10" fill="transparent" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
+                        <defs>
+                          <linearGradient id="cardGaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#6366f1" />
+                            <stop offset="100%" stopColor="#f59e0b" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-slate-800 dark:text-white">{cardUtilPct.toFixed(1)}%</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Utilized</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <p className="text-xs text-slate-400 mt-2 text-center max-w-xs">
+                Share of the total sanctioned card balance that has been charged to travel bookings.
+              </p>
+            </Card>
+
+            <Card className="p-6">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2"><i className="fa-solid fa-building-columns text-sm text-indigo-500"></i> Balance by Bank</h4>
+              <div className="space-y-4">
+                {(() => {
+                  const banks: Record<string, number> = {};
+                  filteredCreditCards.forEach(c => {
+                    banks[c.bank_name] = (banks[c.bank_name] || 0) + (Number(c.opening_balance) || 0);
+                  });
+                  const entries = Object.entries(banks);
+                  if (entries.length === 0) {
+                    return <p className="text-sm text-slate-400">No cards registered in this period.</p>;
+                  }
+                  const maxVal = Math.max(...entries.map(e => e[1]), 1);
+                  return entries.map(([bank, amount]) => {
+                    const pct = Math.round((amount / (totalCardLimit || 1)) * 100);
+                    return (
+                      <div key={bank} className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                          <span>{bank}</span>
+                          <span>₹{amount.toLocaleString()} ({pct}%)</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${(amount / maxVal) * 100}%` }}></div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </Card>
+          </div>
+
+          {/* Credit cards detail list */}
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h4 className="font-bold text-slate-800 dark:text-white">Credit Cards Log</h4>
+              <span className="text-xs font-bold text-slate-400">Showing {paginatedCreditCardsData.length} of {filteredCreditCards.length} records</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-white dark:bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-widest border-b dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4">Card</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCardSort('bank_name')}>Bank <SortIcon col="bank_name" current={cardSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCardSort('approver_name')}>Approver <SortIcon col="approver_name" current={cardSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCardSort('opening_balance')}>Balance <SortIcon col="opening_balance" current={cardSort} /></th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-indigo-600 select-none" onClick={() => toggleCardSort('amount_left')}>Available <SortIcon col="amount_left" current={cardSort} /></th>
+                    <th className="px-6 py-4">Util. %</th>
+                    <th className="px-6 py-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-slate-800">
+                  {paginatedCreditCardsData.map((c: any) => {
+                    const uPct = Number(c.opening_balance) > 0 ? ((Number(c.opening_balance) - Number(c.amount_left)) / Number(c.opening_balance)) * 100 : 0;
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4 font-mono font-bold text-slate-800 dark:text-white">xxxx-xxxx-xxxx-{c.last_four}</td>
+                        <td className="px-6 py-4 font-bold text-indigo-600">{c.bank_name}</td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{c.approver_name}</td>
+                        <td className="px-6 py-4 font-mono text-slate-900 dark:text-white font-bold">₹{Number(c.opening_balance).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-mono text-emerald-600 dark:text-emerald-400">₹{Number(c.amount_left).toLocaleString()}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs">{uPct.toFixed(0)}%</span>
+                            <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${uPct}%` }}></div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${c.is_active ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                            {c.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedCreditCardsData.length === 0 && (
+                    <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-sm">No credit cards matched the current period.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {totalCreditCardsPages > 1 && (
+              <div className="p-4 border-t dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20">
+                <button disabled={creditCardsPage === 1} onClick={() => setCreditCardsPage(p => p - 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  <i className="fa-solid fa-chevron-left mr-1"></i>Previous
+                </button>
+                <span className="text-xs font-bold text-slate-400">Page {creditCardsPage} of {totalCreditCardsPages}</span>
+                <button disabled={creditCardsPage === totalCreditCardsPages} onClick={() => setCreditCardsPage(p => p + 1)} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-all">
                   Next<i className="fa-solid fa-chevron-right ml-1"></i>
                 </button>
               </div>

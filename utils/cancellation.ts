@@ -56,3 +56,38 @@ export const applyRefundToAdvance = async (
   return Number(newAmountLeft);
 };
 
+/**
+ * The credit card twin of {@link applyRefundToAdvance}. A refund on a booking
+ * paid by card restores the card's available balance, not its limit, so the
+ * RPC is called without p_adjust_limit.
+ */
+export const applyRefundToCreditCard = async (
+  creditCardId: string,
+  refundAmount: number,
+  userEmail: string,
+  ticketId: string,
+  submissionId?: string
+) => {
+  const newChangelogEntry = {
+    timestamp: new Date().toISOString(),
+    user: userEmail,
+    action: 'Refund Received',
+    details: `Refund of ₹${refundAmount} credited back to the card for ticket ${submissionId || ticketId}.`,
+    relatedTicketId: ticketId,
+    relatedTicketSubmissionId: submissionId
+  };
+
+  const { data: newAmountLeft, error } = await supabase.rpc('update_credit_card_balance', {
+    p_card_id: creditCardId,
+    p_amount_delta: refundAmount,
+    p_changelog_entry: newChangelogEntry,
+    p_adjust_limit: false
+  });
+
+  if (error) {
+    throw new Error('Failed to apply refund to credit card: ' + error.message);
+  }
+
+  return Number(newAmountLeft);
+};
+

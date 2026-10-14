@@ -312,3 +312,79 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+
+-- 8. Credit Cards: the second funding rail alongside advances.
+-- Mirrors the advance shape (balance + changelog + atomic RPC) so bookings,
+-- cancellations and analytics can treat the two rails side by side. Only the
+-- last four digits of a card are ever stored.
+CREATE SEQUENCE IF NOT EXISTS public.credit_card_code_seq START 1;
+
+CREATE TABLE IF NOT EXISTS public.credit_cards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  card_code TEXT DEFAULT ('CC-' || LPAD(nextval('public.credit_card_code_seq')::text, 4, '0')),
+  last_four TEXT NOT NULL CHECK (last_four ~ '^[0-9]{4}$'),
+  bank_name TEXT NOT NULL,
+  card_label TEXT,
+  approver_name TEXT NOT NULL,
+  approver_id UUID REFERENCES public.profiles(id),
+  opening_balance NUMERIC NOT NULL,
+  amount_left NUMERIC NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  comments TEXT,
+  changelog JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_cards_active ON public.credit_cards (is_active);
+
+ALTER TABLE public.credit_cards ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "PNC and Finance can view and edit credit cards" ON public.credit_cards;
+CREATE POLICY "PNC and Finance can view and edit credit cards" ON public.credit_cards
+  FOR ALL USING (
+    public.get_user_role() IN ('Admin', 'PNC', 'PNC Admin', 'Finance')
+  );
+
+ALTER TABLE public.travel_requests ADD COLUMN IF NOT EXISTS credit_card_id UUID REFERENCES public.credit_cards(id);
+ALTER TABLE public.cancellation_records ADD COLUMN IF NOT EXISTS credit_card_id UUID REFERENCES public.credit_cards(id);
+
+ALTER TABLE public.travel_requests DROP CONSTRAINT IF EXISTS travel_requests_payment_source_check;
+ALTER TABLE public.travel_requests DROP CONSTRAINT IF EXISTS travel_requests_payment_source_allowed;
+ALTER TABLE public.travel_requests
+  ADD CONSTRAINT travel_requests_payment_source_allowed
+  CHECK (payment_source IN ('Advance', 'Credit Card', 'Direct', 'Not Yet Entered'));
+
+-- Atomic credit card balance update. p_adjust_limit is true only when the
+-- sanctioned limit itself moves (a later increase or reduction), in which case
+-- the limit and the available balance shift together.
+CREATE OR REPLACE FUNCTION public.update_credit_card_balance(
+  p_card_id UUID,
+  p_amount_delta NUMERIC,
+  p_changelog_entry JSONB,
+  p_adjust_limit BOOLEAN DEFAULT false
+) RETURNS NUMERIC AS $$
+DECLARE
+  v_new_amount NUMERIC;
+  v_updated_entry JSONB;
+BEGIN
+  UPDATE public.credit_cards
+  SET
+    amount_left = amount_left + p_amount_delta,
+    opening_balance = CASE WHEN p_adjust_limit THEN opening_balance + p_amount_delta ELSE opening_balance END,
+    updated_at = NOW()
+  WHERE id = p_card_id
+  RETURNING amount_left INTO v_new_amount;
+
+  v_updated_entry := p_changelog_entry || jsonb_build_object(
+    'details',
+    (p_changelog_entry->>'details') || ' Available balance: ₹' || v_new_amount || '.'
+  );
+
+  UPDATE public.credit_cards
+  SET changelog = COALESCE(changelog, '[]'::jsonb) || jsonb_build_array(v_updated_entry)
+  WHERE id = p_card_id;
+
+  RETURN v_new_amount;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

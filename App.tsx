@@ -825,7 +825,7 @@ const App: React.FC = () => {
         return <AdminDashboard requests={requests} users={users} onTabChange={handleTabChange} />;
       }
       if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN) {
-        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} />;
+        return <PNCDashboard requests={requests} onTabChange={handleTabChange} onView={setSelectedRequest} policies={travelModePolicies} policy={policy} currentUser={currentUser} />;
       }
       if (currentUser.role === UserRole.FINANCE) {
         return <AnalyticsView requests={requests} currentUser={currentUser} policy={policy} users={users} />;
@@ -889,10 +889,10 @@ const App: React.FC = () => {
           r.pncStatus !== PNCStatus.REJECTED_BY_PNC &&
           r.pncStatus !== PNCStatus.CLOSED
         );
-        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} users={users} />;
+        return <AdminQueueView requests={activeRequests} onView={setSelectedRequest} policies={travelModePolicies} users={users} currentUser={currentUser} />;
       case 'all-requests':
         if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
-        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} users={users} />;
+        return <AdminQueueView requests={requests} onView={setSelectedRequest} showAll={true} policies={travelModePolicies} users={users} currentUser={currentUser} />;
       case 'advances':
         if (currentUser.role === UserRole.PNC || currentUser.role === UserRole.PNC_ADMIN || currentUser.role === UserRole.ADMIN) {
           return <AdvanceManagement currentUser={currentUser} users={users} onViewRequest={(id) => {

@@ -1,13 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import Card from './Card';
-import { Toggle } from './Toggle';
 import {
   SosSeverity,
   SosCategory,
   SOS_SEVERITY_ICONS,
-  SOS_SEVERITY_LABELS,
-  SOS_CATEGORY_LABELS,
   getSosSpec,
   getSosSimpleTerms,
   getSosWhatToCheck,
@@ -22,10 +18,8 @@ import {
 import {
   formatSlackNewRequest,
   formatSlackStatusChange,
-  formatSlackRequestResolved,
-  formatSlackNotificationTest
+  formatSlackRequestResolved
 } from '../utils/desk/slackNotification';
-import { formatSlackDigestPayload } from '../utils/desk/slackDigest';
 import { sendSosTestAlert, sendNotificationTest } from '../utils/sos/sosService';
 
 export type CardCategory = 'sos' | 'notifications';
@@ -35,7 +29,7 @@ export interface SlackCardStudioProps {
   defaultCategory?: CardCategory;
 }
 
-interface SosPreset {
+interface SosScenario {
   id: string;
   label: string;
   severity: SosSeverity;
@@ -50,12 +44,13 @@ interface SosPreset {
   stackSnippet: string;
   route?: string;
   userEmail?: string;
+  isResolved?: boolean;
 }
 
-const SOS_PRESETS: SosPreset[] = [
+const SOS_SCENARIOS: SosScenario[] = [
   {
     id: 'db_pool',
-    label: '🔴 Critical: DB Pool Exhaustion',
+    label: '🔴 Critical: DB Pool Exhausted',
     severity: 'critical',
     category: 'data',
     code: 'DB_POOL_EXHAUSTED',
@@ -71,7 +66,7 @@ const SOS_PRESETS: SosPreset[] = [
   },
   {
     id: 'smtp_auth',
-    label: '🟠 High / Error: SMTP Quota / Auth Failure',
+    label: '🟠 High: SMTP Quota / Auth Failure',
     severity: 'high',
     category: 'email_transport',
     code: 'SMTP_AUTH_FAILED',
@@ -87,7 +82,7 @@ const SOS_PRESETS: SosPreset[] = [
   },
   {
     id: 'chunk_fail',
-    label: '🟡 Warning: Bundle Chunk Load Failure',
+    label: '🟡 Warning: Stale Chunk Load',
     severity: 'warning',
     category: 'platform',
     code: 'WEB_BUNDLE_CHUNK_FAILED',
@@ -103,7 +98,7 @@ const SOS_PRESETS: SosPreset[] = [
   },
   {
     id: 'sos_test',
-    label: '🔵 Info: SOS Connectivity Test',
+    label: '🔵 Info: SOS Connectivity Pulse',
     severity: 'info',
     category: 'platform',
     code: 'SOS_TEST_ALERT',
@@ -116,10 +111,25 @@ const SOS_PRESETS: SosPreset[] = [
     stackSnippet: 'SOS_TEST_ALERT: manual test pulse triggered\n  at SOSView.handleTestAlert (/src/components/SOSView.tsx:512:7)',
     route: '/?tab=sos',
     userEmail: 'admin@navgurukul.org'
+  },
+  {
+    id: 'sos_resolved',
+    label: '✅ Resolved: Single-line Collapsed',
+    severity: 'critical',
+    category: 'data',
+    code: 'DB_POOL_EXHAUSTED',
+    title: 'Database connection pool exhausted',
+    message: 'Resolved after scaling pool size.',
+    service: 'travel-desk-db',
+    environment: 'production',
+    occurrences: 14,
+    impact: 'Resolved',
+    stackSnippet: '',
+    isResolved: true
   }
 ];
 
-interface NotificationPreset {
+interface NotificationScenario {
   id: string;
   label: string;
   ticket: string;
@@ -136,10 +146,10 @@ interface NotificationPreset {
   isResolved?: boolean;
 }
 
-const NOTIFICATION_PRESETS: NotificationPreset[] = [
+const NOTIFICATION_SCENARIOS: NotificationScenario[] = [
   {
     id: 'urgent_req',
-    label: '🚨 Urgent: Pune ➔ Bengaluru Flight',
+    label: '🚨 Urgent Request (Flight)',
     ticket: 'TRV-O-261014-001',
     who: 'Nitin Sudarshan',
     dept: 'CEO Office',
@@ -154,7 +164,7 @@ const NOTIFICATION_PRESETS: NotificationPreset[] = [
   },
   {
     id: 'normal_req',
-    label: '✈️ Normal: Delhi ➔ Dharamshala Train',
+    label: '✈️ Standard Request (Train)',
     ticket: 'TRV-R-261014-002',
     who: 'Pooja Sharma',
     dept: 'Academics',
@@ -168,7 +178,7 @@ const NOTIFICATION_PRESETS: NotificationPreset[] = [
   },
   {
     id: 'approved_req',
-    label: '✅ Status Update: Approved by Manager',
+    label: '✅ Status Update: Approved',
     ticket: 'TRV-O-261014-003',
     who: 'Rohan Verma',
     dept: 'Operations',
@@ -206,44 +216,29 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
   const [slackTheme, setSlackTheme] = useState<'dark' | 'light'>('dark');
   const [deliveryMode, setDeliveryMode] = useState<'block_kit' | 'workflow'>('block_kit');
 
-  // SOS state
-  const [selectedSosPresetId, setSelectedSosPresetId] = useState<string>(SOS_PRESETS[0].id);
-  const [sosOverride, setSosOverride] = useState<SosPreset>(SOS_PRESETS[0]);
-  const [sosResolved, setSosResolved] = useState<boolean>(false);
-  const [sosFullStack, setSosFullStack] = useState<boolean>(false);
+  // Scenario selections
+  const [selectedSosId, setSelectedSosId] = useState<string>(SOS_SCENARIOS[0].id);
+  const [selectedNotifId, setSelectedNotifId] = useState<string>(NOTIFICATION_SCENARIOS[0].id);
 
-  // Notification state
-  const [selectedNotifPresetId, setSelectedNotifPresetId] = useState<string>(NOTIFICATION_PRESETS[0].id);
-  const [notifOverride, setNotifOverride] = useState<NotificationPreset>(NOTIFICATION_PRESETS[0]);
-  const [notifResolved, setNotifResolved] = useState<boolean>(false);
+  // Trace expansion toggle
+  const [showFullStack, setShowFullStack] = useState<boolean>(false);
 
-  // Live test sending state
+  // Live test state
   const [isSendingLiveTest, setIsSendingLiveTest] = useState<boolean>(false);
 
-  const handleSelectSosPreset = (id: string) => {
-    const found = SOS_PRESETS.find(p => p.id === id);
-    if (found) {
-      setSelectedSosPresetId(id);
-      setSosOverride({ ...found });
-      setSosResolved(false);
-      setSosFullStack(false);
-    }
-  };
+  const activeSos = useMemo(() => {
+    return SOS_SCENARIOS.find(s => s.id === selectedSosId) || SOS_SCENARIOS[0];
+  }, [selectedSosId]);
 
-  const handleSelectNotifPreset = (id: string) => {
-    const found = NOTIFICATION_PRESETS.find(p => p.id === id);
-    if (found) {
-      setSelectedNotifPresetId(id);
-      setNotifOverride({ ...found });
-      setNotifResolved(Boolean(found.isResolved));
-    }
-  };
+  const activeNotif = useMemo(() => {
+    return NOTIFICATION_SCENARIOS.find(s => s.id === selectedNotifId) || NOTIFICATION_SCENARIOS[0];
+  }, [selectedNotifId]);
 
-  // SOS Card payload generator
+  // Generate Block Kit payload directly from code utilities
   const generatedSosPayload = useMemo(() => {
-    if (sosResolved) {
+    if (activeSos.isResolved) {
       return formatAlertResolvedSlackPayload(
-        sosOverride.title,
+        activeSos.title,
         currentUser?.name || 'Nitin Sudarshan',
         'Just now'
       );
@@ -251,70 +246,69 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
 
     return formatAlertSlackPayload(
       {
-        code: sosOverride.code,
-        severity: sosOverride.severity,
-        category: sosOverride.category,
-        title: sosOverride.title,
-        message: sosOverride.message,
-        source: (sosOverride.service.includes('worker') ? 'worker' : sosOverride.service.includes('db') ? 'database' : 'web') as any,
+        code: activeSos.code,
+        severity: activeSos.severity,
+        category: activeSos.category,
+        title: activeSos.title,
+        message: activeSos.message,
+        source: (activeSos.service.includes('worker') ? 'worker' : activeSos.service.includes('db') ? 'database' : 'web') as any,
         context: {
-          stack: sosFullStack ? sosOverride.stackSnippet : sosOverride.stackSnippet.split('\n').slice(0, 3).join('\n'),
-          route: sosOverride.route,
-          userEmail: sosOverride.userEmail
+          stack: showFullStack ? activeSos.stackSnippet : activeSos.stackSnippet.split('\n').slice(0, 3).join('\n'),
+          route: activeSos.route,
+          userEmail: activeSos.userEmail
         }
       },
       {
-        occurrences: sosOverride.occurrences,
-        environment: sosOverride.environment,
-        service: sosOverride.service,
+        occurrences: activeSos.occurrences,
+        environment: activeSos.environment,
+        service: activeSos.service,
         portalUrl: 'https://ng-travel-desk.vercel.app'
       }
     );
-  }, [sosOverride, sosResolved, sosFullStack, currentUser]);
+  }, [activeSos, showFullStack, currentUser]);
 
-  // Notification Card payload generator
   const generatedNotifPayload = useMemo(() => {
-    if (notifResolved) {
+    if (activeNotif.isResolved) {
       return formatSlackRequestResolved(
-        notifOverride.ticket,
-        notifOverride.trip,
+        activeNotif.ticket,
+        activeNotif.trip,
         'PNC Desk Team',
-        notifOverride.status.includes('Booked') ? 'Booked' : 'Completed'
+        activeNotif.status.includes('Booked') ? 'Booked' : 'Completed'
       );
     }
 
-    if (notifOverride.id === 'approved_req') {
+    if (activeNotif.id === 'approved_req') {
       return formatSlackStatusChange(
-        notifOverride.ticket,
-        notifOverride.trip,
-        notifOverride.status,
-        notifOverride.manager,
+        activeNotif.ticket,
+        activeNotif.trip,
+        activeNotif.status,
+        activeNotif.manager,
         {
-          traveler: notifOverride.who,
-          date: notifOverride.date,
-          priority: notifOverride.priority,
-          note: notifOverride.note
+          traveler: activeNotif.who,
+          date: activeNotif.date,
+          priority: activeNotif.priority,
+          note: activeNotif.note
         }
       );
     }
 
     return formatSlackNewRequest(
       {
-        submission_id: notifOverride.ticket,
-        requester_name: notifOverride.who,
-        requester_department: notifOverride.dept,
-        requester_campus: notifOverride.campus,
-        from_location: notifOverride.trip.split('➔')[0]?.trim() || 'Pune',
-        to_location: notifOverride.trip.split('➔')[1]?.trim() || 'Bengaluru',
-        date_of_travel: notifOverride.date,
-        travel_mode: notifOverride.mode,
-        priority: notifOverride.priority,
-        approving_manager_email: notifOverride.manager,
-        pnc_status: notifOverride.status
+        submission_id: activeNotif.ticket,
+        requester_name: activeNotif.who,
+        requester_department: activeNotif.dept,
+        requester_campus: activeNotif.campus,
+        from_location: activeNotif.trip.split('➔')[0]?.trim() || 'Pune',
+        to_location: activeNotif.trip.split('➔')[1]?.trim() || 'Bengaluru',
+        date_of_travel: activeNotif.date,
+        travel_mode: activeNotif.mode,
+        priority: activeNotif.priority,
+        approving_manager_email: activeNotif.manager,
+        pnc_status: activeNotif.status
       },
       'https://ng-travel-desk.vercel.app'
     );
-  }, [notifOverride, notifResolved]);
+  }, [activeNotif]);
 
   const activeJson = useMemo(() => {
     return JSON.stringify(category === 'sos' ? generatedSosPayload : generatedNotifPayload, null, 2);
@@ -352,52 +346,47 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
   };
 
   // Triage details for the current SOS alert
-  const sosSpec = getSosSpec(sosOverride.code);
-  const simpleTerms = getSosSimpleTerms(sosOverride.code, sosOverride.message);
-  const whatToCheck = getSosWhatToCheck(sosOverride.code);
-  const diagnosticSteps = getSosDiagnosticSteps(sosOverride.code, {
-    route: sosOverride.route,
-    userEmail: sosOverride.userEmail,
-    source: sosOverride.service
+  const sosSpec = getSosSpec(activeSos.code);
+  const simpleTerms = getSosSimpleTerms(activeSos.code, activeSos.message);
+  const whatToCheck = getSosWhatToCheck(activeSos.code);
+  const diagnosticSteps = getSosDiagnosticSteps(activeSos.code, {
+    route: activeSos.route,
+    userEmail: activeSos.userEmail,
+    source: activeSos.service
   });
 
-  // Current Card Accent Colors
-  const sosColor = SLACK_SEVERITY_COLORS[sosOverride.severity] || '#64748B';
-  const sosPill = SLACK_SEVERITY_PILLS[sosOverride.severity] || ':warning: Warning';
+  const sosColor = SLACK_SEVERITY_COLORS[activeSos.severity] || '#64748B';
+  const sosPill = SLACK_SEVERITY_PILLS[activeSos.severity] || ':warning: Warning';
 
   const notifColor =
-    notifOverride.status === 'Booked' ? '#10B981' :
-    notifOverride.priority.toLowerCase() === 'urgent' ? '#E24B4A' :
-    notifOverride.priority.toLowerCase() === 'high' ? '#EF9F27' :
-    notifOverride.status.includes('Approved') ? '#3B82F6' : '#176AE6';
+    activeNotif.status === 'Booked' ? '#10B981' :
+    activeNotif.priority.toLowerCase() === 'urgent' ? '#E24B4A' :
+    activeNotif.priority.toLowerCase() === 'high' ? '#EF9F27' :
+    activeNotif.status.includes('Approved') ? '#3B82F6' : '#176AE6';
 
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto">
-      {/* Top Banner & Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white shadow-xl">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900 text-white shadow-lg border border-slate-800">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-500/30 border border-indigo-400/40 text-indigo-200">
-              <i className="fa-solid fa-wand-magic-sparkles mr-1.5"></i> Card Design Studio
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+              <i className="fa-solid fa-eye mr-1.5"></i> Card Previews
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-purple-500/20 text-purple-200 border border-purple-400/30">
-              Slack Block Kit & Workflow
+            <span className="text-xs text-slate-400">
+              Direct rendering of production Slack card layouts
             </span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">
-            Slack Card Design Studio & Visual Simulator
+          <h1 className="text-xl font-black tracking-tight text-white">
+            Slack Card Design Showcase
           </h1>
-          <p className="text-sm text-indigo-200/90 max-w-2xl">
-            Preview, test, and tune the scannable Slack card designs for both <strong className="text-white">SOS Alerts</strong> and <strong className="text-white">Travel Desk Notifications</strong>.
-            Inspect the colored left bar, 4-field triage grid, truncated stack trace, collapsed resolved state, and Block Kit JSON payloads.
-          </p>
         </div>
 
         {/* Global Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={handleCopyJson}
-            className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all active:scale-95 flex items-center gap-2"
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition-all active:scale-95 flex items-center gap-2"
           >
             <i className="fa-regular fa-copy"></i>
             Copy Block Kit JSON
@@ -405,7 +394,7 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
           <button
             onClick={handleSendLiveTest}
             disabled={isSendingLiveTest}
-            className="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/30 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
           >
             <i className={`fa-solid ${isSendingLiveTest ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`}></i>
             Send Live to Slack
@@ -413,36 +402,35 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
         </div>
       </div>
 
-      {/* Main Mode Navigation (SOS vs Notifications) & Settings Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-2 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+      {/* Mode Navigation & Slack Environment Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-slate-950 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
           <button
             onClick={() => setCategory('sos')}
             className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${
               category === 'sos'
-                ? 'bg-rose-600 text-white shadow-md'
+                ? 'bg-rose-600 text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <i className="fa-solid fa-tower-broadcast"></i>
-            SOS Error Alert Cards
+            SOS Error Cards
           </button>
           <button
             onClick={() => setCategory('notifications')}
             className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${
               category === 'notifications'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <i className="fa-solid fa-bell"></i>
-            Travel Desk Notifications
+            Desk Notification Cards
           </button>
         </div>
 
-        {/* View Mode & Theme Controls */}
-        <div className="flex items-center gap-3 px-2">
-          {/* Theme switcher */}
+        {/* Theme and Format Switchers */}
+        <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
             <button
               onClick={() => setSlackTheme('dark')}
@@ -452,7 +440,7 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <i className="fa-solid fa-moon text-indigo-400"></i> Slack Dark
+              <i className="fa-solid fa-moon text-indigo-400"></i> Dark
             </button>
             <button
               onClick={() => setSlackTheme('light')}
@@ -462,11 +450,10 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <i className="fa-solid fa-sun text-amber-500"></i> Slack Light
+              <i className="fa-solid fa-sun text-amber-500"></i> Light
             </button>
           </div>
 
-          {/* Delivery format switcher */}
           <div className="flex items-center gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
             <button
               onClick={() => setDeliveryMode('block_kit')}
@@ -475,9 +462,9 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                   ? 'bg-indigo-600 text-white'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
-              title="Slack App incoming webhook rendering Block Kit cards with colored sidebars"
+              title="Slack App incoming webhook (/services/...) with colored left bar"
             >
-              Block Kit Card
+              Block Kit
             </button>
             <button
               onClick={() => setDeliveryMode('workflow')}
@@ -486,7 +473,7 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                   ? 'bg-indigo-600 text-white'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
-              title="Slack Workflow Builder webhook rendering formatted plain-text variables"
+              title="Workflow Builder fallback text (/triggers/...)"
             >
               Workflow Text
             </button>
@@ -494,44 +481,43 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
         </div>
       </div>
 
-      {/* Preset Selector Bar */}
-      <div className="space-y-2">
-        <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-          <i className="fa-solid fa-sliders text-indigo-500"></i>
-          Select Scenario Preset:
+      {/* Scenario Pill Buttons */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Select Card Design:
         </p>
         <div className="flex flex-wrap gap-2">
           {category === 'sos' ? (
-            SOS_PRESETS.map(preset => {
-              const active = selectedSosPresetId === preset.id;
+            SOS_SCENARIOS.map(s => {
+              const active = selectedSosId === s.id;
               return (
                 <button
-                  key={preset.id}
-                  onClick={() => handleSelectSosPreset(preset.id)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
+                  key={s.id}
+                  onClick={() => setSelectedSosId(s.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
                     active
                       ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white shadow-sm'
                       : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400'
                   }`}
                 >
-                  {preset.label}
+                  {s.label}
                 </button>
               );
             })
           ) : (
-            NOTIFICATION_PRESETS.map(preset => {
-              const active = selectedNotifPresetId === preset.id;
+            NOTIFICATION_SCENARIOS.map(s => {
+              const active = selectedNotifId === s.id;
               return (
                 <button
-                  key={preset.id}
-                  onClick={() => handleSelectNotifPreset(preset.id)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
+                  key={s.id}
+                  onClick={() => setSelectedNotifId(s.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
                     active
                       ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white shadow-sm'
                       : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400'
                   }`}
                 >
-                  {preset.label}
+                  {s.label}
                 </button>
               );
             })
@@ -539,79 +525,45 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
         </div>
       </div>
 
-      {/* Main Two-Column Layout: Left = Authentic Slack Simulator, Right = Triage & Customizer */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Authentic Slack UI Simulator (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <i className="fa-brands fa-slack text-indigo-500 text-base"></i>
-              Slack Channel Simulator
-              <span className="text-[10px] font-mono text-slate-400 font-normal">
-                ({category === 'sos' ? '#alerts-sos' : '#alert-team-automation'})
-              </span>
-            </h2>
-
-            {/* Quick interactive status toggle */}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500 font-medium text-[11px]">Preview State:</span>
-              <button
-                onClick={() => category === 'sos' ? setSosResolved(false) : setNotifResolved(false)}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
-                  !(category === 'sos' ? sosResolved : notifResolved)
-                    ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                Active Card
-              </button>
-              <button
-                onClick={() => category === 'sos' ? setSosResolved(true) : setNotifResolved(true)}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
-                  (category === 'sos' ? sosResolved : notifResolved)
-                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                Collapsed / Resolved
-              </button>
-            </div>
+      {/* Main Two-Column View: Authentic Slack Card on the left, Triage & JSON on the right */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Authentic Slack Card Preview (7 cols) */}
+        <div className="lg:col-span-7 space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
+            <span>
+              Slack View ({category === 'sos' ? '#alert-team-automation' : '#travel-desk-notifications'})
+            </span>
+            <span className="font-normal font-mono text-[11px] text-slate-400">
+              {deliveryMode === 'block_kit' ? 'Block Kit Attachment' : 'Plain Text'}
+            </span>
           </div>
 
-          {/* Authentic Slack Window Container */}
           <div
-            className={`rounded-2xl border shadow-2xl overflow-hidden transition-colors ${
+            className={`rounded-2xl border shadow-xl overflow-hidden transition-colors ${
               slackTheme === 'dark'
                 ? 'bg-[#1A1D21] border-[#2C3136] text-[#D1D2D3]'
                 : 'bg-white border-slate-200 text-slate-800'
             }`}
           >
-            {/* Slack Channel Header Bar */}
+            {/* Slack Header */}
             <div
-              className={`px-4 py-3 border-b flex items-center justify-between text-xs font-bold select-none ${
+              className={`px-4 py-2.5 border-b flex items-center justify-between text-xs font-bold ${
                 slackTheme === 'dark'
                   ? 'bg-[#1F2328] border-[#2C3136] text-white'
                   : 'bg-slate-50 border-slate-200 text-slate-900'
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <span className="text-slate-400 font-mono text-sm">#</span>
-                <span className="tracking-wide">
-                  {category === 'sos' ? 'alerts-sos' : 'alert-team-automation'}
-                </span>
-                <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-200/50 dark:bg-slate-800 text-slate-500">
-                  <i className="fa-solid fa-lock text-[9px] mr-1"></i> internal
-                </span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-mono">#</span>
+                <span>{category === 'sos' ? 'alert-team-automation' : 'travel-desk-notifications'}</span>
               </div>
-              <div className="flex items-center gap-3 text-slate-400 text-xs">
-                <span><i className="fa-solid fa-user-group mr-1"></i> 18</span>
-                <i className="fa-solid fa-magnifying-glass"></i>
-              </div>
+              <span className="text-slate-400 text-[11px] font-normal">
+                <i className="fa-solid fa-lock text-[9px] mr-1"></i> internal
+              </span>
             </div>
 
-            {/* Message Thread Body */}
-            <div className="p-4 sm:p-5 space-y-4">
-              {/* Message Item */}
+            {/* Slack Message Body */}
+            <div className="p-4 sm:p-5">
               <div className="flex items-start gap-3">
                 {/* Bot Avatar */}
                 <div
@@ -622,55 +574,40 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                   <i className={`fa-solid ${category === 'sos' ? 'fa-tower-broadcast' : 'fa-paper-plane'}`}></i>
                 </div>
 
-                {/* Message Content Area */}
                 <div className="flex-1 min-w-0 space-y-2">
-                  {/* Bot Name, APP badge, Timestamp */}
                   <div className="flex items-baseline gap-2">
                     <span className="font-black text-sm text-slate-900 dark:text-white">
                       {category === 'sos' ? 'Travel Desk Alert' : 'Travel Desk Notification'}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase tracking-wider bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                       APP
                     </span>
                     <span className="text-[11px] text-slate-400">
-                      Today at {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      Today at 2:04 AM
                     </span>
                   </div>
 
-                  {/* Fallback line / notification snippet */}
-                  <p className="text-xs text-slate-400 font-mono">
-                    {category === 'sos'
-                      ? `${SOS_SEVERITY_ICONS[sosOverride.severity]} ${sosOverride.severity.toUpperCase()} — ${sosOverride.title}`
-                      : `✈️ TRAVEL DESK NOTIFICATION · ${notifOverride.status.toUpperCase()}`}
-                  </p>
-
-                  {/* RENDERING OPTION 1: Slack App Block Kit Attachment Card */}
-                  {deliveryMode === 'block_kit' && (
+                  {deliveryMode === 'block_kit' ? (
                     <div
-                      className={`relative rounded-lg p-4 space-y-3 transition-all ${
+                      className={`rounded-lg p-4 space-y-3 ${
                         slackTheme === 'dark' ? 'bg-[#222529]' : 'bg-slate-50'
                       }`}
                       style={{
                         borderLeft: `4px solid ${
-                          (category === 'sos' ? sosResolved : notifResolved)
-                            ? '#64748B'
-                            : (category === 'sos' ? sosColor : notifColor)
+                          category === 'sos'
+                            ? (activeSos.isResolved ? '#64748B' : sosColor)
+                            : (activeNotif.isResolved ? '#10B981' : notifColor)
                         }`
                       }}
                     >
-                      {/* === SOS CARD: Active State === */}
-                      {category === 'sos' && !sosResolved && (
+                      {/* --- SOS CARD --- */}
+                      {category === 'sos' && !activeSos.isResolved && (
                         <>
-                          {/* Header Line / Severity Pill */}
-                          <div className="flex items-center justify-between">
-                            <p className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                              <span>{sosPill}</span>
-                              <span className="text-slate-400 font-normal">—</span>
-                              <span>{sosOverride.title}</span>
-                            </p>
-                          </div>
+                          <p className="font-black text-sm text-slate-900 dark:text-white">
+                            {sosPill} — {activeSos.title}
+                          </p>
 
-                          {/* 4-Field Scannable Triage Grid */}
+                          {/* 4-Field Grid */}
                           <div
                             className={`grid grid-cols-2 gap-3 p-3 rounded-lg text-xs ${
                               slackTheme === 'dark' ? 'bg-[#1A1D21]' : 'bg-white border border-slate-200'
@@ -678,127 +615,94 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                           >
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Service</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">
-                                {sosOverride.service}
-                              </p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeSos.service}</p>
                             </div>
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Environment</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">
-                                {sosOverride.environment}
-                              </p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeSos.environment}</p>
                             </div>
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Occurrences</p>
                               <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                                {sosOverride.occurrences > 1 ? `${sosOverride.occurrences} in recent window` : '1st occurrence'}
+                                {activeSos.occurrences > 1 ? `${activeSos.occurrences} in recent window` : '1st occurrence'}
                               </p>
                             </div>
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Impact</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate" title={sosOverride.impact}>
-                                {sosOverride.impact}
-                              </p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">{activeSos.impact}</p>
                             </div>
                           </div>
 
-                          {/* Truncated Stack Trace / Log Box */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[11px] text-slate-400">
-                              <span>Log snippet (cut to 3 lines):</span>
-                              <button
-                                onClick={() => setSosFullStack(v => !v)}
-                                className="text-indigo-400 hover:underline font-bold"
+                          {/* Code Snippet */}
+                          {activeSos.stackSnippet && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Error Log Snippet:</span>
+                                <button
+                                  onClick={() => setShowFullStack(v => !v)}
+                                  className="text-indigo-400 hover:underline font-bold"
+                                >
+                                  {showFullStack ? 'Truncate to 3 lines' : 'Show full trace'}
+                                </button>
+                              </div>
+                              <pre
+                                className={`p-3 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto ${
+                                  slackTheme === 'dark' ? 'bg-[#121417] text-slate-200' : 'bg-slate-900 text-slate-100'
+                                }`}
                               >
-                                {sosFullStack ? 'Truncate snippet' : 'View full trace'}
-                              </button>
+                                <code>{showFullStack ? activeSos.stackSnippet : activeSos.stackSnippet.split('\n').slice(0, 3).join('\n')}</code>
+                              </pre>
                             </div>
-                            <pre
-                              className={`p-3 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto ${
-                                slackTheme === 'dark' ? 'bg-[#121417] text-slate-200' : 'bg-slate-900 text-slate-100'
-                              }`}
-                            >
-                              <code>{sosFullStack ? sosOverride.stackSnippet : sosOverride.stackSnippet.split('\n').slice(0, 3).join('\n')}</code>
-                            </pre>
-                          </div>
+                          )}
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <button
-                              onClick={() => {
-                                setSosResolved(true);
-                                toast.success('Alert acknowledged and collapsed!');
-                              }}
-                              className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
-                            >
-                              <i className="fa-solid fa-check"></i>
-                              Acknowledge
-                            </button>
-                            <a
-                              href="#logs"
-                              onClick={e => { e.preventDefault(); toast.info('Navigating to SOS console logs...'); }}
-                              className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all flex items-center gap-1.5"
-                            >
-                              <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                              View logs
-                            </a>
-                            {(sosOverride.code.startsWith('EMAIL_') || sosOverride.code.startsWith('SMTP_')) && (
-                              <button
-                                onClick={() => toast.success('Queue retry triggered!')}
-                                className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all active:scale-95 flex items-center gap-1.5"
-                              >
-                                <i className="fa-solid fa-rotate-right"></i>
-                                Retry
-                              </button>
+                            <span className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white shadow-sm flex items-center gap-1.5">
+                              <i className="fa-solid fa-check"></i> Acknowledge
+                            </span>
+                            <span className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                              <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> View logs
+                            </span>
+                            {(activeSos.code.startsWith('EMAIL_') || activeSos.code.startsWith('SMTP_')) && (
+                              <span className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                                <i className="fa-solid fa-rotate-right"></i> Retry
+                              </span>
                             )}
                           </div>
 
-                          {/* Footer Context line */}
                           <p className="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-200/50 dark:border-slate-800">
-                            `{sosOverride.code}` · Travel Desk SOS
+                            `{activeSos.code}` · Travel Desk SOS
                           </p>
                         </>
                       )}
 
-                      {/* === SOS CARD: Collapsed Resolved State === */}
-                      {category === 'sos' && sosResolved && (
-                        <div className="flex items-center justify-between gap-3 py-1">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                              <span className="text-emerald-500 font-bold">✅ Resolved</span>
-                              <span className="text-slate-400 font-normal">—</span>
-                              <span>{sosOverride.title}</span>
-                            </p>
-                            <p className="text-[11px] text-slate-400 italic">
-                              Handled by {currentUser?.name || 'Nitin Sudarshan'} · Just now
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setSosResolved(false)}
-                            className="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition-all"
-                          >
-                            Reopen Card
-                          </button>
+                      {/* --- SOS COLLAPSED RESOLVED CARD --- */}
+                      {category === 'sos' && activeSos.isResolved && (
+                        <div className="space-y-0.5 py-1">
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                            <span className="text-emerald-500 font-bold">✅ Resolved</span>
+                            <span className="text-slate-400 font-normal">—</span>
+                            <span>{activeSos.title}</span>
+                          </p>
+                          <p className="text-[11px] text-slate-400 italic">
+                            Handled by {currentUser?.name || 'Nitin Sudarshan'} · Just now
+                          </p>
                         </div>
                       )}
 
-                      {/* === NOTIFICATION CARD: Active State === */}
-                      {category === 'notifications' && !notifResolved && (
+                      {/* --- NOTIFICATION ACTIVE CARD --- */}
+                      {category === 'notifications' && !activeNotif.isResolved && (
                         <>
-                          {/* Header Line */}
-                          <div className="flex items-center justify-between">
-                            <p className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                              <span>✈️ New Travel Request — {notifOverride.ticket}</span>
-                            </p>
-                          </div>
-
+                          <p className="font-black text-sm text-slate-900 dark:text-white">
+                            ✈️ New Travel Request — {activeNotif.ticket}
+                          </p>
                           <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                            <span>*Status:* 🟡 <strong>{notifOverride.status}</strong></span>
+                            <span>*Status:* 🟡 <strong>{activeNotif.status}</strong></span>
                             <span className="mx-2 text-slate-400">|</span>
-                            <span>*Priority:* <strong>{notifOverride.priority === 'Urgent' ? '🚨 Urgent' : notifOverride.priority === 'High' ? '🔴 High' : '⚡ Normal'}</strong></span>
+                            <span>*Priority:* <strong>{activeNotif.priority === 'Urgent' ? '🚨 Urgent' : activeNotif.priority === 'High' ? '🔴 High' : '⚡ Normal'}</strong></span>
                           </div>
 
-                          {/* 4-Field Scannable Triage Grid for Notifications */}
+                          {/* 4-Field Notification Grid */}
                           <div
                             className={`grid grid-cols-2 gap-3 p-3 rounded-lg text-xs ${
                               slackTheme === 'dark' ? 'bg-[#1A1D21]' : 'bg-white border border-slate-200'
@@ -806,91 +710,57 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                           >
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">👤 Traveler</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                                {notifOverride.who}
-                              </p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.who}</p>
                             </div>
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">🏢 Dept / Campus</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                                {notifOverride.dept} ({notifOverride.campus})
-                              </p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.dept} ({activeNotif.campus})</p>
                             </div>
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">🛫 Trip Route</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">
-                                {notifOverride.trip}
-                              </p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-0.5">{activeNotif.trip}</p>
                             </div>
                             <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">📅 Travel Date & Mode</p>
-                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                                {notifOverride.date} · {notifOverride.mode}
-                              </p>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">📅 Date & Mode</p>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{activeNotif.date} · {activeNotif.mode}</p>
                             </div>
                           </div>
 
-                          {/* Note / purpose */}
-                          {notifOverride.note && (
+                          {activeNotif.note && (
                             <div className="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-slate-600 dark:text-slate-300">
                               <span className="font-bold text-indigo-700 dark:text-indigo-300 mr-1.5">Note:</span>
-                              {notifOverride.note}
+                              {activeNotif.note}
                             </div>
                           )}
 
-                          {/* Action Buttons */}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <button
-                              onClick={() => toast.info(`Viewing request ${notifOverride.ticket}`)}
-                              className="px-4 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
-                            >
+                          <div className="pt-1">
+                            <span className="px-4 py-2 rounded-lg text-xs font-black bg-indigo-600 text-white shadow-sm inline-block">
                               View in Travel Desk →
-                            </button>
-                            <button
-                              onClick={() => {
-                                setNotifResolved(true);
-                                toast.success(`Request ${notifOverride.ticket} marked booked/completed!`);
-                              }}
-                              className="px-3.5 py-2 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all flex items-center gap-1.5"
-                            >
-                              <i className="fa-solid fa-ticket text-emerald-500"></i>
-                              Mark Booked
-                            </button>
+                            </span>
                           </div>
 
-                          {/* Footer Context */}
                           <p className="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-200/50 dark:border-slate-800">
-                            `{notifOverride.ticket}` · Navgurukul Travel Desk • Automated Notification
+                            `{activeNotif.ticket}` · Navgurukul Travel Desk • Automated Notification
                           </p>
                         </>
                       )}
 
-                      {/* === NOTIFICATION CARD: Collapsed Booked State === */}
-                      {category === 'notifications' && notifResolved && (
-                        <div className="flex items-center justify-between gap-3 py-1">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                              <span className="text-emerald-500 font-bold">✅ Booked</span>
-                              <span className="text-slate-400 font-normal">—</span>
-                              <span>`{notifOverride.ticket}` ({notifOverride.trip})</span>
-                            </p>
-                            <p className="text-[11px] text-slate-400 italic">
-                              Handled by PNC Desk Team · Completed
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setNotifResolved(false)}
-                            className="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition-all"
-                          >
-                            Reopen Request
-                          </button>
+                      {/* --- NOTIFICATION COLLAPSED BOOKED CARD --- */}
+                      {category === 'notifications' && activeNotif.isResolved && (
+                        <div className="space-y-0.5 py-1">
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                            <span className="text-emerald-500 font-bold">✅ Booked</span>
+                            <span className="text-slate-400 font-normal">—</span>
+                            <span>`{activeNotif.ticket}` ({activeNotif.trip})</span>
+                          </p>
+                          <p className="text-[11px] text-slate-400 italic">
+                            Handled by PNC Desk Team · Completed
+                          </p>
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* RENDERING OPTION 2: Slack Workflow Builder Plain Text Format */}
-                  {deliveryMode === 'workflow' && (
+                  ) : (
+                    /* Workflow Text View */
                     <div
                       className={`p-4 rounded-lg font-mono text-xs whitespace-pre-wrap leading-relaxed border ${
                         slackTheme === 'dark'
@@ -900,34 +770,33 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                     >
                       {category === 'sos' ? (
                         [
-                          `${SOS_SEVERITY_ICONS[sosOverride.severity]}  ${sosOverride.severity.toUpperCase()}  ·  ${sosOverride.title}`,
+                          `${SOS_SEVERITY_ICONS[activeSos.severity]}  ${activeSos.severity.toUpperCase()}  ·  ${activeSos.title}`,
                           '',
-                          `Service        ${sosOverride.service}`,
-                          `Environment    ${sosOverride.environment}`,
-                          `Occurrences    ${sosOverride.occurrences > 1 ? `${sosOverride.occurrences} times` : 'First occurrence'}`,
-                          `Impact         ${sosOverride.impact}`,
+                          `Service        ${activeSos.service}`,
+                          `Environment    ${activeSos.environment}`,
+                          `Occurrences    ${activeSos.occurrences > 1 ? `${activeSos.occurrences} times` : 'First occurrence'}`,
+                          `Impact         ${activeSos.impact}`,
                           '',
-                          sosOverride.stackSnippet.split('\n').slice(0, 3).join('\n'),
+                          activeSos.stackSnippet.split('\n').slice(0, 3).join('\n'),
                           '',
                           `View logs: https://ng-travel-desk.vercel.app/?tab=sos`
                         ].join('\n')
                       ) : (
                         [
                           `✈️  TRAVEL DESK NOTIFICATION · NEW REQUEST`,
-                          `Request ID: ${notifOverride.ticket}  •  Status: ${notifOverride.status}`,
+                          `Request ID: ${activeNotif.ticket}  •  Status: ${activeNotif.status}`,
                           '',
                           '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-                          `Traveler:          ${notifOverride.who}`,
-                          `Dept / Campus:     ${notifOverride.dept} (${notifOverride.campus})`,
-                          `Trip Route:        ${notifOverride.trip}`,
-                          `Travel Date:       ${notifOverride.date}`,
-                          `Mode:              ${notifOverride.mode}`,
-                          `Priority:          ${notifOverride.priority}`,
-                          `Approving Manager: ${notifOverride.manager}`,
+                          `Traveler:          ${activeNotif.who}`,
+                          `Dept / Campus:     ${activeNotif.dept} (${activeNotif.campus})`,
+                          `Trip Route:        ${activeNotif.trip}`,
+                          `Travel Date:       ${activeNotif.date}`,
+                          `Mode:              ${activeNotif.mode}`,
+                          `Priority:          ${activeNotif.priority}`,
+                          `Approving Manager: ${activeNotif.manager}`,
                           '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
                           '',
-                          `Action: View in Travel Desk → https://ng-travel-desk.vercel.app/?tab=requests`,
-                          `_Navgurukul Travel Desk • Automated Notification_`
+                          `Action: View in Travel Desk → https://ng-travel-desk.vercel.app/?tab=requests`
                         ].join('\n')
                       )}
                     </div>
@@ -936,79 +805,44 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Quick Design Principles Summary Box */}
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 text-xs space-y-2">
-            <p className="font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-2">
-              <i className="fa-solid fa-compass-drafting text-indigo-500"></i>
-              Why this card design succeeds in Slack:
-            </p>
-            <div className="grid sm:grid-cols-3 gap-3 text-slate-600 dark:text-slate-300">
-              <div className="space-y-1">
-                <strong className="text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500"></span> 1. Scannable Left Bar
-                </strong>
-                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  Engineers triage directly from channel lists without opening or reading full text.
-                </p>
-              </div>
-              <div className="space-y-1">
-                <strong className="text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500"></span> 2. Consistent 4-Field Grid
-                </strong>
-                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  Always shows Service, Env, Occurrences, and Impact in the identical layout every time.
-                </p>
-              </div>
-              <div className="space-y-1">
-                <strong className="text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> 3. Collapsed Resolved State
-                </strong>
-                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  Collapses to a 1-line checkmark when handled, avoiding channel alert fatigue.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Right Column: Triage Details, Live Tweaks & Payload Inspector (5 cols) */}
-        <div className="lg:col-span-5 space-y-5">
-          {/* Section 1: Detailed Triage & Diagnostic Checklist (User Request Feature!) */}
+        {/* Right Column: Triage Info & Block Kit JSON Inspector (5 cols) */}
+        <div className="lg:col-span-5 space-y-4">
           {category === 'sos' && (
-            <div className="space-y-3.5">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+            <div className="space-y-3">
+              <h2 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <i className="fa-solid fa-stethoscope text-indigo-500"></i>
-                Triage & Root Cause Intelligence
+                Triage Details for this Alert
               </h2>
 
-              {/* 1. What the issue is in simple terms */}
-              <div className="p-4 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/60 space-y-1.5">
-                <p className="text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
-                  <i className="fa-solid fa-lightbulb text-amber-500"></i>
-                  What the issue is (in simple terms)
+              {/* In Simple Terms */}
+              <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/60 space-y-1">
+                <p className="text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                  <i className="fa-solid fa-lightbulb text-amber-500 mr-1.5"></i>
+                  What it is (in simple terms)
                 </p>
                 <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
                   {simpleTerms}
                 </p>
                 {sosSpec?.meaning && (
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400 pt-2 border-t border-amber-200/60 dark:border-amber-900/50">
-                    <strong className="text-slate-800 dark:text-slate-300">Why it matters:</strong> {sosSpec.meaning}
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 pt-1.5 border-t border-amber-200/60 dark:border-amber-900/40">
+                    <strong>Why it matters:</strong> {sosSpec.meaning}
                   </p>
                 )}
               </div>
 
-              {/* 2. What to check (Triage checklist) */}
-              <div className="p-4 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/60 space-y-2">
-                <p className="text-[11px] font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-400 flex items-center gap-1.5">
-                  <i className="fa-solid fa-list-check text-indigo-500"></i>
-                  What to check (Triage checklist)
+              {/* What to check */}
+              <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/60 space-y-2">
+                <p className="text-[11px] font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-400">
+                  <i className="fa-solid fa-list-check text-indigo-500 mr-1.5"></i>
+                  What to check (Triage Checklist)
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-1.5">
                   {whatToCheck.map((item, idx) => (
                     <li key={idx} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200 leading-snug">
                       <span className="w-4 h-4 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-[9px] flex-shrink-0 mt-0.5 font-black">
-                        <i className="fa-solid fa-check"></i>
+                        ✓
                       </span>
                       <span>{item}</span>
                     </li>
@@ -1016,13 +850,13 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                 </ul>
               </div>
 
-              {/* 3. Detailed Diagnostics & Reproduction Steps */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/70 space-y-2.5">
-                <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <i className="fa-solid fa-route text-sky-500"></i>
-                  Detailed Diagnostics & Investigation Path
+              {/* Diagnostic steps */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/70 space-y-2">
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  <i className="fa-solid fa-route text-sky-500 mr-1.5"></i>
+                  Diagnostic Steps & Log Path
                 </p>
-                <ol className="space-y-2 pl-0.5">
+                <ol className="space-y-1.5">
                   {diagnosticSteps.map((step, idx) => (
                     <li key={idx} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2">
                       <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex-shrink-0 mt-0.5">
@@ -1036,173 +870,12 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
             </div>
           )}
 
-          {/* Section 2: Interactive Field Customizer / Input Playground */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <i className="fa-solid fa-pen-ruler text-indigo-500"></i>
-                Tune Fields & Test Inputs
-              </span>
-              <span className="text-[10px] font-mono text-slate-400">Live Reaction</span>
-            </h2>
-
-            {category === 'sos' ? (
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Alert Title
-                  </label>
-                  <input
-                    type="text"
-                    value={sosOverride.title}
-                    onChange={e => setSosOverride({ ...sosOverride, title: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Severity
-                    </label>
-                    <select
-                      value={sosOverride.severity}
-                      onChange={e => setSosOverride({ ...sosOverride, severity: e.target.value as SosSeverity })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    >
-                      <option value="critical">🔴 Critical</option>
-                      <option value="high">🟠 Error / High</option>
-                      <option value="warning">🟡 Warning</option>
-                      <option value="info">🔵 Info</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Occurrences
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={sosOverride.occurrences}
-                      onChange={e => setSosOverride({ ...sosOverride, occurrences: Number(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Service
-                    </label>
-                    <input
-                      type="text"
-                      value={sosOverride.service}
-                      onChange={e => setSosOverride({ ...sosOverride, service: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Environment
-                    </label>
-                    <input
-                      type="text"
-                      value={sosOverride.environment}
-                      onChange={e => setSosOverride({ ...sosOverride, environment: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Impact
-                  </label>
-                  <input
-                    type="text"
-                    value={sosOverride.impact}
-                    onChange={e => setSosOverride({ ...sosOverride, impact: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Traveler
-                    </label>
-                    <input
-                      type="text"
-                      value={notifOverride.who}
-                      onChange={e => setNotifOverride({ ...notifOverride, who: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Ticket ID
-                    </label>
-                    <input
-                      type="text"
-                      value={notifOverride.ticket}
-                      onChange={e => setNotifOverride({ ...notifOverride, ticket: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Trip Route
-                    </label>
-                    <input
-                      type="text"
-                      value={notifOverride.trip}
-                      onChange={e => setNotifOverride({ ...notifOverride, trip: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Priority
-                    </label>
-                    <select
-                      value={notifOverride.priority}
-                      onChange={e => setNotifOverride({ ...notifOverride, priority: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    >
-                      <option value="Normal">Normal</option>
-                      <option value="High">High</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Status
-                  </label>
-                  <input
-                    type="text"
-                    value={notifOverride.status}
-                    onChange={e => setNotifOverride({ ...notifOverride, status: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Section 3: Block Kit JSON Payload Inspector */}
-          <div className="p-4 rounded-2xl bg-slate-900 text-slate-200 space-y-3 font-mono text-xs">
+          {/* Block Kit JSON Inspector */}
+          <div className="p-4 rounded-2xl bg-slate-900 text-slate-200 space-y-2.5 font-mono text-xs border border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
                 <i className="fa-solid fa-code mr-1.5 text-indigo-400"></i>
-                Slack Payload JSON Inspector
+                Block Kit Payload JSON
               </span>
               <button
                 onClick={handleCopyJson}
@@ -1211,12 +884,9 @@ export const SlackCardStudio: React.FC<SlackCardStudioProps> = ({
                 Copy JSON
               </button>
             </div>
-            <pre className="p-3 rounded-lg bg-black/60 text-[11px] text-emerald-400 max-h-60 overflow-y-auto leading-relaxed border border-slate-800">
+            <pre className="p-3 rounded-lg bg-black/60 text-[11px] text-emerald-400 max-h-64 overflow-y-auto leading-relaxed border border-slate-800">
               <code>{activeJson}</code>
             </pre>
-            <p className="text-[10px] text-slate-400">
-              Paste directly into Slack’s official <a href="https://app.slack.com/block-kit-builder" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline">Block Kit Builder</a> to test interactive menus and multi-user team previews.
-            </p>
           </div>
         </div>
       </div>

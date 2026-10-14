@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## Quick Navigation
-* [Current Release — v2.10.1 (2026-10-10)](#v2101---2026-10-10)
+* [Current Release — v2.11.0 (2026-10-14)](#v2110---2026-10-14)
+* [v2.10.1 (2026-10-10)](#v2101---2026-10-10)
 * [v2.10.0 (2026-10-10)](#v2100---2026-10-10)
 * [v2.9.0 (2026-10-10)](#v290---2026-10-10)
 * [v2.8.0 (2026-10-10)](#v280---2026-10-10)
@@ -29,6 +30,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * [v2.0.0 (2026-07-23)](#v200---2026-07-23)
 * [v1.5.0 (2026-07-16)](#v150---2026-07-16)
 * [v1.0.0 (2026-02-28)](#v100---2026-02-28)
+
+---
+
+## [v2.11.0] - 2026-10-14
+
+### 💳 Credit Cards — the second funding rail
+
+> **Finance** — The desk could only book against cash advances, so spend on the organisation's credit cards was invisible and nothing reconciled. Cards are now tracked exactly the way advances are: a balance that bookings draw down and refunds restore, with every movement in the card's history.
+
+#### 💳 Credit Card Management
+* **Register a Card**: Last four digits only — the full card number is never stored — plus bank, approver and an opening balance.
+* **Increase / Reduce Balance**: A card's sanctioned balance can be topped up or cut back later. The adjustment moves the balance and what is available together, so spend to date is untouched, and it is written into the card's history with who did it and why.
+* **History & Status**: Every charge, refund and adjustment on a timeline, each ticket charge linking through to its request. A card can be deactivated so it stops appearing at the booking screen, and reactivated later without losing anything.
+* **Reconciliation Export**: A flattened CSV, one row per card movement alongside the card's details.
+
+#### ✈️ Booking & Settlement
+* **Purchased On Credit Card**: Sits next to **Purchased against advance** on the booking screen, on the single ticket and on every split-travel leg. A ticket is funded by one rail or the other, never both.
+* **No Silent Skips**: Ticking a funding rail and leaving the advance or card unpicked used to book the ticket and quietly skip the deduction. It is now refused with a message naming the leg.
+* **Refunds Find Their Way Home**: Settling a cancellation returns the recovery to whichever rail paid for the booking.
+
+#### 📊 Analytics
+* **Two Tabs Instead Of One**: **PNC Advances & Funds** is split into **PNC Advances** and **Credit Cards**, each with its own headline figures, utilisation gauge, source breakdown, sortable log and CSV export.
+
+#### 🔔 Alerts
+* **Card Failure Paths**: A deduction that does not post, or balances that cannot be loaded, raise their own SOS codes — the card equivalents of the advance ones.
+
+#### 📝 Commits in this Release
+* `9ef5bfe` — `feat(finance): add credit cards as a second funding rail beside advances` — Nitin — 2026-10-14
 
 ---
 

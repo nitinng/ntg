@@ -34,6 +34,7 @@ VALUES
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">{{requester_name}} has submitted a travel request from {{origin}} to {{destination}} on {{departure_date}} ({{travel_mode}}) for {{purpose}}.</p>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Since a few details fall outside our standard policy, this request requires your review:</p>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">{{violation_reasons}}</p>
+      <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">This travel request has not been raised within the required advance notice period. Please review the urgency and purpose of the travel before approving.</p>
       <p style="color:#334155;font-size:14px;line-height:1.7;margin:12px 0;">Click below to review-if you''re not signed in, you''ll be prompted to log in and taken straight to the request.</p>
       <div style="text-align:center;margin:26px 0;"><a href="{{portal_url}}" style="background-color:#4F46E5;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;">Review and Approve Request</a></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">

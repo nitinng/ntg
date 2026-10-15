@@ -76,6 +76,9 @@ const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) =>
               <p className="text-xs text-rose-600 dark:text-rose-300 mt-1">
                 <span className="font-bold">Reason:</span> {request.violationDetails || 'Advance booking policy violation'}
               </p>
+              <p className="text-xs text-rose-700 dark:text-rose-300 mt-1.5 font-medium">
+                This travel request has not been raised within the required advance notice period. Please review the urgency and purpose of the travel before approving.
+              </p>
             </div>
           </div>
         )}

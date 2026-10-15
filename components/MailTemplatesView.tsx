@@ -246,6 +246,7 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
   const published = templates.filter(t => t.status === 'Published' || (!t.isDraft && t.status !== 'Archived'));
   const drafts = templates.filter(t => t.status === 'Draft' || (t.isDraft && t.status !== 'Archived'));
   const archived = templates.filter(t => t.status === 'Archived');
+  const [travelPolicies, setTravelPolicies] = useState<any[]>([]);
 
   useEffect(() => {
     fetchTemplates();
@@ -253,6 +254,13 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
 
   const fetchTemplates = async () => {
     try {
+      try {
+        const { data: polData } = await supabase.from('travel_mode_policies').select('*');
+        if (polData) setTravelPolicies(polData);
+      } catch {
+        // ignore
+      }
+
       const { data, error } = await supabase
         .from('mail_templates')
         .select('*')
@@ -685,7 +693,9 @@ export const MailTemplatesView: React.FC<MailTemplatesViewProps> = ({ currentUse
     processed = processed.replace(/\{\{change_summary\}\}/g, 'Departure date updated to 2026-09-15 (Morning flight confirmed)');
     processed = processed.replace(/\{\{current_status\}\}/g, 'Processing');
     processed = processed.replace(/\{\{cancellation_reason\}\}/g, 'Schedule rescheduled due to meeting postponement');
-    processed = processed.replace(/\{\{violation_reasons\}\}/g, 'Booked less than 7 days in advance');
+    const sampleModePolicy = travelPolicies.find((p: any) => p.travel_mode === SAMPLE_REQUEST.mode || p.travelMode === SAMPLE_REQUEST.mode);
+    const advanceNoticeDays = sampleModePolicy?.min_advance_days ?? sampleModePolicy?.minAdvanceDays ?? 14;
+    processed = processed.replace(/\{\{violation_reasons\}\}/g, `Request raised less than ${advanceNoticeDays} days in advance`);
     processed = processed.replace(/\{\{rejection_reason\}\}/g, 'Budget allocation exhausted for current cycle');
     processed = processed.replace(/\{\{information_requested\}\}/g, 'Please provide official invitation letter or ID scan');
     processed = processed.replace(/\{\{support_email\}\}/g, 'travel@navgurukul.org');

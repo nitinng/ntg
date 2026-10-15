@@ -12,9 +12,12 @@ import AuthView from './components/AuthView';
 import Select from './components/Select';
 import TextArea from './components/TextArea';
 
-const MailTemplatesView = React.lazy(() => import('./components/MailTemplatesView'));
+import { lazyWithRetry } from './utils/lazyWithRetry';
+import { installVersionWatcher } from './utils/versionWatcher';
+
+const MailTemplatesView = lazyWithRetry(() => import('./components/MailTemplatesView'));
 import PNCBookingModal from './components/PNCBookingModal';
-const ChatView = React.lazy(() => import('./components/ChatView'));
+const ChatView = lazyWithRetry(() => import('./components/ChatView'));
 import { supabase } from './supabaseClient';
 import { Toaster, toast } from 'sonner';
 import { queueEmailsForTransition } from './utils/emailQueueUtils';
@@ -47,21 +50,21 @@ const WELCOME_NOTES = [
 
 // --- Shared Components ---
 
-const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
-const PNCDashboard = React.lazy(() => import('./components/PNCDashboard'));
-const AdvanceManagement = React.lazy(() => import('./components/AdvanceManagement'));
-const CreditCardManagement = React.lazy(() => import('./components/CreditCardManagement'));
-const CancellationsDashboard = React.lazy(() => import('./components/CancellationsDashboard'));
-const CancellationRequestsQueue = React.lazy(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
-const DepartmentManagement = React.lazy(() => import('./components/DepartmentManagement').then(module => ({ default: module.DepartmentManagement })));
-const TestingSettingsView = React.lazy(() => import('./components/TestingSettingsView').then(module => ({ default: module.TestingSettingsView })));
-const FinanceDashboard = React.lazy(() => import('./components/FinanceDashboard'));
-const ManagerApprovalsView = React.lazy(() => import('./components/ManagerApprovalsView'));
-const PolicyManagement = React.lazy(() => import('./components/PolicyManagement'));
-const LocationCalendar = React.lazy(() => import('./components/LocationCalendar'));
-const RequestDetailOverlay = React.lazy(() => import('./components/RequestDetailOverlay'));
-const EmployeeGuideView = React.lazy(() => import('./components/EmployeeGuideView'));
-const SOSView = React.lazy(() => import('./components/SOSView').then(module => ({ default: module.SOSView })));
+const AdminDashboard = lazyWithRetry(() => import('./components/AdminDashboard'));
+const PNCDashboard = lazyWithRetry(() => import('./components/PNCDashboard'));
+const AdvanceManagement = lazyWithRetry(() => import('./components/AdvanceManagement'));
+const CreditCardManagement = lazyWithRetry(() => import('./components/CreditCardManagement'));
+const CancellationsDashboard = lazyWithRetry(() => import('./components/CancellationsDashboard'));
+const CancellationRequestsQueue = lazyWithRetry(() => import('./components/CancellationRequestsQueue').then(module => ({ default: module.CancellationRequestsQueue })));
+const DepartmentManagement = lazyWithRetry(() => import('./components/DepartmentManagement').then(module => ({ default: module.DepartmentManagement })));
+const TestingSettingsView = lazyWithRetry(() => import('./components/TestingSettingsView').then(module => ({ default: module.TestingSettingsView })));
+const FinanceDashboard = lazyWithRetry(() => import('./components/FinanceDashboard'));
+const ManagerApprovalsView = lazyWithRetry(() => import('./components/ManagerApprovalsView'));
+const PolicyManagement = lazyWithRetry(() => import('./components/PolicyManagement'));
+const LocationCalendar = lazyWithRetry(() => import('./components/LocationCalendar'));
+const RequestDetailOverlay = lazyWithRetry(() => import('./components/RequestDetailOverlay'));
+const EmployeeGuideView = lazyWithRetry(() => import('./components/EmployeeGuideView'));
+const SOSView = lazyWithRetry(() => import('./components/SOSView').then(module => ({ default: module.SOSView })));
 
 import { mapDbRequest } from './services/requestMapper';
 import { checkPolicyViolation } from './utils/policyUtils';
@@ -71,19 +74,19 @@ import IgathpuriAvailabilityModal from './components/IgathpuriAvailabilityModal'
 import LoadingView from './components/LoadingView';
 import EmployeeDashboard from './components/EmployeeDashboard';
 
-const IgathpuriMeetupView = React.lazy(() => import('./components/IgathpuriMeetupView'));
-const UserRoleManagement = React.lazy(() => import('./components/UserRoleManagement'));
-const OnboardingView = React.lazy(() => import('./components/OnboardingView'));
-const AnalyticsView = React.lazy(() => import('./components/AnalyticsView'));
-const MeetupApprovalsView = React.lazy(() => import('./components/MeetupApprovalsView'));
-const VerificationQueue = React.lazy(() => import('./components/VerificationQueue'));
-const SettingsView = React.lazy(() => import('./components/SettingsView'));
-const AdminQueueView = React.lazy(() => import('./components/AdminQueueView'));
-const PastRequestsView = React.lazy(() => import('./components/PastRequestsView'));
-const SentMailsView = React.lazy(() => import('./components/SentMailsView'));
-const EmailSettingsView = React.lazy(() => import('./components/EmailSettingsView'));
-const EmailNotificationCenter = React.lazy(() => import('./components/EmailNotificationCenter').then(module => ({ default: module.EmailNotificationCenter })));
-const VersionChangelogView = React.lazy(() => import('./components/VersionChangelogView'));
+const IgathpuriMeetupView = lazyWithRetry(() => import('./components/IgathpuriMeetupView'));
+const UserRoleManagement = lazyWithRetry(() => import('./components/UserRoleManagement'));
+const OnboardingView = lazyWithRetry(() => import('./components/OnboardingView'));
+const AnalyticsView = lazyWithRetry(() => import('./components/AnalyticsView'));
+const MeetupApprovalsView = lazyWithRetry(() => import('./components/MeetupApprovalsView'));
+const VerificationQueue = lazyWithRetry(() => import('./components/VerificationQueue'));
+const SettingsView = lazyWithRetry(() => import('./components/SettingsView'));
+const AdminQueueView = lazyWithRetry(() => import('./components/AdminQueueView'));
+const PastRequestsView = lazyWithRetry(() => import('./components/PastRequestsView'));
+const SentMailsView = lazyWithRetry(() => import('./components/SentMailsView'));
+const EmailSettingsView = lazyWithRetry(() => import('./components/EmailSettingsView'));
+const EmailNotificationCenter = lazyWithRetry(() => import('./components/EmailNotificationCenter').then(module => ({ default: module.EmailNotificationCenter })));
+const VersionChangelogView = lazyWithRetry(() => import('./components/VersionChangelogView'));
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -119,8 +122,15 @@ const App: React.FC = () => {
     window.history.replaceState({}, '', url.toString());
   }, []);
 
-  // Anything that escapes every try/catch in the app still gets reported.
-  useEffect(() => installGlobalSosHandlers(), []);
+  // Anything that escapes every try/catch in the app still gets reported, and watch for new deployments.
+  useEffect(() => {
+    const uninstallSos = installGlobalSosHandlers();
+    const uninstallWatcher = installVersionWatcher();
+    return () => {
+      uninstallSos();
+      uninstallWatcher();
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) {
@@ -1414,7 +1424,15 @@ const App: React.FC = () => {
                   employee_response: null,
                   on_hold_since: null,
                   has_violation: isViolated,
-                  violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                  violation_reason: (() => {
+                    if (!isViolated) return null;
+                    const modePolicy = travelModePolicies.find(p => p.travelMode === data.mode);
+                    const noticeDays = modePolicy?.minAdvanceDays;
+                    const noticePrefix = noticeDays !== undefined
+                      ? `Request raised less than ${noticeDays} days in advance`
+                      : 'Request raised less than required advance notice period';
+                    return data.violationReason ? `${noticePrefix} (Reason: ${data.violationReason})` : noticePrefix;
+                  })(),
                   timeline: [
                     ...editingRequest.timeline,
                     {
@@ -1515,7 +1533,15 @@ const App: React.FC = () => {
                   pnc_status: PNCStatus.NOT_STARTED,
                   timeline: [{ id: '1', timestamp: new Date().toISOString(), actor: currentUser!.name, event: 'Request Created' }],
                   has_violation: isViolated,
-                  violation_reason: isViolated ? (data.violationReason || 'Advance booking policy violation') : null,
+                  violation_reason: (() => {
+                    if (!isViolated) return null;
+                    const modePolicy = travelModePolicies.find(p => p.travelMode === data.mode);
+                    const noticeDays = modePolicy?.minAdvanceDays;
+                    const noticePrefix = noticeDays !== undefined
+                      ? `Request raised less than ${noticeDays} days in advance`
+                      : 'Request raised less than required advance notice period';
+                    return data.violationReason ? `${noticePrefix} (Reason: ${data.violationReason})` : noticePrefix;
+                  })(),
                   booked_by: 'PNC'
                 };
 

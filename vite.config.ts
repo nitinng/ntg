@@ -31,7 +31,12 @@ export default defineConfig(({ mode }) => {
       }
     : undefined;
 
+  const buildId = env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || Date.now().toString();
+
   return {
+    define: {
+      'import.meta.env.VITE_BUILD_ID': JSON.stringify(mode === 'development' ? 'dev' : buildId),
+    },
     server: {
       port: 3000,
       host: '0.0.0.0',
@@ -62,7 +67,22 @@ export default defineConfig(({ mode }) => {
         usePolling: false,
       },
     },
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: 'emit-version-json',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'version.json',
+            source: JSON.stringify({
+              buildId,
+              builtAt: new Date().toISOString()
+            })
+          });
+        }
+      }
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

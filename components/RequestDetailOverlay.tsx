@@ -748,6 +748,11 @@ export const RequestDetailOverlay = ({
                   <p className={`text-sm font-bold ${isPolicyViolated ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                     {isPolicyViolated ? (request.violationDetails || 'Advance booking policy violation') : 'No Violation'}
                   </p>
+                  {isPolicyViolated && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                      This travel request has not been raised within the required advance notice period. Please review the urgency and purpose of the travel before approving.
+                    </p>
+                  )}
                 </div>
 
                 {(request.infoRequested || request.employeeResponse) && (

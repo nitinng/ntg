@@ -327,6 +327,10 @@ const PNCBookingModal = ({ onClose, onSubmit, currentUser, employees, policies, 
                                                 </button>
                                             ))}
                                         </div>
+                                        <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-1.5 leading-relaxed font-medium">
+                                            <span className="shrink-0 text-sm leading-none">⚠️</span>
+                                            <span>Final decision will be made after consultation with PnC based on travel policy and availability.</span>
+                                        </p>
                                     </div>
 
                                     {/* Trip Type */}

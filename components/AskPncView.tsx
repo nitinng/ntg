@@ -89,10 +89,14 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
     }
 
     try {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUserId = authData?.user?.id;
+      const effectiveEmployeeId = authUserId || currentUser.id;
+
       const payload: any = {
-        employee_id: currentUser.id,
-        employee_name: currentUser.name || currentUser.email,
-        employee_email: currentUser.email,
+        employee_id: effectiveEmployeeId,
+        employee_name: currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email,
+        employee_email: currentUser.email || authData?.user?.email,
         title: newQuestionTitle.trim(),
         content: newQuestionContent.trim(),
         status: 'Open'
@@ -107,9 +111,9 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
       // If content column is missing from schema, retry with question column
       if (error && (error.message?.includes('content') || error.code === 'PGRST204')) {
         const altPayload: any = {
-          employee_id: currentUser.id,
-          employee_name: currentUser.name || currentUser.email,
-          employee_email: currentUser.email,
+          employee_id: effectiveEmployeeId,
+          employee_name: currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email,
+          employee_email: currentUser.email || authData?.user?.email,
           title: newQuestionTitle.trim(),
           question: newQuestionContent.trim(),
           status: 'Open'
@@ -149,10 +153,13 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
     setIsSubmittingReply(true);
 
     try {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUserId = authData?.user?.id;
+
       const payload = {
         question_id: selectedQuestion.id,
-        author_id: currentUser.id,
-        author_name: currentUser.name || currentUser.email,
+        author_id: authUserId || currentUser.id,
+        author_name: currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email,
         author_role: currentUser.role,
         reply_text: replyText.trim(),
         is_edited: false

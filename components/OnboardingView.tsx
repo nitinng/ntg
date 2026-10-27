@@ -321,6 +321,28 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
 
       {/* Warnings & Notices */}
       <div className="space-y-4">
+        {onSkip && policy.isEnforcementEnabled && !minDaysRemaining && (
+          <div className="p-5 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <i className="fa-solid fa-forward-step text-xl text-indigo-500"></i>
+              </div>
+              <div>
+                <p className="font-bold text-sm text-slate-800 dark:text-white">Need to book travel immediately?</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  You can temporarily skip verification for {policy.temporaryUnlockDays} days. After this window, full verification will be required to maintain access.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onSkip}
+              className="whitespace-nowrap px-6 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 rounded-lg text-xs font-black uppercase hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              Skip for Now
+            </button>
+          </div>
+        )}
+
         {policy.isEnforcementEnabled && minDaysRemaining !== null && minDaysRemaining > 0 && (
           <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-lg p-5 flex items-start gap-4 animate-in slide-in-from-top-2">
             <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">

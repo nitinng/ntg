@@ -656,11 +656,12 @@ const App: React.FC = () => {
       if (currentUser?.id === finalUser.id) {
         setCurrentUser(finalUser);
         if (returnTo === 'new-request') {
+          const verified = isUserVerified(finalUser, policy);
           const newCompleteness = calculateProfileCompleteness(finalUser);
-          if (newCompleteness === 100) {
+          if (verified || newCompleteness === 100) {
             setReturnTo(null);
             setIsNewRequestModalOpen(true);
-            toast.success("Profile complete! Resuming your travel booking.");
+            toast.success("Resuming your travel booking.");
           }
         }
       }
@@ -827,9 +828,9 @@ const App: React.FC = () => {
           <EmployeeDashboard
             requests={requests.filter(r => r.requesterId === currentUser.id)}
             onNewRequest={(context?: any) => {
-              const completeness = calculateProfileCompleteness(currentUser);
-              if (currentUser.role === UserRole.EMPLOYEE && completeness < 100) {
-                toast.error("Please complete your profile (100%) before submitting a travel request.");
+              const verified = isUserVerified(currentUser, policy);
+              if (currentUser.role === UserRole.EMPLOYEE && policy.isEnforcementEnabled && !verified) {
+                toast.error("Please complete your verification or use 'Skip for Now' before submitting a travel request.");
                 setReturnTo('new-request');
                 setMeetupContext(context);
                 handleTabChange('profile');
@@ -987,7 +988,7 @@ const App: React.FC = () => {
       case 'profile':
         return (
           <div className="w-full transition-all duration-300">
-            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} departments={departments} />
+            <OnboardingView user={currentUser!} policy={policy} onUpdate={handleUpdateUser} isLock={false} onSkip={handleSkipVerification} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onLogout={() => { sessionStorage.removeItem('activeTab'); sessionStorage.removeItem('currentRole'); setActiveTab('dashboard'); supabase.auth.signOut(); }} departments={departments} />
           </div>
         );
       case 'settings':
@@ -1110,9 +1111,9 @@ const App: React.FC = () => {
         if (!isIgatpuriEnabled) return renderDashboard();
         return <IgathpuriMeetupView
           onNewRequest={(context?: any) => {
-            const completeness = calculateProfileCompleteness(currentUser);
-            if (currentUser.role === UserRole.EMPLOYEE && completeness < 100) {
-              toast.error("Please complete your profile (100%) before submitting a travel request.");
+            const verified = isUserVerified(currentUser, policy);
+            if (currentUser.role === UserRole.EMPLOYEE && policy.isEnforcementEnabled && !verified) {
+              toast.error("Please complete your verification or use 'Skip for Now' before submitting a travel request.");
               setReturnTo('new-request');
               setMeetupContext(context);
               handleTabChange('profile');
@@ -1143,11 +1144,15 @@ const App: React.FC = () => {
 
   const handleSkipVerification = () => {
     const updatedUser = {
-      ...currentUser,
+      ...currentUser!,
       skippedVerificationAt: new Date().toISOString()
     };
     handleUpdateUser(updatedUser);
     toast.success(`Verification skipped. You have ${policy.temporaryUnlockDays} days to complete your profile.`);
+    if (returnTo === 'new-request') {
+      setReturnTo(null);
+      setIsNewRequestModalOpen(true);
+    }
   };
 
   if (!session || isResettingPassword) {

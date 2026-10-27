@@ -198,19 +198,28 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     try {
       // Extract mentions matching known PNC staff or generic @handles
       const mentionedNames: string[] = [];
-      pncStaffList.forEach(pnc => {
+      const sortedPnc = [...pncStaffList].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+
+      sortedPnc.forEach(pnc => {
         const namePattern = pnc.name ? new RegExp(`@${escapeRegex(pnc.name)}\\b`, 'i') : null;
         const emailPattern = pnc.email ? new RegExp(`@${escapeRegex(pnc.email)}\\b`, 'i') : null;
         if ((namePattern && namePattern.test(newComment)) || (emailPattern && emailPattern.test(newComment))) {
-          mentionedNames.push(pnc.name || pnc.email);
+          const val = pnc.name || pnc.email;
+          if (val && !mentionedNames.includes(val)) {
+            mentionedNames.push(val);
+          }
         }
       });
 
-      // Also pick up any generic @mentions
-      const genericMatches: string[] = newComment.match(/@([\w.-]+(?:@[\w.-]+)?)/g) || [];
+      // Also pick up any generic @mentions (avoid adding sub-words of already matched full names)
+      const genericMatches = newComment.match(/@([\w.-]+(?:@[\w.-]+)?)/g) || [];
       genericMatches.forEach((m: string) => {
         const clean = m.slice(1).trim();
-        if (!mentionedNames.includes(clean)) {
+        const alreadyMatched = mentionedNames.some(name =>
+          name.toLowerCase() === clean.toLowerCase() ||
+          name.toLowerCase().startsWith(clean.toLowerCase() + ' ')
+        );
+        if (!alreadyMatched && clean) {
           mentionedNames.push(clean);
         }
       });
@@ -276,7 +285,7 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
 
   /**
    * Parses text and renders @mentions as rounded-md badges with distinct,
-   * high-contrast background and text colors.
+   * high-contrast background and text colors. The PNC tag is omitted once rendered.
    */
   const renderFormattedComment = (text: string) => {
     if (!text) return null;
@@ -307,14 +316,11 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
       parts.push(
         <span
           key={match.index}
-          className={`inline-flex items-center gap-0.5 px-2 py-0.5 mx-0.5 rounded-md text-xs font-bold border shadow-2xs ${colorClasses} align-baseline`}
+          className={`inline-flex items-center gap-0.5 px-2 py-0.5 mx-0.5 rounded-md text-xs font-semibold border shadow-2xs ${colorClasses} align-baseline`}
           title={`PNC Member: ${mentionName}`}
         >
           <span className="opacity-75 font-mono text-[10px]">@</span>
           <span>{mentionName}</span>
-          <span className="ml-1 px-1 py-0.1 rounded text-[9px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/10 opacity-90">
-            PNC
-          </span>
         </span>
       );
 
@@ -347,8 +353,6 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
         ) : (
           comments.map(c => {
             const isAuthor = currentUser?.id === c.author_id;
-            const isPncAuthor = c.author_role === UserRole.PNC || c.author_role === UserRole.PNC_ADMIN;
-            const authorRoleDisplay = isPncAuthor ? 'PNC' : c.author_role;
 
             return (
               <div
@@ -358,13 +362,6 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-800 dark:text-slate-200">{c.author_name}</span>
-                    <span className={`px-1.5 py-0.2 rounded text-3xs font-bold uppercase tracking-wider border ${
-                      isPncAuthor
-                        ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                    }`}>
-                      {authorRoleDisplay}
-                    </span>
                     {c.is_edited && (
                       <span className="text-3xs text-slate-400 italic">(edited)</span>
                     )}
@@ -414,28 +411,6 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                   <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
                     {renderFormattedComment(c.comment_text)}
                   </p>
-                )}
-
-                {c.mentions && c.mentions.length > 0 && (
-                  <div className="flex items-center gap-1.5 pt-1.5 flex-wrap">
-                    <span className="text-3xs font-semibold text-slate-400 flex items-center gap-1">
-                      <i className="fa-solid fa-at text-indigo-500"></i> Mentioned:
-                    </span>
-                    {c.mentions.map((m, idx) => {
-                      const colorClasses = getMentionColor(m);
-                      return (
-                        <span
-                          key={idx}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-3xs font-bold border shadow-2xs ${colorClasses}`}
-                        >
-                          <span>@{m}</span>
-                          <span className="px-1 py-0.1 rounded text-[8px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/10 opacity-90">
-                            PNC
-                          </span>
-                        </span>
-                      );
-                    })}
-                  </div>
                 )}
               </div>
             );

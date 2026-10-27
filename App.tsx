@@ -1307,15 +1307,6 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
-                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
-                    <SidebarLink
-                      icon="fa-file-signature"
-                      label="Approvals"
-                      active={activeTab === 'approvals'}
-                      onClick={() => handleTabChange('approvals')}
-                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
-                    />
-                  )}
                   <SidebarLink
                     icon="fa-calendar-plus"
                     label="Self Booking"
@@ -1372,15 +1363,6 @@ const App: React.FC = () => {
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
                   <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
-                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
-                    <SidebarLink
-                      icon="fa-file-signature"
-                      label="Approvals"
-                      active={activeTab === 'approvals'}
-                      onClick={() => handleTabChange('approvals')}
-                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
-                    />
-                  )}
                 </div>
 
               </>
@@ -1391,15 +1373,6 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
-                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
-                    <SidebarLink
-                      icon="fa-file-signature"
-                      label="Approvals"
-                      active={activeTab === 'approvals'}
-                      onClick={() => handleTabChange('approvals')}
-                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
-                    />
-                  )}
                   <SidebarLink icon="fa-circle-question" label="PnC Inquiries" active={activeTab === 'pnc-inquiries'} onClick={() => handleTabChange('pnc-inquiries')} />
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
                 </div>

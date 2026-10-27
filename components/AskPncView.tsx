@@ -45,7 +45,11 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
 
       const { data, error } = await query;
       if (!error && data) {
-        setQuestions(data as PncQuestion[]);
+        const mapped = data.map((d: any) => ({
+          ...d,
+          content: d.content || d.question || d.description || ''
+        }));
+        setQuestions(mapped as PncQuestion[]);
       }
     } catch (err: any) {
       console.error('Error loading questions:', err);
@@ -85,7 +89,7 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
     }
 
     try {
-      const payload = {
+      const payload: any = {
         employee_id: currentUser.id,
         employee_name: currentUser.name || currentUser.email,
         employee_email: currentUser.email,
@@ -94,11 +98,33 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
         status: 'Open'
       };
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('pnc_questions')
         .insert(payload)
         .select()
         .single();
+
+      // If content column is missing from schema, retry with question column
+      if (error && (error.message?.includes('content') || error.code === 'PGRST204')) {
+        const altPayload: any = {
+          employee_id: currentUser.id,
+          employee_name: currentUser.name || currentUser.email,
+          employee_email: currentUser.email,
+          title: newQuestionTitle.trim(),
+          question: newQuestionContent.trim(),
+          status: 'Open'
+        };
+        const altRes = await supabase
+          .from('pnc_questions')
+          .insert(altPayload)
+          .select()
+          .single();
+
+        if (!altRes.error) {
+          data = altRes.data;
+          error = null;
+        }
+      }
 
       if (error) throw error;
 
@@ -108,7 +134,10 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
       setIsAsking(false);
       loadQuestions();
       if (data) {
-        setSelectedQuestion(data as PncQuestion);
+        setSelectedQuestion({
+          ...(data as any),
+          content: (data as any).content || (data as any).question || ''
+        });
       }
     } catch (err: any) {
       toast.error("Failed to submit question: " + err.message);

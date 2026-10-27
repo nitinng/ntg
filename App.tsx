@@ -1381,8 +1381,8 @@ const App: React.FC = () => {
                     label="Self Booking"
                     active={false}
                     onClick={() => setIsPNCBookingModalOpen(true)}
-                    badge={<i className="fa-solid fa-plus text-xs"></i>}
-                    badgeColor="bg-blue-600 w-5 h-5 flex items-center justify-center !p-0"
+                    badge={<i className="fa-solid fa-plus text-xs text-white"></i>}
+                    badgeColor="bg-blue-600 text-white"
                   />
                   <SidebarLink icon="fa-list-check" label="Queue" active={activeTab === 'requests'} onClick={() => handleTabChange('requests')} />
                   <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />

@@ -14,7 +14,7 @@ export const SidebarLink = ({ icon, label, active, onClick, badge, badgeColor }:
     <i className={`fa-solid ${icon} w-5 ${active ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'}`}></i>
     <span className="flex-1 text-left whitespace-nowrap">{label}</span>
     {badge && (
-      <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full leading-none shrink-0 ${badgeColor || 'bg-rose-500 text-white'}`}>
+      <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full leading-none shrink-0 text-white shadow-2xs ${badgeColor || 'bg-rose-500'}`}>
         {badge}
       </span>
     )}

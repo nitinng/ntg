@@ -22,7 +22,7 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
   const [isAsking, setIsAsking] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('Open');
 
   // Promote to FAQ Modal
   const [promoteModalOpen, setPromoteModalOpen] = useState(false);
@@ -332,7 +332,12 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
 
   const filteredQuestions = questions.filter(q => {
     if (statusFilter === 'ALL') return true;
-    return q.status === statusFilter;
+    const s = (q.status || '').toLowerCase();
+    const filter = statusFilter.toLowerCase();
+    if (filter === 'resolved') {
+      return s === 'resolved' || s === 'closed';
+    }
+    return s === filter;
   });
 
   return (
@@ -416,11 +421,11 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
               {filteredQuestions.length} Inquiry{filteredQuestions.length !== 1 ? 'ies' : ''}
             </span>
             <div className="flex items-center gap-1">
-              {['ALL', 'Open', 'Answered', 'Resolved'].map(tab => (
+              {['Open', 'Answered', 'Resolved', 'ALL'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setStatusFilter(tab)}
-                  className={`px-2.5 py-1 text-2xs font-bold rounded-md transition-all ${
+                  className={`px-2.5 py-1 text-2xs font-bold rounded-md transition-all cursor-pointer ${
                     statusFilter === tab
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'

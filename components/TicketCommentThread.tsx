@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { User, TicketComment } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { User, UserRole, TicketComment } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 
@@ -9,6 +9,66 @@ interface TicketCommentThreadProps {
   users?: User[];
   title?: string;
 }
+
+/**
+ * Curated palette of WCAG AAA high-contrast color pairings (> 9:1 contrast ratio)
+ * for @mention badges in both light and dark modes.
+ */
+const MENTION_PALETTES = [
+  {
+    name: 'indigo',
+    light: 'bg-indigo-100 text-indigo-950 border-indigo-300',
+    dark: 'dark:bg-indigo-950/90 dark:text-indigo-200 dark:border-indigo-700'
+  },
+  {
+    name: 'emerald',
+    light: 'bg-emerald-100 text-emerald-950 border-emerald-300',
+    dark: 'dark:bg-emerald-950/90 dark:text-emerald-200 dark:border-emerald-700'
+  },
+  {
+    name: 'amber',
+    light: 'bg-amber-100 text-amber-950 border-amber-300',
+    dark: 'dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-700'
+  },
+  {
+    name: 'purple',
+    light: 'bg-purple-100 text-purple-950 border-purple-300',
+    dark: 'dark:bg-purple-950/90 dark:text-purple-200 dark:border-purple-700'
+  },
+  {
+    name: 'sky',
+    light: 'bg-sky-100 text-sky-950 border-sky-300',
+    dark: 'dark:bg-sky-950/90 dark:text-sky-200 dark:border-sky-700'
+  },
+  {
+    name: 'rose',
+    light: 'bg-rose-100 text-rose-950 border-rose-300',
+    dark: 'dark:bg-rose-950/90 dark:text-rose-200 dark:border-rose-700'
+  },
+  {
+    name: 'teal',
+    light: 'bg-teal-100 text-teal-950 border-teal-300',
+    dark: 'dark:bg-teal-950/90 dark:text-teal-200 dark:border-teal-700'
+  },
+  {
+    name: 'cyan',
+    light: 'bg-cyan-100 text-cyan-950 border-cyan-300',
+    dark: 'dark:bg-cyan-950/90 dark:text-cyan-200 dark:border-cyan-700'
+  }
+];
+
+export const getMentionColor = (name: string): string => {
+  if (!name) return `${MENTION_PALETTES[0].light} ${MENTION_PALETTES[0].dark}`;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % MENTION_PALETTES.length;
+  const p = MENTION_PALETTES[index];
+  return `${p.light} ${p.dark}`;
+};
+
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
   ticketId,
@@ -23,7 +83,34 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
   const [editingText, setEditingText] = useState('');
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
+  const [pncStaffList, setPncStaffList] = useState<User[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync / fetch PNC staff list (PNC + PNC Admin only)
+  useEffect(() => {
+    const fromProps = (users || []).filter(
+      u => u.role === UserRole.PNC || u.role === UserRole.PNC_ADMIN
+    );
+
+    if (fromProps.length > 0) {
+      setPncStaffList(fromProps);
+    } else {
+      const fetchPncStaff = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, name, email, role')
+            .in('role', ['PNC', 'PNC Admin']);
+          if (!error && data && data.length > 0) {
+            setPncStaffList(data as User[]);
+          }
+        } catch (err) {
+          console.warn('Could not fetch PNC staff for mentions:', err);
+        }
+      };
+      fetchPncStaff();
+    }
+  }, [users]);
 
   const loadComments = async () => {
     if (!ticketId) return;
@@ -62,12 +149,17 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     };
   }, [ticketId]);
 
-  // Mention autocomplete suggestions
-  const mentionSuggestions = users.filter(u => {
-    if (!mentionQuery) return true;
-    const q = mentionQuery.toLowerCase();
-    return (u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q));
-  }).slice(0, 5);
+  // Mention autocomplete suggestions: ONLY PNC members (PNC + PNC Admin)
+  const mentionSuggestions = useMemo(() => {
+    return pncStaffList.filter(u => {
+      if (!mentionQuery) return true;
+      const q = mentionQuery.toLowerCase();
+      return (
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q))
+      );
+    }).slice(0, 8);
+  }, [pncStaffList, mentionQuery]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -104,9 +196,24 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Extract mentions (@name or @email)
-      const mentionMatches = newComment.match(/@([\w.-]+(?:@[\w.-]+)?)/g) || [];
-      const mentions = mentionMatches.map(m => m.slice(1).trim());
+      // Extract mentions matching known PNC staff or generic @handles
+      const mentionedNames: string[] = [];
+      pncStaffList.forEach(pnc => {
+        const namePattern = pnc.name ? new RegExp(`@${escapeRegex(pnc.name)}\\b`, 'i') : null;
+        const emailPattern = pnc.email ? new RegExp(`@${escapeRegex(pnc.email)}\\b`, 'i') : null;
+        if ((namePattern && namePattern.test(newComment)) || (emailPattern && emailPattern.test(newComment))) {
+          mentionedNames.push(pnc.name || pnc.email);
+        }
+      });
+
+      // Also pick up any generic @mentions
+      const genericMatches: string[] = newComment.match(/@([\w.-]+(?:@[\w.-]+)?)/g) || [];
+      genericMatches.forEach((m: string) => {
+        const clean = m.slice(1).trim();
+        if (!mentionedNames.includes(clean)) {
+          mentionedNames.push(clean);
+        }
+      });
 
       const payload = {
         ticket_id: ticketId,
@@ -114,7 +221,7 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
         author_name: currentUser.name || currentUser.email,
         author_role: currentUser.role,
         comment_text: newComment.trim(),
-        mentions: mentions.length > 0 ? mentions : null,
+        mentions: mentionedNames.length > 0 ? mentionedNames : null,
         is_edited: false
       };
 
@@ -167,6 +274,60 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     }
   };
 
+  /**
+   * Parses text and renders @mentions as rounded-md badges with distinct,
+   * high-contrast background and text colors.
+   */
+  const renderFormattedComment = (text: string) => {
+    if (!text) return null;
+
+    // Collect all PNC names and emails, sorted by length descending so full names match first
+    const candidateNames = pncStaffList
+      .flatMap(u => [u.name, u.email])
+      .filter((n): n is string => Boolean(n && n.trim()))
+      .sort((a, b) => b.length - a.length);
+
+    const pattern = candidateNames.length > 0
+      ? new RegExp(`@(${candidateNames.map(escapeRegex).join('|')})\\b|@([\\w.-]+(?:@[\\w.-]+)?)`, 'gi')
+      : /@([\w.-]+(?:@[\w.-]+)?)/gi;
+
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      const mentionName = match[1] || match[2];
+      const fullMention = match[0];
+      const colorClasses = getMentionColor(mentionName);
+
+      parts.push(
+        <span
+          key={match.index}
+          className={`inline-flex items-center gap-0.5 px-2 py-0.5 mx-0.5 rounded-md text-xs font-bold border shadow-2xs ${colorClasses} align-baseline`}
+          title={`PNC Member: ${mentionName}`}
+        >
+          <span className="opacity-75 font-mono text-[10px]">@</span>
+          <span>{mentionName}</span>
+          <span className="ml-1 px-1 py-0.1 rounded text-[9px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/10 opacity-90">
+            PNC
+          </span>
+        </span>
+      );
+
+      lastIndex = match.index + fullMention.length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts;
+  };
+
   return (
     <div className="space-y-4 pt-4 border-t dark:border-slate-800">
       <div className="flex items-center justify-between">
@@ -174,18 +335,21 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
           <i className="fa-solid fa-comments text-indigo-600"></i>
           {title} ({comments.length})
         </h4>
-        <span className="text-2xs text-slate-400">Supports @mentions</span>
+        <span className="text-2xs text-slate-400">Type @ to mention PNC team</span>
       </div>
 
       {/* Comment List */}
       <div className="space-y-3 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
         {comments.length === 0 ? (
           <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50 dark:bg-slate-800/20 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
-            No comments yet. Start a discussion or mention colleagues using @.
+            No comments yet. Start a discussion or mention PNC staff using @.
           </div>
         ) : (
           comments.map(c => {
             const isAuthor = currentUser?.id === c.author_id;
+            const isPncAuthor = c.author_role === UserRole.PNC || c.author_role === UserRole.PNC_ADMIN;
+            const authorRoleDisplay = isPncAuthor ? 'PNC' : c.author_role;
+
             return (
               <div
                 key={c.id}
@@ -194,8 +358,12 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-800 dark:text-slate-200">{c.author_name}</span>
-                    <span className="px-1.5 py-0.2 rounded text-3xs font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                      {c.author_role}
+                    <span className={`px-1.5 py-0.2 rounded text-3xs font-bold uppercase tracking-wider border ${
+                      isPncAuthor
+                        ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    }`}>
+                      {authorRoleDisplay}
                     </span>
                     {c.is_edited && (
                       <span className="text-3xs text-slate-400 italic">(edited)</span>
@@ -244,14 +412,29 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                   </div>
                 ) : (
                   <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                    {c.comment_text}
+                    {renderFormattedComment(c.comment_text)}
                   </p>
                 )}
 
                 {c.mentions && c.mentions.length > 0 && (
-                  <div className="flex items-center gap-1.5 pt-1 text-3xs text-indigo-600 dark:text-indigo-400 font-semibold">
-                    <i className="fa-solid fa-at"></i>
-                    <span>Mentioned: {c.mentions.join(', ')}</span>
+                  <div className="flex items-center gap-1.5 pt-1.5 flex-wrap">
+                    <span className="text-3xs font-semibold text-slate-400 flex items-center gap-1">
+                      <i className="fa-solid fa-at text-indigo-500"></i> Mentioned:
+                    </span>
+                    {c.mentions.map((m, idx) => {
+                      const colorClasses = getMentionColor(m);
+                      return (
+                        <span
+                          key={idx}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-3xs font-bold border shadow-2xs ${colorClasses}`}
+                        >
+                          <span>@{m}</span>
+                          <span className="px-1 py-0.1 rounded text-[8px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/10 opacity-90">
+                            PNC
+                          </span>
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -263,22 +446,49 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
       {/* New Comment Input */}
       {currentUser && (
         <div className="relative space-y-2">
+          {/* Mention Menu: Only PNC staff (PNC + PNC Admin), labeled as PNC without role differentiation */}
           {showMentionMenu && mentionSuggestions.length > 0 && (
-            <div className="absolute bottom-full mb-1 left-0 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-20 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-              <div className="p-2 bg-slate-50 dark:bg-slate-800 text-3xs font-bold uppercase tracking-wider text-slate-400">
-                Mention Member
+            <div className="absolute bottom-full mb-1 left-0 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-20 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 text-3xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <i className="fa-solid fa-at text-indigo-500"></i>
+                  Mention PNC Team
+                </span>
+                <span className="text-3xs text-slate-400 font-normal">{mentionSuggestions.length} available</span>
               </div>
-              {mentionSuggestions.map(u => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => handleSelectMention(u)}
-                  className="w-full p-2 text-left hover:bg-indigo-50 dark:hover:bg-slate-800 text-xs flex items-center justify-between"
-                >
-                  <span className="font-bold text-slate-800 dark:text-slate-200 truncate">{u.name}</span>
-                  <span className="text-3xs text-slate-400">{u.role}</span>
-                </button>
-              ))}
+              <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                {mentionSuggestions.map(u => {
+                  const colorClasses = getMentionColor(u.name || u.email);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => handleSelectMention(u)}
+                      className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/70 text-xs flex items-center justify-between gap-2 transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-3xs font-bold border shrink-0 ${colorClasses}`}>
+                          {(u.name || u.email || 'P').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
+                            {u.name || u.email}
+                          </span>
+                          {u.name && u.email && (
+                            <span className="text-3xs text-slate-400 truncate block">
+                              {u.email}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Uniform PNC tag - no role differentiation */}
+                      <span className="px-2 py-0.5 rounded text-3xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
+                        PNC
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -286,19 +496,19 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
             ref={textareaRef}
             value={newComment}
             onChange={handleInputChange}
-            placeholder="Write a comment or update... Type @ to mention someone"
+            placeholder="Write a comment or update... Type @ to mention a PNC team member"
             className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
             rows={2}
           />
 
           <div className="flex items-center justify-between">
             <span className="text-3xs text-slate-400">
-              Press Post to send comment. Notifications will be sent for @mentions.
+              Type @ to notify a PNC member.
             </span>
             <button
               onClick={handlePostComment}
               disabled={isSubmitting || !newComment.trim()}
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 transition-all flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <i className="fa-solid fa-paper-plane text-2xs"></i>
               Post Comment
@@ -311,3 +521,4 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
 };
 
 export default TicketCommentThread;
+

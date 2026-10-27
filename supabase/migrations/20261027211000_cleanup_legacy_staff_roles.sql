@@ -31,6 +31,7 @@ SET role = 'Employee',
     updated_at = now()
 WHERE role IN ('Admin', 'PNC', 'PNC Admin')
   AND lower(trim(email)) NOT IN (
+    'nitin@navgurukul.org',
     'nitin.s@navgurukul.org',
     'travel@navgurukul.org',
     'aayushi.b@navgurukul.org',

@@ -117,29 +117,11 @@ ON CONFLICT (template_key) DO UPDATE SET
   is_active = true,
   status = 'Published';
 
--- 5. Template: Direct Manager Approval on Request Submit
-INSERT INTO public.mail_templates (
-  template_key,
-  name,
-  subject,
-  body,
-  event,
-  audience,
-  context_key,
-  from_status,
-  to_status,
-  cc_rule,
-  sheet_row,
-  is_active,
-  is_draft,
-  status,
-  version
-)
-VALUES (
-  'manager_approval_request.manager.default',
-  'Action Required: Manager Approval for Travel Booking',
-  'Action Required: Approve Travel for {{requester_name}} - {{submissionId}}',
-  '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
+-- 5. Template: Direct Manager Approval on Request Submit (update existing manager trigger)
+UPDATE public.mail_templates
+SET name = 'Action Required: Manager Approval for Travel Booking',
+    subject = 'Action Required: Approve Travel for {{requester_name}} - {{submissionId}}',
+    body = '<div style="font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FF6B35;">
         <img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />
         <p style="color:#64748b;margin:4px 0 0 0;font-size:13px;font-weight:500;">Travel Desk Approval Request</p>
@@ -154,7 +136,7 @@ VALUES (
         <div><strong>Mode:</strong> {{travel_mode}}</div>
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="{{portal_url}}/?tab=approvals" style="background-color:#4F46E5;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;display:inline-block;">Open Manager Approvals Tab &rarr;</a>
+        <a href="{{approval_url}}" style="background-color:#4F46E5;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.2);">Review and Approve Request &rarr;</a>
       </div>
       <p style="color:#64748b;font-size:12px;text-align:center;margin-top:16px;">
         To review our reimbursement policies: <a href="https://app.notion.com/p/navgurukul/Travel-Reimbursement-Policy-2026-37da93c7c39180e7ac27fa2ec5ebc528" style="color:#4F46E5;">Click here to read the travel policy</a>
@@ -163,20 +145,7 @@ VALUES (
         Navgurukul Travel Desk &bull; Automated notification, please do not reply to this address.
       </div>
     </div>',
-  'POLICY_VIOLATION_DETECTED',
-  'manager',
-  NULL,
-  'Not Started',
-  'Approval Pending',
-  'default',
-  '2',
-  true,
-  false,
-  'Published',
-  1
-)
-ON CONFLICT (template_key) DO UPDATE SET
-  body = EXCLUDED.body,
-  subject = EXCLUDED.subject,
-  is_active = true,
-  status = 'Published';
+    is_active = true,
+    status = 'Published',
+    version = version + 1
+WHERE template_key = 'policy_violation_detected.manager.default';

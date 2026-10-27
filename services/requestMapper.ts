@@ -61,4 +61,11 @@ export const mapDbRequest = (r: any): TravelRequest => ({
   advanceId: r.advance_id || r.advanceId,
   creditCardId: r.credit_card_id || r.creditCardId,
   paymentSource: r.payment_source || r.paymentSource || 'Not Yet Entered',
+  baseLocation: r.base_location || r.baseLocation || '',
+  remoteLocationDetails: r.remote_location_details || r.remoteLocationDetails || '',
+  travelPreferences: r.travel_preferences || r.travelPreferences || '',
+  screenshotUrl: r.screenshot_url || r.screenshotUrl || '',
+  isOverdueEscalated: r.is_overdue_escalated ?? r.isOverdueEscalated ?? false,
+  overdueEscalatedAt: r.overdue_escalated_at || r.overdueEscalatedAt,
+  autoExpiredAt: r.auto_expired_at || r.autoExpiredAt,
 });

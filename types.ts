@@ -344,6 +344,17 @@ export interface TravelRequest {
   assignmentType?: 'claim' | 'assign' | 'reassign' | 'transfer' | null;
   paymentSource?: 'Advance' | 'Credit Card' | 'Direct' | 'Not Yet Entered';
   bookingStatus?: 'Booked' | 'Cancelled' | 'Partially Cancelled' | 'Reconciled';
+
+  // Request form additions
+  baseLocation?: string;
+  remoteLocationDetails?: string;
+  travelPreferences?: string;
+  screenshotUrl?: string;
+
+  // Overdue tracking & expiry
+  isOverdueEscalated?: boolean;
+  overdueEscalatedAt?: string;
+  autoExpiredAt?: string;
 }
 
 export interface TravelLeg {
@@ -656,4 +667,67 @@ export interface TestingSettings {
   admin: boolean;
   pnc: boolean;
   employee: boolean;
+}
+
+export interface ManagerChangeLog {
+  id: string;
+  employee_id: string;
+  old_manager_name?: string;
+  old_manager_email?: string;
+  new_manager_name?: string;
+  new_manager_email?: string;
+  changed_by?: string;
+  changed_by_name?: string;
+  created_at: string;
+}
+
+export interface TicketComment {
+  id: string;
+  ticket_id: string;
+  author_id: string;
+  author_name: string;
+  author_role: string;
+  comment_text: string;
+  mentions?: string[];
+  is_edited: boolean;
+  edited_at?: string;
+  created_at: string;
+}
+
+export interface PncQuestion {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_email: string;
+  title: string;
+  content: string;
+  status: 'Open' | 'Answered' | 'Resolved' | 'Promoted to FAQ';
+  promoted_faq_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PncQuestionReply {
+  id: string;
+  question_id: string;
+  author_id: string;
+  author_name: string;
+  author_role: string;
+  reply_text: string;
+  is_edited: boolean;
+  edited_at?: string;
+  created_at: string;
+}
+
+export interface PublishedFaq {
+  id: string;
+  question: string;
+  answer: string;
+  category?: string;
+  sort_order?: number;
+  promoted_from_question_id?: string;
+  promoted_by?: string;
+  is_published?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }

@@ -172,11 +172,15 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
       const { data: authData } = await supabase.auth.getUser();
       const authUserId = authData?.user?.id;
 
+      const authorRole = isDeskStaff
+        ? (currentUser.role === UserRole.EMPLOYEE ? 'PNC' : (currentUser.role || 'PNC'))
+        : 'Employee';
+
       const payload = {
         question_id: selectedQuestion.id,
         author_id: authUserId || currentUser.id,
         author_name: currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email,
-        author_role: currentUser.role,
+        author_role: authorRole,
         reply_text: replyText.trim(),
         is_edited: false
       };
@@ -191,20 +195,34 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
 
       // If PnC replies to an Open question, mark it Answered
       if (isDeskStaff && selectedQuestion.status === 'Open') {
-        await supabase
+        let { error: statusErr } = await supabase
           .from('pnc_questions')
           .update({ status: 'Answered', updated_at: new Date().toISOString() })
           .eq('id', selectedQuestion.id);
+
+        if (statusErr && statusErr.message?.includes('check_question_status')) {
+          await supabase
+            .from('pnc_questions')
+            .update({ status: 'answered', updated_at: new Date().toISOString() })
+            .eq('id', selectedQuestion.id);
+        }
 
         setSelectedQuestion(prev => prev ? { ...prev, status: 'Answered' } : null);
       }
 
       // If Employee posts a follow-up to an Answered/Resolved question, mark it Open so PnC sees the new follow-up
       if (!isDeskStaff && (selectedQuestion.status === 'Answered' || selectedQuestion.status === 'Resolved')) {
-        await supabase
+        let { error: statusErr } = await supabase
           .from('pnc_questions')
           .update({ status: 'Open', updated_at: new Date().toISOString() })
           .eq('id', selectedQuestion.id);
+
+        if (statusErr && statusErr.message?.includes('check_question_status')) {
+          await supabase
+            .from('pnc_questions')
+            .update({ status: 'open', updated_at: new Date().toISOString() })
+            .eq('id', selectedQuestion.id);
+        }
 
         setSelectedQuestion(prev => prev ? { ...prev, status: 'Open' } : null);
       }
@@ -223,10 +241,31 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
   const handleUpdateStatus = async (newStatus: 'Open' | 'Answered' | 'Resolved') => {
     if (!selectedQuestion) return;
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('pnc_questions')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', selectedQuestion.id);
+
+      // If database constraint check_question_status rejects the string, try common aliases
+      if (error && error.message?.includes('check_question_status')) {
+        const fallbacks: Record<string, string[]> = {
+          'Resolved': ['Closed', 'resolved', 'closed', 'Answered', 'answered'],
+          'Open': ['open', 'Pending', 'pending'],
+          'Answered': ['answered', 'Open', 'open']
+        };
+
+        const candidates = fallbacks[newStatus] || [];
+        for (const candidate of candidates) {
+          const retry = await supabase
+            .from('pnc_questions')
+            .update({ status: candidate, updated_at: new Date().toISOString() })
+            .eq('id', selectedQuestion.id);
+          if (!retry.error) {
+            error = null;
+            break;
+          }
+        }
+      }
 
       if (error) throw error;
 
@@ -523,7 +562,7 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
                   </h4>
                   {replies.length > 0 && (
                     <span className="text-3xs text-slate-400 font-medium">
-                      {replies.filter(r => r.author_role === 'PNC' || r.author_role === 'PNC Admin' || r.author_role === 'Admin').length} Responses • {replies.filter(r => r.author_role === 'Employee' || r.author_id === selectedQuestion.employee_id).length} Follow-ups
+                      {replies.filter(r => r.author_role === 'PNC' || r.author_role === 'PNC Admin' || r.author_role === 'Admin').length} Responses • {replies.filter(r => r.author_role !== 'PNC' && r.author_role !== 'PNC Admin' && r.author_role !== 'Admin').length} Follow-ups
                     </span>
                   )}
                 </div>
@@ -537,30 +576,33 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
                     </div>
                   ) : (
                     replies.map(r => {
-                      const isReplyFromEmployee =
-                        r.author_role === 'Employee' ||
-                        r.author_role === UserRole.EMPLOYEE ||
-                        r.author_id === selectedQuestion.employee_id;
+                      const isPncResponse =
+                        r.author_role === 'PNC' ||
+                        r.author_role === 'PNC Admin' ||
+                        r.author_role === 'Admin' ||
+                        r.author_role === UserRole.PNC ||
+                        r.author_role === UserRole.PNC_ADMIN ||
+                        r.author_role === UserRole.ADMIN;
 
                       return (
                         <div
                           key={r.id}
                           className={`p-3.5 rounded-lg border space-y-1 text-xs ${
-                            isReplyFromEmployee
-                              ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800'
-                              : 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200/80 dark:border-indigo-900/60'
+                            isPncResponse
+                              ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200/80 dark:border-indigo-900/60'
+                              : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800'
                           }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800 dark:text-slate-200">{r.author_name}</span>
-                              {isReplyFromEmployee ? (
-                                <span className="px-2 py-0.5 rounded text-3xs font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-300/80 dark:border-slate-600">
-                                  Follow-up
+                              {isPncResponse ? (
+                                <span className="px-2 py-0.5 rounded text-3xs font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                  Response
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 rounded text-3xs font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                  PnC Response
+                                <span className="px-2 py-0.5 rounded text-3xs font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-300/80 dark:border-slate-600">
+                                  Follow-up
                                 </span>
                               )}
                             </div>

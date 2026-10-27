@@ -45,6 +45,11 @@ BEGIN
   END IF;
 END $$;
 
+-- Fix check_question_status to allow all lifecycle status values
+ALTER TABLE public.pnc_questions DROP CONSTRAINT IF EXISTS check_question_status;
+ALTER TABLE public.pnc_questions DROP CONSTRAINT IF EXISTS pnc_questions_status_check;
+ALTER TABLE public.pnc_questions ADD CONSTRAINT check_question_status CHECK (status IN ('Open', 'open', 'Answered', 'answered', 'Resolved', 'resolved', 'Closed', 'closed', 'Promoted to FAQ', 'Pending', 'pending'));
+
 CREATE INDEX IF NOT EXISTS idx_pnc_questions_employee ON public.pnc_questions(employee_id);
 CREATE INDEX IF NOT EXISTS idx_pnc_questions_status ON public.pnc_questions(status);
 

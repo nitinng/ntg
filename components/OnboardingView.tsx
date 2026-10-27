@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SignedImage } from './SignedMedia';
-import { User, PolicyConfig, VerificationStatus, IdProofType, UserDocument, Department } from '../types';
+import { User, PolicyConfig, VerificationStatus, IdProofType, UserDocument, Department, UserRole, BASE_LOCATIONS, ManagerChangeLog } from '../types';
 import Card from './Card';
 import Input from './Input';
 import Select from './Select';
@@ -70,6 +70,63 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
     setFormData(user);
   }, [user]);
 
+  const parseCampus = (rawCampus?: string) => {
+    if (!rawCampus) return { base: '', remoteCity: '' };
+    const trimmed = rawCampus.trim();
+    if (trimmed.toLowerCase().startsWith('remote')) {
+      const match = trimmed.match(/^remote\s*(?:[-–—:\(]\s*|\s*\(\s*)?([^\)]*)\)?$/i);
+      const city = match && match[1] ? match[1].trim() : '';
+      return { base: 'Remote', remoteCity: city };
+    }
+    const match = BASE_LOCATIONS.find(loc => loc.toLowerCase() === trimmed.toLowerCase());
+    return { base: match || trimmed, remoteCity: '' };
+  };
+
+  const parsedInitial = useMemo(() => parseCampus(formData.campus), [formData.campus]);
+  const [selectedBaseLocation, setSelectedBaseLocation] = useState<string>(parsedInitial.base);
+  const [remoteCity, setRemoteCity] = useState<string>(parsedInitial.remoteCity);
+
+  useEffect(() => {
+    const p = parseCampus(formData.campus);
+    setSelectedBaseLocation(p.base);
+    setRemoteCity(p.remoteCity);
+  }, [formData.campus]);
+
+  const handleBaseLocationChange = (base: string) => {
+    setSelectedBaseLocation(base);
+    if (base === 'Remote') {
+      const full = remoteCity.trim() ? `Remote (${remoteCity.trim()})` : 'Remote';
+      setFormData(prev => ({ ...prev, campus: full }));
+    } else {
+      setFormData(prev => ({ ...prev, campus: base }));
+    }
+  };
+
+  const handleRemoteCityChange = (city: string) => {
+    setRemoteCity(city);
+    const full = city.trim() ? `Remote (${city.trim()})` : 'Remote';
+    setFormData(prev => ({ ...prev, campus: full }));
+  };
+
+  const isEmployee = user.role === UserRole.EMPLOYEE;
+  const isManagerLocked = isEmployee && Boolean(user.managerEmail && user.managerEmail.trim() !== '');
+
+  const [managerLogs, setManagerLogs] = useState<ManagerChangeLog[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('manager_change_logs')
+      .select('*')
+      .eq('employee_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setManagerLogs(data as ManagerChangeLog[]);
+        }
+      });
+  }, [user?.id]);
+
   // Calculate profile completeness (excluding email)
   const calculateCompleteness = () => {
     let completed = 0;
@@ -77,7 +134,14 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
 
     if (formData.name && formData.name.trim() !== '') completed++;
     if (formData.department && formData.department.trim() !== '') completed++;
-    if (formData.campus && formData.campus.trim() !== '') completed++;
+    if (formData.campus && formData.campus.trim() !== '') {
+      if (formData.campus.startsWith('Remote')) {
+        const parsed = parseCampus(formData.campus);
+        if (parsed.remoteCity.trim() !== '') completed++;
+      } else {
+        completed++;
+      }
+    }
     if (formData.managerName && formData.managerName.trim() !== '') completed++;
     if (formData.managerEmail && formData.managerEmail.trim() !== '') completed++;
     if (formData.passportPhoto?.fileUrl) completed++;
@@ -179,6 +243,10 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
       toast.error("Email address and Approving Manager Email cannot be the same");
       return;
     }
+    if (selectedBaseLocation === 'Remote' && !remoteCity.trim()) {
+      toast.error("Please enter your exact remote work city/location");
+      return;
+    }
 
     onUpdate(formData);
     toast.success("Profile updated successfully");
@@ -192,7 +260,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
   ];
 
   return (
-    <div className={`space-y-6 animate-in fade-in duration-500 pb-16 ${isLock ? 'w-full max-w-3xl mx-auto' : ''}`}>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-16 w-full max-w-5xl mx-auto">
       <header className="flex flex-col md:flex-row items-center gap-6 bg-white dark:bg-slate-900 p-5 md:p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="relative group shrink-0">
           <div className={`w-20 h-20 sm:w-24 sm:h-24 bg-indigo-50 dark:bg-slate-800 rounded-full overflow-hidden border-2 border-white dark:border-slate-900 shadow-md transition-all group-hover:brightness-90 flex items-center justify-center ${isUploading === 'avatar' ? 'animate-pulse' : ''}`}>
@@ -213,8 +281,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
         <div className="flex-1 text-center md:text-left space-y-1.5 w-full">
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{isLock ? 'Getting Started' : 'Account Profile'}</h2>
-              <p className="text-slate-500 text-xs sm:text-sm font-medium">{isLock ? 'Please complete your profile to enable travel booking features.' : 'Maintain your personal, professional and identity information.'}</p>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{isLock ? 'Complete Your Profile' : 'Account Profile'}</h2>
+              <p className="text-slate-500 text-xs sm:text-sm font-medium">{isLock ? 'Please complete your profile to 100% to enable travel booking features.' : 'Maintain your personal, professional and identity information.'}</p>
             </div>
             {!isLock && (
               <div className="flex items-center gap-2 self-center md:self-start">
@@ -253,21 +321,6 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
 
       {/* Warnings & Notices */}
       <div className="space-y-4">
-        {isLock && onSkip && policy.isEnforcementEnabled && !minDaysRemaining && (
-          <div className="p-5 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-sm">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                <i className="fa-solid fa-forward-step text-xl text-indigo-500"></i>
-              </div>
-              <div>
-                <p className="font-bold text-sm text-slate-800 dark:text-white">Need to book travel immediately?</p>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">You can temporarily skip verification for {policy.temporaryUnlockDays} days. After this window, full verification will be required to maintain access.</p>
-              </div>
-            </div>
-            <button onClick={onSkip} className="whitespace-nowrap px-6 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 rounded-lg text-xs font-black uppercase hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition-all shadow-sm active:scale-95">Skip for Now</button>
-          </div>
-        )}
-
         {policy.isEnforcementEnabled && minDaysRemaining !== null && minDaysRemaining > 0 && (
           <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-lg p-5 flex items-start gap-4 animate-in slide-in-from-top-2">
             <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
@@ -305,8 +358,9 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
           <Input label="Contact Number" value={formData.phone || ''} placeholder="10 digit mobile number" onChange={(e: any) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
         </Section>
 
-        {/* Org Details */}
-        <Section title="Professional Details" icon="fa-briefcase" columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Professional Details - Split into 2 Rows of 2 columns */}
+        <Section title="Professional Details" icon="fa-briefcase" columns="grid-cols-1 md:grid-cols-2">
+          {/* Row 1: Department & Campus / Base Location */}
           <Select
             label="Department"
             value={formData.department || ''}
@@ -314,29 +368,108 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             placeholder="Select department..."
             onChange={(e: any) => setFormData({ ...formData, department: e.target.value })}
           />
-          <Input label="Campus / Location" value={formData.campus || ''} onChange={(e: any) => setFormData({ ...formData, campus: e.target.value })} />
-          <Input label="Approving Manager Name" value={formData.managerName || ''} onChange={(e: any) => setFormData({ ...formData, managerName: e.target.value })} />
+          <div className="space-y-2">
+            <Select
+              label="Campus / Base Location"
+              value={selectedBaseLocation}
+              options={BASE_LOCATIONS.map(loc => ({ label: loc, value: loc }))}
+              placeholder="Select campus or remote..."
+              onChange={(e: any) => handleBaseLocationChange(e.target.value)}
+            />
+            {selectedBaseLocation === 'Remote' && (
+              <Input
+                label="Remote Work Location (City / Town)"
+                placeholder="e.g. Patna, Lucknow, Hyderabad"
+                value={remoteCity}
+                onChange={(e: any) => handleRemoteCityChange(e.target.value)}
+              />
+            )}
+          </div>
+
+          {/* Row 2: Approving Manager Name & Email */}
+          <Input
+            label="Approving Manager Name"
+            value={formData.managerName || ''}
+            disabled={isManagerLocked}
+            placeholder="Full name of your direct manager"
+            onChange={(e: any) => setFormData({ ...formData, managerName: e.target.value })}
+          />
           <Input
             label="Approving Manager Email"
             type="email"
             value={formData.managerEmail || ''}
+            disabled={isManagerLocked}
+            placeholder="manager@navgurukul.org"
             error={areBookingEmailsIdentical(formData.email, formData.managerEmail) ? "Email address and Approving Manager Email cannot be the same" : undefined}
             onChange={(e: any) => setFormData({ ...formData, managerEmail: e.target.value })}
           />
+
+          {isManagerLocked && (
+            <div className="md:col-span-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-center gap-2">
+              <i className="fa-solid fa-lock text-amber-600 dark:text-amber-400"></i>
+              <span>Your approving manager is locked. If your reporting manager has changed, contact a PnC Admin to update it.</span>
+            </div>
+          )}
+
+          {/* Manager Change Audit Trail (Visible if changes exist) */}
+          {managerLogs.length > 0 && (
+            <div className="md:col-span-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center gap-1.5">
+                <i className="fa-solid fa-clock-rotate-left text-xs"></i>
+                Manager Change History
+              </h6>
+              <div className="space-y-1.5 text-xs">
+                {managerLogs.map(log => (
+                  <div key={log.id} className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between text-slate-600 dark:text-slate-300">
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{log.old_manager_name || 'None'}</span>
+                      <span className="text-slate-400 mx-1.5">→</span>
+                      <span className="font-semibold text-indigo-600 dark:text-indigo-400">{log.new_manager_name}</span>
+                      <span className="text-2xs text-slate-400 ml-2">({log.new_manager_email})</span>
+                    </div>
+                    <div className="text-2xs text-slate-400 mt-1 sm:mt-0">
+                      By {log.changed_by_name || 'Admin'} • {new Date(log.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Section>
 
-        {/* Emergency & Medical Information */}
-        <Section title="Emergency & Health" icon="fa-heart-pulse" columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          <Input label="Emergency Contact Name" value={formData.emergencyContactName || ''} onChange={(e: any) => setFormData({ ...formData, emergencyContactName: e.target.value })} />
-          <Input label="Relationship" value={formData.emergencyContactRelation || ''} onChange={(e: any) => setFormData({ ...formData, emergencyContactRelation: e.target.value })} />
-          <Input label="Emergency Contact Number" value={formData.emergencyContactPhone || ''} placeholder="10 digit mobile number" onChange={(e: any) => setFormData({ ...formData, emergencyContactPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+        {/* Emergency & Health - Split into 2 Rows of 2 columns */}
+        <Section title="Emergency & Health" icon="fa-heart-pulse" columns="grid-cols-1 md:grid-cols-2">
+          {/* Row 1: Contact Name & Relationship */}
+          <Input
+            label="Emergency Contact Name"
+            value={formData.emergencyContactName || ''}
+            placeholder="Full name"
+            onChange={(e: any) => setFormData({ ...formData, emergencyContactName: e.target.value })}
+          />
+          <Input
+            label="Relationship"
+            value={formData.emergencyContactRelation || ''}
+            placeholder="e.g. Parent, Spouse, Sibling, Friend"
+            onChange={(e: any) => setFormData({ ...formData, emergencyContactRelation: e.target.value })}
+          />
+
+          {/* Row 2: Phone Number & Blood Group */}
+          <Input
+            label="Emergency Contact Number"
+            value={formData.emergencyContactPhone || ''}
+            placeholder="10 digit mobile number"
+            onChange={(e: any) => setFormData({ ...formData, emergencyContactPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+          />
           <Select
             label="Blood Group"
             value={formData.bloodGroup || ''}
             options={bloodGroupOptions}
+            placeholder="Select blood group..."
             onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
           />
-          <div className="sm:col-span-2 lg:col-span-4">
+
+          {/* Row 3: Medical Conditions (Optional) spanning 2 columns */}
+          <div className="md:col-span-2">
             <TextArea
               label="Medical Conditions (Optional)"
               value={formData.medicalConditions || ''}

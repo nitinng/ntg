@@ -53,6 +53,21 @@ export interface User {
   medicalConditions?: string;
 }
 
+export const BASE_LOCATIONS = [
+  'Pune',
+  'Delhi',
+  'Dharamshala',
+  'Bangalore',
+  'Igatpuri',
+  'Udaipur',
+  'Jashpur',
+  'Dantewada',
+  'Kishanganj',
+  'Remote'
+] as const;
+
+export type BaseLocation = typeof BASE_LOCATIONS[number];
+
 export enum TripType {
   ONE_WAY = 'One-way',
   ROUND_TRIP = 'Round-trip'

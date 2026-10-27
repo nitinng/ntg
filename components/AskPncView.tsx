@@ -95,7 +95,9 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
       const userName = currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email;
       const userEmail = currentUser.email || authData?.user?.email;
 
-      // Primary payload populated with both employee_* and legacy asker_* columns to satisfy all constraints
+      const questionText = newQuestionContent.trim();
+
+      // Primary payload populated with both content & question, and employee_* & asker_* columns
       const payload: any = {
         employee_id: effectiveEmployeeId,
         asker_id: effectiveEmployeeId,
@@ -104,7 +106,8 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
         employee_email: userEmail,
         asker_email: userEmail,
         title: newQuestionTitle.trim(),
-        content: newQuestionContent.trim(),
+        content: questionText,
+        question: questionText,
         status: 'Open'
       };
 
@@ -129,10 +132,11 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
         }
       }
 
-      // If schema rejects content column, retry with question column
-      if (error && (error.message?.includes('content') || error.code === 'PGRST204')) {
-        const altPayload = { ...payload, question: newQuestionContent.trim() };
-        delete altPayload.content;
+      // If schema rejects content or question column
+      if (error && (error.message?.includes("'content'") || error.message?.includes("'question'"))) {
+        const altPayload = { ...payload };
+        if (error.message?.includes("'content'")) delete altPayload.content;
+        if (error.message?.includes("'question'")) delete altPayload.question;
         const retry2 = await supabase.from('pnc_questions').insert(altPayload).select().single();
         if (!retry2.error) {
           data = retry2.data;

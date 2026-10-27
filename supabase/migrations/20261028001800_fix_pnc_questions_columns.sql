@@ -21,15 +21,19 @@ CREATE TABLE IF NOT EXISTS public.pnc_questions (
 ALTER TABLE public.pnc_questions 
   ADD COLUMN IF NOT EXISTS title TEXT,
   ADD COLUMN IF NOT EXISTS content TEXT,
+  ADD COLUMN IF NOT EXISTS question TEXT,
   ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Open',
   ADD COLUMN IF NOT EXISTS employee_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS employee_name TEXT,
   ADD COLUMN IF NOT EXISTS employee_email TEXT,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
--- Drop NOT NULL on legacy asker_* columns if present from prior schema
+-- Drop NOT NULL on legacy question and asker_* columns if present from prior schema
 DO $$
 BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pnc_questions' AND column_name = 'question') THEN
+    ALTER TABLE public.pnc_questions ALTER COLUMN question DROP NOT NULL;
+  END IF;
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pnc_questions' AND column_name = 'asker_id') THEN
     ALTER TABLE public.pnc_questions ALTER COLUMN asker_id DROP NOT NULL;
   END IF;

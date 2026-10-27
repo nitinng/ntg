@@ -620,29 +620,29 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                     {/* Header Strip */}
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2 relative z-10">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-3xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
                           {req?.submissionId || group.ticketId.slice(0, 8)}
                         </span>
 
                         {group.mentionCount > 0 && (
-                          <span className={`px-2 py-0.5 rounded text-3xs font-black uppercase tracking-wider flex items-center gap-1 shadow-2xs ${
+                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 shadow-2xs ${
                             group.unreadMentionCount > 0
                               ? 'bg-rose-500 text-white animate-pulse'
                               : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
                           }`}>
-                            <i className="fa-solid fa-at text-[9px]"></i>
-                            {group.mentionCount} {group.mentionCount === 1 ? 'MENTION' : 'MENTIONS'}
+                            <i className="fa-solid fa-at text-[8.5px]"></i>
+                            {group.mentionCount} {group.mentionCount === 1 ? 'mention' : 'mentions'}
                           </span>
                         )}
 
-                        <span className="text-3xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded border border-slate-200 dark:border-slate-700">
-                          <i className="fa-solid fa-comments text-slate-400 mr-1 text-[9px]"></i>
+                        <span className="text-[9.5px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                          <i className="fa-solid fa-comments text-slate-400 text-[8.5px]"></i>
                           {group.comments.length} comments
                         </span>
 
                         {group.isResolved && (
-                          <span className="text-3xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
-                            <i className="fa-solid fa-check text-[9px]"></i>
+                          <span className="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                            <i className="fa-solid fa-check text-emerald-600 dark:text-emerald-400 text-[8.5px]"></i>
                             Resolved {group.resolvedBy ? `by ${group.resolvedBy}` : ''} {group.resolutionDurationMs ? `(${formatResolutionDuration(group.resolutionDurationMs)})` : ''}
                           </span>
                         )}

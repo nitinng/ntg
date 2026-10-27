@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { User, TravelRequest, TicketComment } from '../types';
 import { supabase } from '../supabaseClient';
-import { getMentionColor } from './TicketCommentThread';
+import { getMentionColor, formatResolutionDuration } from './TicketCommentThread';
 import { mapDbRequest } from '../services/requestMapper';
 import StatusBadge from './StatusBadge';
+import PageBanner from './PageBanner';
 import { toast } from 'sonner';
 
 interface TicketCommentsViewProps {
@@ -49,6 +50,9 @@ interface TicketDiscussionGroup {
   unreadMentionCount: number;
   hasUnread: boolean;
   latestComment: TicketComment;
+  isResolved: boolean;
+  resolvedBy?: string;
+  resolutionDurationMs?: number;
 }
 
 export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
@@ -60,9 +64,21 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [fetchedRequestsMap, setFetchedRequestsMap] = useState<Map<string, TravelRequest>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [statusTab, setStatusTab] = useState<'open' | 'completed'>('open');
   const [activeSubTab, setActiveSubTab] = useState<'mentioned' | 'all'>('mentioned');
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+
+  // Local resolution overrides to ensure instant UI transitions
+  const [localResolutionMap, setLocalResolutionMap] = useState<Record<string, { resolved: boolean; resolvedBy?: string; durationMs?: number }>>(() => {
+    try {
+      const raw = localStorage.getItem('local_discussion_resolutions');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+
   const [readCommentIds, setReadCommentIds] = useState<Set<string>>(() => {
     try {
       if (!currentUser?.id) return new Set();
@@ -150,7 +166,7 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
 
     // Subscribe to live comments across all tickets
     const channel = supabase
-      .channel('ticket_comments_stub_view')
+      .channel('ticket_comments_resolution_stub_view')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ticket_comments' },
@@ -168,12 +184,10 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
   // Combined requests map: props + directly fetched
   const requestsById = useMemo(() => {
     const map = new Map<string, TravelRequest>();
-    // Seed with props requests
     requests.forEach(r => {
       if (r.id) map.set(r.id, r);
       if (r.submissionId) map.set(r.submissionId, r);
     });
-    // Overlay fetched requests
     fetchedRequestsMap.forEach((req, key) => {
       map.set(key, req);
     });
@@ -200,6 +214,12 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
       const unreadMentionCount = mentionComments.filter(c => !readCommentIds.has(c.id)).length;
       const hasUnread = sortedComments.some(c => !readCommentIds.has(c.id) && isUserMentionedInComment(c, currentUser));
 
+      // Check resolution status
+      const localRes = localResolutionMap[ticketId];
+      const isResolved = localRes ? localRes.resolved : Boolean(req?.commentsResolved);
+      const resolvedBy = localRes ? localRes.resolvedBy : (req?.commentsResolvedBy || '');
+      const resolutionDurationMs = localRes ? localRes.durationMs : req?.commentsResolutionDurationMs;
+
       groups.push({
         ticketId,
         request: req,
@@ -207,11 +227,14 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
         mentionCount,
         unreadMentionCount,
         hasUnread,
-        latestComment: sortedComments[0]
+        latestComment: sortedComments[0],
+        isResolved,
+        resolvedBy,
+        resolutionDurationMs
       });
     });
 
-    // Sort groups: unread mentions first, then newest latest comment
+    // Sort: unread first, then newest
     groups.sort((a, b) => {
       if (a.unreadMentionCount > 0 && b.unreadMentionCount === 0) return -1;
       if (b.unreadMentionCount > 0 && a.unreadMentionCount === 0) return 1;
@@ -219,11 +242,93 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
     });
 
     return groups;
-  }, [comments, requestsById, currentUser, readCommentIds]);
+  }, [comments, requestsById, currentUser, readCommentIds, localResolutionMap]);
 
-  // Filter groups
+  // Resolve discussion handler
+  const handleResolveTicket = async (group: TicketDiscussionGroup, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUser) return;
+
+    const earliestComment = group.comments[group.comments.length - 1];
+    const startTime = earliestComment
+      ? new Date(earliestComment.created_at).getTime()
+      : (group.request?.timestamp ? new Date(group.request.timestamp).getTime() : Date.now());
+    const durationMs = Math.max(0, Date.now() - startTime);
+    const actorName = currentUser.name || currentUser.email;
+
+    // Update local state immediately
+    const updatedMap = {
+      ...localResolutionMap,
+      [group.ticketId]: { resolved: true, resolvedBy: actorName, durationMs }
+    };
+    setLocalResolutionMap(updatedMap);
+    try {
+      localStorage.setItem('local_discussion_resolutions', JSON.stringify(updatedMap));
+    } catch {}
+
+    // Mark as read
+    markTicketCommentsAsRead(group.ticketId, group.comments);
+
+    try {
+      await supabase
+        .from('travel_requests')
+        .update({
+          comments_resolved: true,
+          comments_resolved_at: new Date().toISOString(),
+          comments_resolved_by: actorName,
+          comments_resolved_by_id: currentUser.id,
+          comments_resolution_duration_ms: durationMs
+        })
+        .eq('id', group.ticketId);
+
+      toast.success(`Discussion resolved in ${formatResolutionDuration(durationMs)} by ${actorName}`);
+    } catch (err: any) {
+      console.warn('Could not persist resolution to DB:', err);
+    }
+  };
+
+  // Reopen discussion handler
+  const handleReopenTicket = async (group: TicketDiscussionGroup, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Update local state immediately
+    const updatedMap = {
+      ...localResolutionMap,
+      [group.ticketId]: { resolved: false, resolvedBy: undefined, durationMs: undefined }
+    };
+    setLocalResolutionMap(updatedMap);
+    try {
+      localStorage.setItem('local_discussion_resolutions', JSON.stringify(updatedMap));
+    } catch {}
+
+    try {
+      await supabase
+        .from('travel_requests')
+        .update({
+          comments_resolved: false,
+          comments_resolved_at: null,
+          comments_resolved_by: null,
+          comments_resolved_by_id: null,
+          comments_resolution_duration_ms: null
+        })
+        .eq('id', group.ticketId);
+
+      toast.success("Discussion reopened and moved to Open tab");
+    } catch (err: any) {
+      console.warn('Could not reopen discussion in DB:', err);
+    }
+  };
+
+  // Partition groups into Open vs Completed
+  const openGroups = useMemo(() => ticketGroups.filter(g => !g.isResolved), [ticketGroups]);
+  const completedGroups = useMemo(() => ticketGroups.filter(g => g.isResolved), [ticketGroups]);
+
+  // Current active groups based on status tab (open vs completed)
+  const currentTabGroups = statusTab === 'open' ? openGroups : completedGroups;
+
+  // Filtered groups
   const displayGroups = useMemo(() => {
-    let list = ticketGroups;
+    let list = currentTabGroups;
 
     if (activeSubTab === 'mentioned') {
       list = list.filter(g => g.mentionCount > 0);
@@ -246,15 +351,15 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
     }
 
     return list;
-  }, [ticketGroups, activeSubTab, unreadOnly, searchQuery]);
+  }, [currentTabGroups, activeSubTab, unreadOnly, searchQuery]);
 
-  const totalMentionedTickets = useMemo(() => {
-    return ticketGroups.filter(g => g.mentionCount > 0).length;
-  }, [ticketGroups]);
+  const openMentionsCount = useMemo(() => {
+    return openGroups.filter(g => g.mentionCount > 0).length;
+  }, [openGroups]);
 
-  const totalUnreadMentions = useMemo(() => {
-    return ticketGroups.reduce((acc, g) => acc + g.unreadMentionCount, 0);
-  }, [ticketGroups]);
+  const openUnreadMentionsCount = useMemo(() => {
+    return openGroups.reduce((acc, g) => acc + g.unreadMentionCount, 0);
+  }, [openGroups]);
 
   // Click handler to open the full ticket stub overlay
   const handleOpenTicketStub = async (group: TicketDiscussionGroup) => {
@@ -262,7 +367,6 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
 
     let req = group.request || requestsById.get(group.ticketId);
 
-    // If still missing, fetch on demand from Supabase to guarantee opening
     if (!req) {
       try {
         const { data, error } = await supabase
@@ -306,9 +410,9 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
       parts.push(
         <span
           key={match.index}
-          className={`inline-flex items-center gap-0.5 px-2 py-0.5 mx-0.5 rounded-md text-xs font-semibold border shadow-2xs ${color} align-baseline`}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 mx-0.5 rounded text-3xs font-semibold border shadow-2xs ${color} align-baseline`}
         >
-          <span className="opacity-75 font-mono text-[10px]">@</span>
+          <span className="opacity-75 font-mono text-[9px]">@</span>
           <span>{mentionName}</span>
         </span>
       );
@@ -332,94 +436,112 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-indigo-900/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30">
-            <i className="fa-solid fa-comments text-indigo-400"></i>
-            Ticket Discussion Queue
+    <div className="space-y-4 animate-in fade-in duration-300">
+      {/* PageBanner standard */}
+      <PageBanner
+        title="Ticket Comments & Discussions"
+        description="Review questions, replies, and @mentions on travel request stubs. Resolve completed inquiries."
+        icon="fa-comments"
+      >
+        <div className="flex items-center gap-2">
+          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/15 text-center shrink-0">
+            <span className="text-3xs uppercase font-bold text-indigo-200 block">Open Stubs</span>
+            <span className="text-base font-black text-white">{openGroups.length}</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Ticket Stubs with Comments & @Mentions
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Click any ticket stub below to open the complete request details and participate in the live comment thread.
-          </p>
+          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/15 text-center shrink-0">
+            <span className="text-3xs uppercase font-bold text-rose-200 block">Unread Mentions</span>
+            <span className="text-base font-black text-rose-300">{openUnreadMentionsCount}</span>
+          </div>
+          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/15 text-center shrink-0">
+            <span className="text-3xs uppercase font-bold text-emerald-200 block">Completed</span>
+            <span className="text-base font-black text-emerald-300">{completedGroups.length}</span>
+          </div>
+        </div>
+      </PageBanner>
+
+      {/* Primary Status Tabs: Open vs Completed */}
+      <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setStatusTab('open')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              statusTab === 'open'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <i className="fa-solid fa-envelope-open-text text-xs"></i>
+            Open Discussions ({openGroups.length})
+            {openUnreadMentionsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-3xs font-black bg-rose-500 text-white">
+                {openUnreadMentionsCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setStatusTab('completed')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              statusTab === 'completed'
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <i className="fa-solid fa-circle-check text-xs"></i>
+            Completed ({completedGroups.length})
+          </button>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex-1 md:flex-initial bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10 text-center">
-            <span className="text-2xs font-bold uppercase tracking-wider text-indigo-300 block">
-              Mentioned Tickets
-            </span>
-            <span className="text-2xl font-black text-white">{totalMentionedTickets}</span>
-          </div>
-          <div className="flex-1 md:flex-initial bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10 text-center">
-            <span className="text-2xs font-bold uppercase tracking-wider text-rose-300 block">
-              Unread Mentions
-            </span>
-            <span className="text-2xl font-black text-rose-400">{totalUnreadMentions}</span>
-          </div>
-          <div className="flex-1 md:flex-initial bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10 text-center">
-            <span className="text-2xs font-bold uppercase tracking-wider text-slate-300 block">
-              Total Stubs
-            </span>
-            <span className="text-2xl font-black text-slate-200">{ticketGroups.length}</span>
-          </div>
-        </div>
+        <span className="text-3xs text-slate-400 font-medium">
+          {statusTab === 'open' ? 'Active discussions awaiting resolution' : 'Discussions marked resolved with completion times'}
+        </span>
       </div>
 
-      {/* Control Bar: Tabs, Search, Actions */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      {/* Control Bar: Sub-filters, Search, Actions */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-2xs">
         {/* Sub tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+        <div className="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
           <button
             onClick={() => setActiveSubTab('mentioned')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeSubTab === 'mentioned'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <i className="fa-solid fa-at text-xs"></i>
-            Mentioned Tickets ({totalMentionedTickets})
-            {totalUnreadMentions > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-3xs font-black bg-rose-500 text-white">
-                {totalUnreadMentions}
-              </span>
-            )}
+            Mentioned (@Me) ({statusTab === 'open' ? openMentionsCount : completedGroups.filter(g => g.mentionCount > 0).length})
           </button>
           <button
             onClick={() => setActiveSubTab('all')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeSubTab === 'all'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <i className="fa-solid fa-layer-group text-xs"></i>
-            All Active Discussions ({ticketGroups.length})
+            All in {statusTab === 'open' ? 'Open' : 'Completed'} ({currentTabGroups.length})
           </button>
         </div>
 
         {/* Search & Filters */}
-        <div className="flex items-center gap-2.5 flex-1 sm:max-w-md">
+        <div className="flex items-center gap-2 flex-1 sm:max-w-md">
           <div className="relative flex-1">
             <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by ticket #, requester, route, or comment..."
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
+              placeholder="Search ticket #, requester, route, comment..."
+              className="w-full pl-8 pr-3 py-1 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
             />
           </div>
 
           <button
             onClick={() => setUnreadOnly(prev => !prev)}
             title="Filter unread mentions only"
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
               unreadOnly
                 ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
@@ -429,41 +551,43 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
             <span className="hidden sm:inline">Unread</span>
           </button>
 
-          {totalUnreadMentions > 0 && (
+          {openUnreadMentionsCount > 0 && statusTab === 'open' && (
             <button
               onClick={markAllAsRead}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 transition-all cursor-pointer"
+              className="px-2.5 py-1 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 transition-all cursor-pointer"
               title="Mark all as read"
             >
               <i className="fa-solid fa-check-double text-2xs mr-1"></i>
-              <span className="hidden md:inline">Mark all read</span>
+              <span className="hidden md:inline">Mark read</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Ticket Stubs Grid / List */}
+      {/* Ticket Stubs Grid / List - Compact Design */}
       {loading ? (
-        <div className="py-16 text-center space-y-3">
-          <div className="inline-block w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="py-12 text-center space-y-2">
+          <div className="inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-xs font-medium text-slate-400">Loading ticket stubs...</p>
         </div>
       ) : displayGroups.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-3">
-          <div className="w-14 h-14 mx-auto rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl">
-            <i className="fa-solid fa-ticket"></i>
+        <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg p-10 text-center space-y-2">
+          <div className="w-12 h-12 mx-auto rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg">
+            <i className={statusTab === 'open' ? 'fa-solid fa-envelope-open-text' : 'fa-solid fa-circle-check text-emerald-500'}></i>
           </div>
-          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-            {activeSubTab === 'mentioned' ? 'No ticket mentions found' : 'No ticket discussions found'}
+          <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            {statusTab === 'open'
+              ? (activeSubTab === 'mentioned' ? 'No open ticket mentions' : 'No open ticket discussions')
+              : 'No completed ticket discussions'}
           </h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            {activeSubTab === 'mentioned'
-              ? 'When someone mentions you in a ticket stub with @your-name, the ticket stub with a mention badge will appear here.'
-              : 'No ticket comments match your filter criteria.'}
+          <p className="text-2xs text-slate-400 max-w-sm mx-auto">
+            {statusTab === 'open'
+              ? 'All ticket discussions are resolved. New comments and @mentions on active ticket stubs will appear here.'
+              : 'Discussions that have been marked as resolved will be archived in this Completed tab with resolution times.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           {displayGroups.map(group => {
             const req = group.request;
             const fromCity = req?.from || 'Origin';
@@ -477,79 +601,87 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
               <div
                 key={group.ticketId}
                 onClick={() => handleOpenTicketStub(group)}
-                className={`group relative bg-white dark:bg-slate-900 rounded-xl flex flex-col md:flex-row overflow-hidden border cursor-pointer shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 ${
-                  isUnread
+                className={`group relative bg-white dark:bg-slate-900 rounded-lg flex flex-col md:flex-row overflow-hidden border cursor-pointer shadow-2xs hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${
+                  group.isResolved
+                    ? 'border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/10'
+                    : isUnread
                     ? 'border-indigo-400/80 dark:border-indigo-600/80 ring-1 ring-indigo-500/20'
                     : 'border-slate-200/90 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700'
                 }`}
               >
-                {/* Left Ticket Main Body (Boarding Pass Layout) */}
-                <div className="flex-1 p-5 sm:p-6 relative overflow-hidden bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/20 border-b md:border-b-0 md:border-r border-dashed border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-                  {/* Background Watermark Icon */}
-                  <div className="absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.04] text-[9rem] pointer-events-none text-indigo-900 dark:text-indigo-200">
+                {/* Left Ticket Main Body (Compact Boarding Pass) */}
+                <div className="flex-1 p-3.5 sm:p-4 relative overflow-hidden bg-gradient-to-br from-white via-slate-50/40 to-indigo-50/15 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/20 border-b md:border-b-0 md:border-r border-dashed border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                  {/* Subtle Background Watermark Icon */}
+                  <div className="absolute -right-4 -bottom-4 opacity-[0.03] dark:opacity-[0.03] text-[7rem] pointer-events-none text-indigo-900 dark:text-indigo-200">
                     <i className={`fa-solid ${modeIcon}`}></i>
                   </div>
 
                   <div>
-                    {/* Top Header Row of the Stub */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4 relative z-10">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="text-3xs font-black uppercase tracking-widest px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                    {/* Header Strip */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2 relative z-10">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-3xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
                           {req?.submissionId || group.ticketId.slice(0, 8)}
                         </span>
 
-                        {/* Prominent Mentions Notification Badge */}
                         {group.mentionCount > 0 && (
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs ${
+                          <span className={`px-2 py-0.5 rounded text-3xs font-black uppercase tracking-wider flex items-center gap-1 shadow-2xs ${
                             group.unreadMentionCount > 0
                               ? 'bg-rose-500 text-white animate-pulse'
                               : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
                           }`}>
-                            <i className="fa-solid fa-at text-xs"></i>
-                            {group.mentionCount} {group.mentionCount === 1 ? 'mention' : 'mentions'}
+                            <i className="fa-solid fa-at text-[9px]"></i>
+                            {group.mentionCount} {group.mentionCount === 1 ? 'MENTION' : 'MENTIONS'}
                           </span>
                         )}
 
-                        <span className="text-3xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                          <i className="fa-solid fa-comments text-slate-400 mr-1"></i>
-                          {group.comments.length} {group.comments.length === 1 ? 'comment' : 'comments'}
+                        <span className="text-3xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded border border-slate-200 dark:border-slate-700">
+                          <i className="fa-solid fa-comments text-slate-400 mr-1 text-[9px]"></i>
+                          {group.comments.length} comments
                         </span>
+
+                        {group.isResolved && (
+                          <span className="text-3xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                            <i className="fa-solid fa-check text-[9px]"></i>
+                            Resolved {group.resolvedBy ? `by ${group.resolvedBy}` : ''} {group.resolutionDurationMs ? `(${formatResolutionDuration(group.resolutionDurationMs)})` : ''}
+                          </span>
+                        )}
                       </div>
 
                       {req?.pncStatus && (
-                        <div className="shrink-0">
+                        <div className="shrink-0 text-3xs scale-90 origin-right">
                           <StatusBadge type="pnc" value={req.pncStatus} audience="employee" />
                         </div>
                       )}
                     </div>
 
-                    {/* Route Display */}
-                    <div className="flex items-center justify-between mb-5 relative z-10">
+                    {/* Route Section */}
+                    <div className="flex items-center justify-between my-2 relative z-10">
                       <div className="text-left flex-1 min-w-0">
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                        <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
                           {fromCode}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[120px] sm:max-w-[180px]">
+                        <p className="text-3xs text-slate-400 font-medium truncate max-w-[120px] sm:max-w-[150px] mt-0.5">
                           {fromCity}
                         </p>
                       </div>
 
-                      <div className="flex-[2] flex flex-col items-center justify-center px-3 sm:px-6">
+                      <div className="flex-[2] flex flex-col items-center justify-center px-2 sm:px-4">
                         <div className="w-full flex items-center opacity-60">
-                          <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
-                          <i className={`fa-solid ${modeIcon} text-indigo-600 dark:text-indigo-400 mx-3 text-base sm:text-xl group-hover:scale-125 transition-transform duration-300`}></i>
-                          <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
+                          <div className="h-[1px] flex-1 border-t border-dashed border-slate-300 dark:border-slate-600"></div>
+                          <i className={`fa-solid ${modeIcon} text-indigo-600 dark:text-indigo-400 mx-2 text-sm group-hover:scale-115 transition-transform duration-200`}></i>
+                          <div className="h-[1px] flex-1 border-t border-dashed border-slate-300 dark:border-slate-600"></div>
                         </div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 mt-1">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 mt-0.5">
                           {req?.mode || 'Travel'}
                         </span>
                       </div>
 
                       <div className="text-right flex-1 min-w-0">
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                        <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
                           {toCode}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[120px] sm:max-w-[180px]">
+                        <p className="text-3xs text-slate-400 font-medium truncate max-w-[120px] sm:max-w-[150px] mt-0.5">
                           {toCity}
                         </p>
                       </div>
@@ -557,18 +689,18 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                   </div>
 
                   {/* Requester & Date Meta Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 relative z-10 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-3xs uppercase font-bold text-slate-400">Requester:</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 relative z-10 text-3xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="uppercase font-bold text-slate-400">Requester:</span>
                       <span className="font-bold text-slate-800 dark:text-slate-200">
                         {req?.requesterName || 'Employee Request'}
                       </span>
                       {req?.requesterDepartment && (
-                        <span className="text-3xs text-slate-400 font-medium">({req.requesterDepartment})</span>
+                        <span className="text-slate-400">({req.requesterDepartment})</span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-4 text-slate-500 dark:text-slate-400 text-3xs font-mono">
+                    <div className="flex items-center gap-3 text-slate-400 font-mono">
                       {req?.dateOfTravel && (
                         <span>
                           <i className="fa-solid fa-calendar mr-1 text-slate-400"></i>
@@ -583,13 +715,13 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Right Tear-Off Stub (Discussion Preview & Action) */}
-                <div className="w-full md:w-80 bg-slate-50/80 dark:bg-slate-900/80 p-5 flex flex-col justify-between relative overflow-hidden">
+                {/* Right Tear-Off Stub (Compact Discussion Preview & Actions) */}
+                <div className="w-full md:w-72 bg-slate-50/70 dark:bg-slate-900/60 p-3 sm:p-3.5 flex flex-col justify-between relative overflow-hidden">
                   {/* Perforation holes on md screens */}
-                  <div className="hidden md:block absolute -left-3 top-[-10px] w-6 h-6 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
-                  <div className="hidden md:block absolute -left-3 bottom-[-10px] w-6 h-6 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                  <div className="hidden md:block absolute -left-2.5 top-[-8px] w-5 h-5 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                  <div className="hidden md:block absolute -left-2.5 bottom-[-8px] w-5 h-5 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
 
-                  <div className="space-y-2.5">
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="text-3xs font-black uppercase tracking-wider text-slate-400">
                         Latest Comment
@@ -600,34 +732,74 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                     </div>
 
                     {/* Latest Comment Bubble */}
-                    <div className="p-3 bg-white dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700/80 space-y-1 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
-                          {group.latestComment.author_name}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                    <div className="p-2 bg-white dark:bg-slate-800/80 rounded border border-slate-200/80 dark:border-slate-700/80 space-y-0.5 text-xs">
+                      <span className="font-bold text-3xs text-slate-800 dark:text-slate-200 block truncate">
+                        {group.latestComment.author_name}
+                      </span>
+                      <p className="text-3xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                         {renderCommentContent(group.latestComment.comment_text)}
                       </p>
                     </div>
 
                     {group.comments.length > 1 && (
-                      <p className="text-3xs text-slate-400 text-center font-medium">
+                      <p className="text-[10px] text-slate-400 text-center font-medium">
                         + {group.comments.length - 1} earlier {group.comments.length - 1 === 1 ? 'comment' : 'comments'} in thread
                       </p>
                     )}
+
+                    {group.isResolved && (
+                      <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/40 rounded border border-emerald-200 dark:border-emerald-800/80 text-3xs space-y-0.5">
+                        <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
+                          <span className="font-semibold flex items-center gap-1">
+                            <i className="fa-solid fa-check-circle text-emerald-600 dark:text-emerald-400"></i>
+                            Resolved by
+                          </span>
+                          <span className="font-bold truncate max-w-[120px]">{group.resolvedBy || 'Staff'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 pt-0.5 border-t border-emerald-200/50 dark:border-emerald-800/40">
+                          <span>Resolution time:</span>
+                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                            {formatResolutionDuration(group.resolutionDurationMs)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Primary Stub CTA */}
-                  <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 group-hover:translate-x-1 transition-transform">
-                      Open Ticket Stub
-                      <i className="fa-solid fa-arrow-right text-2xs"></i>
+                  {/* Stub Actions: Resolve / Reopen & Open */}
+                  <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <span className="text-2xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                      Open Stub
+                      <i className="fa-solid fa-arrow-right text-[10px]"></i>
                     </span>
 
-                    {isUnread && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-4 ring-rose-500/20 shrink-0" />
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {group.isResolved ? (
+                        <button
+                          type="button"
+                          onClick={(e) => handleReopenTicket(group, e)}
+                          title="Reopen discussion to Open tab"
+                          className="px-2 py-0.5 text-3xs font-bold text-slate-500 hover:text-indigo-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <i className="fa-solid fa-arrow-rotate-left text-[9px]"></i>
+                          Reopen
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => handleResolveTicket(group, e)}
+                          title="Mark resolved and move to Completed"
+                          className="px-2 py-0.5 text-3xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 rounded transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                        >
+                          <i className="fa-solid fa-circle-check text-[9px]"></i>
+                          Resolve
+                        </button>
+                      )}
+
+                      {isUnread && (
+                        <span className="w-2 h-2 rounded-full bg-rose-500 ring-2 ring-rose-500/20 shrink-0" />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

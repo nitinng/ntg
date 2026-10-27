@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { User, UserRole, TicketComment } from '../types';
+import { User, UserRole, TicketComment, TravelRequest } from '../types';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 
@@ -8,6 +8,7 @@ interface TicketCommentThreadProps {
   currentUser: User | null;
   users?: User[];
   title?: string;
+  request?: TravelRequest;
 }
 
 /**
@@ -68,13 +69,26 @@ export const getMentionColor = (name: string): string => {
   return `${p.light} ${p.dark}`;
 };
 
+export const formatResolutionDuration = (ms?: number): string => {
+  if (!ms || ms <= 0) return '< 1m';
+  const totalMinutes = Math.floor(ms / (1000 * 60));
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+};
+
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
   ticketId,
   currentUser,
   users = [],
-  title = "Ticket Activity & Comments"
+  title = "Ticket Activity & Comments",
+  request
 }) => {
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -84,9 +98,62 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [pncStaffList, setPncStaffList] = useState<User[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [ticketRequester, setTicketRequester] = useState<User | null>(() => {
+    if (request?.requesterName) {
+      return {
+        id: request.requesterId || 'requester',
+        name: request.requesterName,
+        email: request.requesterEmail || '',
+        role: UserRole.EMPLOYEE
+      } as User;
+    }
+    return null;
+  });
 
-  // Sync / fetch PNC staff list (PNC + PNC Admin only)
+  // Resolution tracking state
+  const [isResolved, setIsResolved] = useState<boolean>(Boolean(request?.commentsResolved));
+  const [resolvedBy, setResolvedBy] = useState<string>(request?.commentsResolvedBy || '');
+  const [resolutionDurationMs, setResolutionDurationMs] = useState<number | undefined>(request?.commentsResolutionDurationMs);
+  const [isResolving, setIsResolving] = useState<boolean>(false);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isEmployee = currentUser?.role === UserRole.EMPLOYEE;
+
+  // Sync / fetch requester details if not available in props
+  useEffect(() => {
+    if (request?.requesterName) {
+      setTicketRequester({
+        id: request.requesterId || 'requester',
+        name: request.requesterName,
+        email: request.requesterEmail || '',
+        role: UserRole.EMPLOYEE
+      } as User);
+      setIsResolved(Boolean(request.commentsResolved));
+      setResolvedBy(request.commentsResolvedBy || '');
+      setResolutionDurationMs(request.commentsResolutionDurationMs);
+    } else if (ticketId) {
+      supabase
+        .from('travel_requests')
+        .select('requester_id, requester_name, requester_email, comments_resolved, comments_resolved_by, comments_resolution_duration_ms')
+        .eq('id', ticketId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setTicketRequester({
+              id: data.requester_id,
+              name: data.requester_name,
+              email: data.requester_email,
+              role: UserRole.EMPLOYEE
+            } as User);
+            setIsResolved(Boolean(data.comments_resolved));
+            setResolvedBy(data.comments_resolved_by || '');
+            setResolutionDurationMs(data.comments_resolution_duration_ms);
+          }
+        });
+    }
+  }, [ticketId, request]);
+
+  // Sync / fetch PNC staff list
   useEffect(() => {
     const fromProps = (users || []).filter(
       u => u.role === UserRole.PNC || u.role === UserRole.PNC_ADMIN
@@ -112,6 +179,47 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     }
   }, [users]);
 
+  // All mentionable users depending on actor:
+  // - If employee: can tag PNC team members
+  // - If PNC / Admin: can tag ticket requester (employee), other employees/users, and other PNC staff
+  const mentionableUsers = useMemo(() => {
+    const list: User[] = [];
+    const seen = new Set<string>();
+
+    if (isEmployee) {
+      pncStaffList.forEach(u => {
+        if (!seen.has(u.id)) {
+          seen.add(u.id);
+          list.push(u);
+        }
+      });
+    } else {
+      // 1. Tag ticket requester first
+      if (ticketRequester && !seen.has(ticketRequester.id)) {
+        seen.add(ticketRequester.id);
+        list.push(ticketRequester);
+      }
+
+      // 2. Tag other employees / users
+      (users || []).forEach(u => {
+        if (u.id !== currentUser?.id && !seen.has(u.id)) {
+          seen.add(u.id);
+          list.push(u);
+        }
+      });
+
+      // 3. Tag other PNC staff
+      pncStaffList.forEach(u => {
+        if (u.id !== currentUser?.id && !seen.has(u.id)) {
+          seen.add(u.id);
+          list.push(u);
+        }
+      });
+    }
+
+    return list;
+  }, [isEmployee, pncStaffList, ticketRequester, users, currentUser]);
+
   const loadComments = async () => {
     if (!ticketId) return;
     try {
@@ -132,7 +240,6 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
   useEffect(() => {
     loadComments();
 
-    // Subscribe to realtime changes on ticket_comments for this ticket
     const channel = supabase
       .channel(`ticket-comments-${ticketId}`)
       .on(
@@ -149,9 +256,9 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     };
   }, [ticketId]);
 
-  // Mention autocomplete suggestions: ONLY PNC members (PNC + PNC Admin)
+  // Mention autocomplete suggestions
   const mentionSuggestions = useMemo(() => {
-    return pncStaffList.filter(u => {
+    return mentionableUsers.filter(u => {
       if (!mentionQuery) return true;
       const q = mentionQuery.toLowerCase();
       return (
@@ -159,13 +266,12 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
         (u.email && u.email.toLowerCase().includes(q))
       );
     }).slice(0, 8);
-  }, [pncStaffList, mentionQuery]);
+  }, [mentionableUsers, mentionQuery]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setNewComment(val);
 
-    // Check for @mention trigger
     const cursor = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursor);
     const lastAt = textBeforeCursor.lastIndexOf('@');
@@ -191,27 +297,99 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
     textareaRef.current.focus();
   };
 
+  const handleResolveDiscussion = async () => {
+    if (!currentUser || !ticketId) return;
+    setIsResolving(true);
+    try {
+      const firstCommentTime = comments.length > 0
+        ? new Date(comments[0].created_at).getTime()
+        : (request?.timestamp ? new Date(request.timestamp).getTime() : Date.now());
+      const durationMs = Math.max(0, Date.now() - firstCommentTime);
+      const actorName = currentUser.name || currentUser.email;
+
+      try {
+        const raw = localStorage.getItem('local_discussion_resolutions');
+        const map = raw ? JSON.parse(raw) : {};
+        map[ticketId] = { resolved: true, resolvedBy: actorName, durationMs };
+        localStorage.setItem('local_discussion_resolutions', JSON.stringify(map));
+      } catch {}
+
+      await supabase
+        .from('travel_requests')
+        .update({
+          comments_resolved: true,
+          comments_resolved_at: new Date().toISOString(),
+          comments_resolved_by: actorName,
+          comments_resolved_by_id: currentUser.id,
+          comments_resolution_duration_ms: durationMs
+        })
+        .eq('id', ticketId);
+
+      setIsResolved(true);
+      setResolvedBy(actorName);
+      setResolutionDurationMs(durationMs);
+      toast.success(`Discussion marked as resolved in ${formatResolutionDuration(durationMs)} by ${actorName}`);
+    } catch (err: any) {
+      toast.error('Failed to resolve discussion: ' + err.message);
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  const handleReopenDiscussion = async () => {
+    if (!currentUser || !ticketId) return;
+    setIsResolving(true);
+    try {
+      try {
+        const raw = localStorage.getItem('local_discussion_resolutions');
+        const map = raw ? JSON.parse(raw) : {};
+        map[ticketId] = { resolved: false };
+        localStorage.setItem('local_discussion_resolutions', JSON.stringify(map));
+      } catch {}
+
+      await supabase
+        .from('travel_requests')
+        .update({
+          comments_resolved: false,
+          comments_resolved_at: null,
+          comments_resolved_by: null,
+          comments_resolved_by_id: null,
+          comments_resolution_duration_ms: null
+        })
+        .eq('id', ticketId);
+
+      setIsResolved(false);
+      setResolvedBy('');
+      setResolutionDurationMs(undefined);
+      toast.success('Discussion reopened and moved to Open tab');
+    } catch (err: any) {
+      toast.error('Failed to reopen discussion: ' + err.message);
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
   const handlePostComment = async () => {
     if (!currentUser || !newComment.trim()) return;
     setIsSubmitting(true);
 
     try {
-      // Extract mentions matching known PNC staff or generic @handles
+      // Extract mentions matching known staff/employees
       const mentionedNames: string[] = [];
-      const sortedPnc = [...pncStaffList].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+      const sortedUsers = [...mentionableUsers].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
 
-      sortedPnc.forEach(pnc => {
-        const namePattern = pnc.name ? new RegExp(`@${escapeRegex(pnc.name)}\\b`, 'i') : null;
-        const emailPattern = pnc.email ? new RegExp(`@${escapeRegex(pnc.email)}\\b`, 'i') : null;
+      sortedUsers.forEach(u => {
+        const namePattern = u.name ? new RegExp(`@${escapeRegex(u.name)}\\b`, 'i') : null;
+        const emailPattern = u.email ? new RegExp(`@${escapeRegex(u.email)}\\b`, 'i') : null;
         if ((namePattern && namePattern.test(newComment)) || (emailPattern && emailPattern.test(newComment))) {
-          const val = pnc.name || pnc.email;
+          const val = u.name || u.email;
           if (val && !mentionedNames.includes(val)) {
             mentionedNames.push(val);
           }
         }
       });
 
-      // Also pick up any generic @mentions (avoid adding sub-words of already matched full names)
+      // Also pick up any generic @mentions
       const genericMatches = newComment.match(/@([\w.-]+(?:@[\w.-]+)?)/g) || [];
       genericMatches.forEach((m: string) => {
         const clean = m.slice(1).trim();
@@ -285,13 +463,12 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
 
   /**
    * Parses text and renders @mentions as rounded-md badges with distinct,
-   * high-contrast background and text colors. The PNC tag is omitted once rendered.
+   * high-contrast background and text colors. The role tag is omitted once rendered.
    */
   const renderFormattedComment = (text: string) => {
     if (!text) return null;
 
-    // Collect all PNC names and emails, sorted by length descending so full names match first
-    const candidateNames = pncStaffList
+    const candidateNames = mentionableUsers
       .flatMap(u => [u.name, u.email])
       .filter((n): n is string => Boolean(n && n.trim()))
       .sort((a, b) => b.length - a.length);
@@ -317,7 +494,7 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
         <span
           key={match.index}
           className={`inline-flex items-center gap-0.5 px-2 py-0.5 mx-0.5 rounded-md text-xs font-semibold border shadow-2xs ${colorClasses} align-baseline`}
-          title={`PNC Member: ${mentionName}`}
+          title={`Mentioned: ${mentionName}`}
         >
           <span className="opacity-75 font-mono text-[10px]">@</span>
           <span>{mentionName}</span>
@@ -336,19 +513,79 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
 
   return (
     <div className="space-y-4 pt-4 border-t dark:border-slate-800">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
-          <i className="fa-solid fa-comments text-indigo-600"></i>
-          {title} ({comments.length})
-        </h4>
-        <span className="text-2xs text-slate-400">Type @ to mention PNC team</span>
+      {/* Thread Header with Resolution Status */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2.5">
+          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
+            <i className="fa-solid fa-comments text-indigo-600"></i>
+            {title} ({comments.length})
+          </h4>
+          {isResolved && (
+            <span className="px-2 py-0.5 rounded text-3xs font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1 shadow-2xs">
+              <i className="fa-solid fa-check text-[9px]"></i>
+              Resolved {resolvedBy ? `by ${resolvedBy}` : ''} {resolutionDurationMs ? `(${formatResolutionDuration(resolutionDurationMs)})` : ''}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!isEmployee && (
+            isResolved ? (
+              <button
+                type="button"
+                onClick={handleReopenDiscussion}
+                disabled={isResolving}
+                className="px-2 py-1 text-3xs font-bold text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <i className="fa-solid fa-arrow-rotate-left text-[9px]"></i>
+                Reopen Discussion
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleResolveDiscussion}
+                disabled={isResolving}
+                className="px-2.5 py-1 text-3xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 rounded transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+              >
+                <i className="fa-solid fa-circle-check text-[9px]"></i>
+                Resolve Discussion
+              </button>
+            )
+          )}
+          <span className="text-2xs text-slate-400">
+            {isEmployee ? 'Type @ to mention PNC' : 'Type @ to mention Employee or PNC'}
+          </span>
+        </div>
       </div>
+
+      {/* Prominent Resolution Audit Callout */}
+      {isResolved && (
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2.5 text-emerald-900 dark:text-emerald-200">
+            <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <i className="fa-solid fa-circle-check text-sm"></i>
+            </div>
+            <div>
+              <p className="font-bold text-xs leading-tight">Discussion Marked as Resolved</p>
+              <p className="text-3xs text-emerald-700 dark:text-emerald-300">
+                Resolved by <strong className="font-semibold">{resolvedBy || 'Staff'}</strong>
+              </p>
+            </div>
+          </div>
+          <div className="text-right pl-3 border-l border-emerald-200 dark:border-emerald-800/60">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Resolution Time</span>
+            <span className="font-mono font-black text-xs text-emerald-700 dark:text-emerald-300">
+              {formatResolutionDuration(resolutionDurationMs)}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Comment List */}
       <div className="space-y-3 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
         {comments.length === 0 ? (
           <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50 dark:bg-slate-800/20 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
-            No comments yet. Start a discussion or mention PNC staff using @.
+            No comments yet. Start a discussion or mention team members using @.
           </div>
         ) : (
           comments.map(c => {
@@ -376,7 +613,7 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                           setEditingCommentId(c.id);
                           setEditingText(c.comment_text);
                         }}
-                        className="text-slate-400 hover:text-indigo-600 text-3xs font-semibold"
+                        className="text-slate-400 hover:text-indigo-600 text-3xs font-semibold cursor-pointer"
                       >
                         Edit
                       </button>
@@ -395,13 +632,13 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                     <div className="flex gap-2 justify-end">
                       <button
                         onClick={() => setEditingCommentId(null)}
-                        className="px-2.5 py-1 text-2xs font-semibold text-slate-500 hover:text-slate-700"
+                        className="px-2.5 py-1 text-2xs font-semibold text-slate-500 hover:text-slate-700 cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => handleSaveEdit(c.id)}
-                        className="px-3 py-1 bg-indigo-600 text-white rounded text-2xs font-bold shadow-xs hover:bg-indigo-700"
+                        className="px-3 py-1 bg-indigo-600 text-white rounded text-2xs font-bold shadow-xs hover:bg-indigo-700 cursor-pointer"
                       >
                         Save
                       </button>
@@ -421,19 +658,23 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
       {/* New Comment Input */}
       {currentUser && (
         <div className="relative space-y-2">
-          {/* Mention Menu: Only PNC staff (PNC + PNC Admin), labeled as PNC without role differentiation */}
+          {/* Mention Menu */}
           {showMentionMenu && mentionSuggestions.length > 0 && (
             <div className="absolute bottom-full mb-1 left-0 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-20 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-150">
               <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 text-3xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <i className="fa-solid fa-at text-indigo-500"></i>
-                  Mention PNC Team
+                  {isEmployee ? 'Mention PNC Team' : 'Mention Team Member'}
                 </span>
                 <span className="text-3xs text-slate-400 font-normal">{mentionSuggestions.length} available</span>
               </div>
               <div className="max-h-48 overflow-y-auto custom-scrollbar">
                 {mentionSuggestions.map(u => {
                   const colorClasses = getMentionColor(u.name || u.email);
+                  const isReq = u.id === ticketRequester?.id;
+                  const isPnc = u.role === UserRole.PNC || u.role === UserRole.PNC_ADMIN;
+                  const roleTag = isReq ? 'REQUESTER' : isPnc ? 'PNC' : 'EMPLOYEE';
+
                   return (
                     <button
                       key={u.id}
@@ -443,7 +684,7 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-3xs font-bold border shrink-0 ${colorClasses}`}>
-                          {(u.name || u.email || 'P').charAt(0).toUpperCase()}
+                          {(u.name || u.email || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
@@ -456,9 +697,15 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
                           )}
                         </div>
                       </div>
-                      {/* Uniform PNC tag - no role differentiation */}
-                      <span className="px-2 py-0.5 rounded text-3xs font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
-                        PNC
+                      {/* Role indicator shown ONLY while typing and selecting */}
+                      <span className={`px-2 py-0.5 rounded text-3xs font-black uppercase tracking-wider shrink-0 ${
+                        isReq
+                          ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700'
+                          : isPnc
+                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                      }`}>
+                        {roleTag}
                       </span>
                     </button>
                   );
@@ -471,14 +718,14 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
             ref={textareaRef}
             value={newComment}
             onChange={handleInputChange}
-            placeholder="Write a comment or update... Type @ to mention a PNC team member"
+            placeholder={isEmployee ? "Write a comment or update... Type @ to mention a PNC team member" : "Write a comment or update... Type @ to mention employee or PNC"}
             className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
             rows={2}
           />
 
           <div className="flex items-center justify-between">
             <span className="text-3xs text-slate-400">
-              Type @ to notify a PNC member.
+              {isEmployee ? 'Type @ to notify a PNC member.' : 'Type @ to notify the employee or team member.'}
             </span>
             <button
               onClick={handlePostComment}
@@ -496,4 +743,3 @@ export const TicketCommentThread: React.FC<TicketCommentThreadProps> = ({
 };
 
 export default TicketCommentThread;
-

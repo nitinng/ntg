@@ -1357,16 +1357,6 @@ const App: React.FC = () => {
                     />
                   )}
                   <SidebarLink icon="fa-book" label="Employee Guide" active={activeTab === 'guide'} onClick={() => handleTabChange('guide')} />
-                  {unreadCommentsCount > 0 && (
-                    <SidebarLink
-                      icon="fa-comments"
-                      label="Comments"
-                      active={activeTab === 'comments'}
-                      onClick={() => handleTabChange('comments')}
-                      badge={unreadCommentsCount}
-                      badgeColor="bg-indigo-600 text-white font-bold"
-                    />
-                  )}
                   <SidebarLink icon="fa-circle-question" label="Ask PnC" active={activeTab === 'ask-pnc'} onClick={() => handleTabChange('ask-pnc')} />
                 </div>
 

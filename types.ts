@@ -370,6 +370,13 @@ export interface TravelRequest {
   isOverdueEscalated?: boolean;
   overdueEscalatedAt?: string;
   autoExpiredAt?: string;
+
+  // Comments / Discussion resolution tracking
+  commentsResolved?: boolean;
+  commentsResolvedAt?: string;
+  commentsResolvedBy?: string;
+  commentsResolvedById?: string;
+  commentsResolutionDurationMs?: number;
 }
 
 export interface TravelLeg {

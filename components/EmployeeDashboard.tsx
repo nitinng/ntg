@@ -42,6 +42,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   isChatEnabled = false
 }) => {
   const [_cancellationOwed, setCancellationOwed] = useState(0);
+  const [activeTicketComments, setActiveTicketComments] = useState<Record<string, { pncReplies: number; unread: boolean; latestSnippet?: string }>>({});
 
   useEffect(() => {
     const fetchOwed = async () => {
@@ -57,6 +58,64 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
     };
     fetchOwed();
   }, []);
+
+  useEffect(() => {
+    const fetchCommentsForActiveTickets = async () => {
+      const activeIds = requests
+        .filter(r => r.pncStatus !== PNCStatus.BOOKED && r.pncStatus !== PNCStatus.REJECTED_BY_PNC && r.pncStatus !== PNCStatus.REJECTED_BY_MANAGER && r.pncStatus !== PNCStatus.CANCELLED_BY_EMPLOYEE && r.pncStatus !== PNCStatus.CANCELLED_BY_PNC && r.pncStatus !== PNCStatus.CLOSED)
+        .map(r => r.id);
+
+      if (activeIds.length === 0) {
+        setActiveTicketComments({});
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('ticket_comments')
+          .select('id, ticket_id, author_id, author_role, author_name, comment_text, created_at')
+          .in('ticket_id', activeIds);
+
+        if (!error && data) {
+          let readSet = new Set<string>();
+          try {
+            const raw = localStorage.getItem(`read_comments_${user.id}`);
+            if (raw) readSet = new Set(JSON.parse(raw));
+          } catch {}
+
+          const map: Record<string, { pncReplies: number; unread: boolean; latestSnippet?: string }> = {};
+          data.forEach((c: any) => {
+            const isPncReply = (c.author_role && (c.author_role.includes('PNC') || c.author_role.includes('Admin'))) || c.author_id !== user.id;
+            if (isPncReply) {
+              const current = map[c.ticket_id] || { pncReplies: 0, unread: false };
+              current.pncReplies += 1;
+              if (!readSet.has(c.id)) {
+                current.unread = true;
+              }
+              current.latestSnippet = c.comment_text;
+              map[c.ticket_id] = current;
+            }
+          });
+          setActiveTicketComments(map);
+        }
+      } catch (err) {
+        console.warn('Could not fetch comments for active tickets:', err);
+      }
+    };
+
+    fetchCommentsForActiveTickets();
+
+    const channel = supabase
+      .channel('employee_active_ticket_comments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_comments' }, () => {
+        fetchCommentsForActiveTickets();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [requests, user.id]);
 
   const welcomeNote = useMemo(() => WELCOME_NOTES[Math.floor(Math.random() * WELCOME_NOTES.length)], []);
 
@@ -320,6 +379,20 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
 
               return (
                 <div key={r.id} onClick={() => onView(r)} className={`group relative bg-white dark:bg-slate-900 rounded-md flex flex-col sm:flex-row overflow-hidden border border-slate-200 dark:border-slate-800 cursor-pointer shadow-sm hover:shadow-xl ${theme.shadow} transition-all hover:-translate-y-1 duration-300`}>
+                  {/* Top-Right PNC Reply Notification Indicator */}
+                  {activeTicketComments[r.id]?.pncReplies > 0 && (
+                    <div className="absolute top-2.5 right-2.5 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-600 text-white text-3xs font-black shadow-md border border-white dark:border-slate-800">
+                      <i className="fa-solid fa-comment-dots text-2xs text-indigo-200"></i>
+                      {activeTicketComments[r.id].unread ? (
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>
+                          <span>{activeTicketComments[r.id].pncReplies} PNC {activeTicketComments[r.id].pncReplies === 1 ? 'Reply' : 'Replies'}</span>
+                        </span>
+                      ) : (
+                        <span>{activeTicketComments[r.id].pncReplies} PNC {activeTicketComments[r.id].pncReplies === 1 ? 'Reply' : 'Replies'}</span>
+                      )}
+                    </div>
+                  )}
                   {/* Main Ticket Area */}
                   <div className={`flex-1 p-5 sm:p-6 relative overflow-hidden bg-gradient-to-br ${theme.grad} border-b sm:border-b-0 sm:border-r border-dashed border-slate-200 dark:border-slate-700`}>
                     <div className={`absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.03] text-[8rem] pointer-events-none ${theme.iconBg}`}>

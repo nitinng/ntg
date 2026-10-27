@@ -68,4 +68,9 @@ export const mapDbRequest = (r: any): TravelRequest => ({
   isOverdueEscalated: r.is_overdue_escalated ?? r.isOverdueEscalated ?? false,
   overdueEscalatedAt: r.overdue_escalated_at || r.overdueEscalatedAt,
   autoExpiredAt: r.auto_expired_at || r.autoExpiredAt,
+  commentsResolved: r.comments_resolved ?? r.commentsResolved ?? false,
+  commentsResolvedAt: r.comments_resolved_at || r.commentsResolvedAt,
+  commentsResolvedBy: r.comments_resolved_by || r.commentsResolvedBy,
+  commentsResolvedById: r.comments_resolved_by_id || r.commentsResolvedById,
+  commentsResolutionDurationMs: r.comments_resolution_duration_ms ?? r.commentsResolutionDurationMs,
 });

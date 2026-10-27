@@ -1650,7 +1650,7 @@ export const RequestDetailOverlay = ({
 
           {/* Ticket Comments & Mentions Thread */}
           <div className="w-full pt-6 border-t border-slate-200 dark:border-slate-800">
-            <TicketCommentThread ticketId={request.id} currentUser={currentUser} users={users} />
+            <TicketCommentThread ticketId={request.id} currentUser={currentUser} users={users} request={request} />
           </div>
         </div>
       </div>

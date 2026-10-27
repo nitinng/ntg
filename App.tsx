@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import {
   TravelRequest, PNCStatus, Priority, TravelMode, UserRole, User, TripType, ApprovalStatus, PolicyConfig, VerificationStatus, IdProofType, PaymentStatus, UserDocument, TravelModePolicy, MeetupAvailabilityRequest, Department, TestingSettings
 } from './types';
@@ -88,6 +88,8 @@ const SentMailsView = lazyWithRetry(() => import('./components/SentMailsView'));
 const EmailSettingsView = lazyWithRetry(() => import('./components/EmailSettingsView'));
 const EmailNotificationCenter = lazyWithRetry(() => import('./components/EmailNotificationCenter').then(module => ({ default: module.EmailNotificationCenter })));
 const VersionChangelogView = lazyWithRetry(() => import('./components/VersionChangelogView'));
+const TicketCommentsView = lazyWithRetry(() => import('./components/TicketCommentsView'));
+import { isUserMentionedInComment } from './components/TicketCommentsView';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -275,6 +277,56 @@ const App: React.FC = () => {
       supabase.removeChannel(globalSub);
     };
   }, [currentUser]);
+
+  // Fetch Unread Ticket Comments / @Mentions
+  const [unreadCommentsCount, setUnreadCommentsCount] = useState(0);
+
+  const fetchUnreadComments = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const { data, error } = await supabase
+        .from('ticket_comments')
+        .select('id, mentions, comment_text, author_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (!error && data) {
+        let readSet = new Set<string>();
+        try {
+          const raw = localStorage.getItem(`read_comments_${currentUser.id}`);
+          if (raw) readSet = new Set(JSON.parse(raw));
+        } catch {}
+
+        const unreadMentions = data.filter(c =>
+          c.author_id !== currentUser.id &&
+          isUserMentionedInComment(c, currentUser) &&
+          !readSet.has(c.id)
+        );
+        setUnreadCommentsCount(unreadMentions.length);
+      }
+    } catch (err) {
+      console.warn('Could not fetch unread comments count:', err);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    fetchUnreadComments();
+
+    const commentChannel = supabase
+      .channel('global-ticket-comments-badge')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ticket_comments' },
+        () => {
+          fetchUnreadComments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(commentChannel);
+    };
+  }, [fetchUnreadComments]);
 
   // Handle Auth State
   // Fetch global settings (like email login toggle) regardless of session
@@ -1017,6 +1069,15 @@ const App: React.FC = () => {
         );
       case 'guide':
         return <EmployeeGuideView onTabChange={handleTabChange} policies={travelModePolicies} isChatEnabled={isChatEnabled} />;
+      case 'comments':
+        return (
+          <TicketCommentsView
+            currentUser={currentUser}
+            requests={requests}
+            onViewRequest={setSelectedRequest}
+            onCommentsViewed={fetchUnreadComments}
+          />
+        );
       case 'approvals': {
         const pendingApprovals = requests.filter(r => 
           r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && 
@@ -1296,6 +1357,16 @@ const App: React.FC = () => {
                     />
                   )}
                   <SidebarLink icon="fa-book" label="Employee Guide" active={activeTab === 'guide'} onClick={() => handleTabChange('guide')} />
+                  {unreadCommentsCount > 0 && (
+                    <SidebarLink
+                      icon="fa-comments"
+                      label="Comments"
+                      active={activeTab === 'comments'}
+                      onClick={() => handleTabChange('comments')}
+                      badge={unreadCommentsCount}
+                      badgeColor="bg-indigo-600 text-white font-bold"
+                    />
+                  )}
                   <SidebarLink icon="fa-circle-question" label="Ask PnC" active={activeTab === 'ask-pnc'} onClick={() => handleTabChange('ask-pnc')} />
                 </div>
 
@@ -1307,6 +1378,14 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  <SidebarLink
+                    icon="fa-comments"
+                    label="Comments"
+                    active={activeTab === 'comments'}
+                    onClick={() => handleTabChange('comments')}
+                    badge={unreadCommentsCount > 0 ? unreadCommentsCount : null}
+                    badgeColor="bg-indigo-600 text-white font-bold"
+                  />
                   <SidebarLink
                     icon="fa-calendar-plus"
                     label="Self Booking"
@@ -1373,6 +1452,14 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  <SidebarLink
+                    icon="fa-comments"
+                    label="Comments"
+                    active={activeTab === 'comments'}
+                    onClick={() => handleTabChange('comments')}
+                    badge={unreadCommentsCount > 0 ? unreadCommentsCount : null}
+                    badgeColor="bg-indigo-600 text-white font-bold"
+                  />
                   <SidebarLink icon="fa-circle-question" label="PnC Inquiries" active={activeTab === 'pnc-inquiries'} onClick={() => handleTabChange('pnc-inquiries')} />
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
                 </div>

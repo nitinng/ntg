@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { User, TravelRequest, TicketComment } from '../types';
 import { supabase } from '../supabaseClient';
 import { getMentionColor } from './TicketCommentThread';
+import { mapDbRequest } from '../services/requestMapper';
+import StatusBadge from './StatusBadge';
 import { toast } from 'sonner';
 
 interface TicketCommentsViewProps {
@@ -39,7 +41,15 @@ export const isUserMentionedInComment = (
   return false;
 };
 
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+interface TicketDiscussionGroup {
+  ticketId: string;
+  request?: TravelRequest;
+  comments: TicketComment[];
+  mentionCount: number;
+  unreadMentionCount: number;
+  hasUnread: boolean;
+  latestComment: TicketComment;
+}
 
 export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
   currentUser,
@@ -48,6 +58,7 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
   onCommentsViewed
 }) => {
   const [comments, setComments] = useState<TicketComment[]>([]);
+  const [fetchedRequestsMap, setFetchedRequestsMap] = useState<Map<string, TravelRequest>>(new Map());
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<'mentioned' | 'all'>('mentioned');
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,12 +73,12 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
     }
   });
 
-  const markCommentAsRead = useCallback((commentId: string) => {
+  // Mark all comments of a ticket as read
+  const markTicketCommentsAsRead = useCallback((ticketId: string, ticketComments: TicketComment[]) => {
     if (!currentUser?.id) return;
     setReadCommentIds(prev => {
-      if (prev.has(commentId)) return prev;
       const next = new Set(prev);
-      next.add(commentId);
+      ticketComments.forEach(c => next.add(c.id));
       try {
         localStorage.setItem(`read_comments_${currentUser.id}`, JSON.stringify(Array.from(next)));
       } catch (err) {
@@ -88,40 +99,63 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
     } catch (err) {
       console.warn('Could not save read comments', err);
     }
-    toast.success("All comments marked as read");
+    toast.success("All comment mentions marked as read");
     if (onCommentsViewed) onCommentsViewed();
   };
 
-  const loadAllComments = async () => {
+  // Load all comments & ensure all associated ticket stubs are fetched from Supabase
+  const loadData = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: commentsData, error: commentsError } = await supabase
         .from('ticket_comments')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(300);
 
-      if (!error && data) {
-        setComments(data as TicketComment[]);
+      if (commentsError) throw commentsError;
+
+      const loadedComments = (commentsData || []) as TicketComment[];
+      setComments(loadedComments);
+
+      // Collect all ticket IDs that need full request details
+      const uniqueTicketIds = Array.from(new Set(loadedComments.map(c => c.ticket_id)));
+      if (uniqueTicketIds.length > 0) {
+        const { data: dbRequests, error: reqsError } = await supabase
+          .from('travel_requests')
+          .select('*')
+          .in('id', uniqueTicketIds);
+
+        if (!reqsError && dbRequests) {
+          const map = new Map<string, TravelRequest>();
+          dbRequests.forEach((r: any) => {
+            const mapped = mapDbRequest(r);
+            map.set(mapped.id, mapped);
+            if (mapped.submissionId) {
+              map.set(mapped.submissionId, mapped);
+            }
+          });
+          setFetchedRequestsMap(map);
+        }
       }
     } catch (err) {
-      console.error('Failed to load ticket comments:', err);
+      console.error('Failed to load ticket comments and request stubs:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAllComments();
+    loadData();
 
-    // Realtime subscription to live comments across all tickets
+    // Subscribe to live comments across all tickets
     const channel = supabase
-      .channel('ticket_comments_live_view')
+      .channel('ticket_comments_stub_view')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ticket_comments' },
         () => {
-          loadAllComments();
+          loadData();
         }
       )
       .subscribe();
@@ -131,48 +165,127 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
     };
   }, []);
 
-  // Map ticketId to TravelRequest
+  // Combined requests map: props + directly fetched
   const requestsById = useMemo(() => {
     const map = new Map<string, TravelRequest>();
+    // Seed with props requests
     requests.forEach(r => {
       if (r.id) map.set(r.id, r);
       if (r.submissionId) map.set(r.submissionId, r);
     });
+    // Overlay fetched requests
+    fetchedRequestsMap.forEach((req, key) => {
+      map.set(key, req);
+    });
     return map;
-  }, [requests]);
+  }, [requests, fetchedRequestsMap]);
 
-  // Mentioned comments for current user
-  const mentionedComments = useMemo(() => {
-    return comments.filter(c => isUserMentionedInComment(c, currentUser));
-  }, [comments, currentUser]);
+  // Group comments by ticket stub
+  const ticketGroups = useMemo(() => {
+    const groupMap = new Map<string, TicketComment[]>();
+    comments.forEach(c => {
+      const list = groupMap.get(c.ticket_id) || [];
+      list.push(c);
+      groupMap.set(c.ticket_id, list);
+    });
 
-  const unreadMentionsCount = useMemo(() => {
-    return mentionedComments.filter(c => !readCommentIds.has(c.id)).length;
-  }, [mentionedComments, readCommentIds]);
+    const groups: TicketDiscussionGroup[] = [];
 
-  // Filtered comments
-  const displayComments = useMemo(() => {
-    let list = activeSubTab === 'mentioned' ? mentionedComments : comments;
+    groupMap.forEach((cList, ticketId) => {
+      const sortedComments = [...cList].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const req = requestsById.get(ticketId);
+
+      const mentionComments = sortedComments.filter(c => isUserMentionedInComment(c, currentUser));
+      const mentionCount = mentionComments.length;
+      const unreadMentionCount = mentionComments.filter(c => !readCommentIds.has(c.id)).length;
+      const hasUnread = sortedComments.some(c => !readCommentIds.has(c.id) && isUserMentionedInComment(c, currentUser));
+
+      groups.push({
+        ticketId,
+        request: req,
+        comments: sortedComments,
+        mentionCount,
+        unreadMentionCount,
+        hasUnread,
+        latestComment: sortedComments[0]
+      });
+    });
+
+    // Sort groups: unread mentions first, then newest latest comment
+    groups.sort((a, b) => {
+      if (a.unreadMentionCount > 0 && b.unreadMentionCount === 0) return -1;
+      if (b.unreadMentionCount > 0 && a.unreadMentionCount === 0) return 1;
+      return new Date(b.latestComment.created_at).getTime() - new Date(a.latestComment.created_at).getTime();
+    });
+
+    return groups;
+  }, [comments, requestsById, currentUser, readCommentIds]);
+
+  // Filter groups
+  const displayGroups = useMemo(() => {
+    let list = ticketGroups;
+
+    if (activeSubTab === 'mentioned') {
+      list = list.filter(g => g.mentionCount > 0);
+    }
 
     if (unreadOnly) {
-      list = list.filter(c => !readCommentIds.has(c.id));
+      list = list.filter(g => g.hasUnread);
     }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(c => {
-        const req = requestsById.get(c.ticket_id);
-        const matchText = c.comment_text?.toLowerCase().includes(q);
-        const matchAuthor = c.author_name?.toLowerCase().includes(q);
-        const matchTicketId = c.ticket_id?.toLowerCase().includes(q) || (req?.submissionId && req.submissionId.toLowerCase().includes(q));
+      list = list.filter(g => {
+        const req = g.request;
+        const matchTicketId = g.ticketId.toLowerCase().includes(q) || (req?.submissionId && req.submissionId.toLowerCase().includes(q));
         const matchRequester = req?.requesterName?.toLowerCase().includes(q);
         const matchRoute = (req?.from && req.from.toLowerCase().includes(q)) || (req?.to && req.to.toLowerCase().includes(q));
-        return matchText || matchAuthor || matchTicketId || matchRequester || matchRoute;
+        const matchComment = g.comments.some(c => c.comment_text?.toLowerCase().includes(q) || c.author_name?.toLowerCase().includes(q));
+        return matchTicketId || matchRequester || matchRoute || matchComment;
       });
     }
 
     return list;
-  }, [activeSubTab, mentionedComments, comments, unreadOnly, readCommentIds, searchQuery, requestsById]);
+  }, [ticketGroups, activeSubTab, unreadOnly, searchQuery]);
+
+  const totalMentionedTickets = useMemo(() => {
+    return ticketGroups.filter(g => g.mentionCount > 0).length;
+  }, [ticketGroups]);
+
+  const totalUnreadMentions = useMemo(() => {
+    return ticketGroups.reduce((acc, g) => acc + g.unreadMentionCount, 0);
+  }, [ticketGroups]);
+
+  // Click handler to open the full ticket stub overlay
+  const handleOpenTicketStub = async (group: TicketDiscussionGroup) => {
+    markTicketCommentsAsRead(group.ticketId, group.comments);
+
+    let req = group.request || requestsById.get(group.ticketId);
+
+    // If still missing, fetch on demand from Supabase to guarantee opening
+    if (!req) {
+      try {
+        const { data, error } = await supabase
+          .from('travel_requests')
+          .select('*')
+          .eq('id', group.ticketId)
+          .maybeSingle();
+
+        if (!error && data) {
+          req = mapDbRequest(data);
+          setFetchedRequestsMap(prev => new Map(prev).set(req!.id, req!));
+        }
+      } catch (err) {
+        console.warn('Could not fetch request details:', err);
+      }
+    }
+
+    if (req) {
+      onViewRequest(req);
+    } else {
+      toast.error(`Ticket details for ${group.ticketId.slice(0, 8)} could not be loaded.`);
+    }
+  };
 
   /**
    * Formats comment text with high-contrast @mention pill badges.
@@ -208,51 +321,51 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
     return parts;
   };
 
-  const handleOpenTicket = (comment: TicketComment) => {
-    markCommentAsRead(comment.id);
-    const req = requestsById.get(comment.ticket_id);
-    if (req) {
-      onViewRequest(req);
-    } else {
-      toast.info(`Opening request ${comment.ticket_id}...`);
+  const getModeIcon = (mode?: string) => {
+    switch (mode) {
+      case 'Flight': return 'fa-plane';
+      case 'Train': return 'fa-train';
+      case 'Bus': return 'fa-bus';
+      case 'Cab': return 'fa-taxi';
+      default: return 'fa-ticket';
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Banner / Stats */}
+      {/* Top Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-indigo-900/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30">
             <i className="fa-solid fa-comments text-indigo-400"></i>
-            Ticket Activity Feed
+            Ticket Discussion Queue
           </div>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Ticket Comments & @Mentions
+            Ticket Stubs with Comments & @Mentions
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Stay on top of questions, updates, and team mentions left in ticket stub comments across all travel requests.
+            Click any ticket stub below to open the complete request details and participate in the live comment thread.
           </p>
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="flex-1 md:flex-initial bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10 text-center">
             <span className="text-2xs font-bold uppercase tracking-wider text-indigo-300 block">
-              @Me Mentions
+              Mentioned Tickets
             </span>
-            <span className="text-2xl font-black text-white">{mentionedComments.length}</span>
+            <span className="text-2xl font-black text-white">{totalMentionedTickets}</span>
           </div>
           <div className="flex-1 md:flex-initial bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10 text-center">
             <span className="text-2xs font-bold uppercase tracking-wider text-rose-300 block">
-              Unread
+              Unread Mentions
             </span>
-            <span className="text-2xl font-black text-rose-400">{unreadMentionsCount}</span>
+            <span className="text-2xl font-black text-rose-400">{totalUnreadMentions}</span>
           </div>
           <div className="flex-1 md:flex-initial bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10 text-center">
             <span className="text-2xs font-bold uppercase tracking-wider text-slate-300 block">
-              Total
+              Total Stubs
             </span>
-            <span className="text-2xl font-black text-slate-200">{comments.length}</span>
+            <span className="text-2xl font-black text-slate-200">{ticketGroups.length}</span>
           </div>
         </div>
       </div>
@@ -270,10 +383,10 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
             }`}
           >
             <i className="fa-solid fa-at text-xs"></i>
-            Mentioned (@Me)
-            {unreadMentionsCount > 0 && (
+            Mentioned Tickets ({totalMentionedTickets})
+            {totalUnreadMentions > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-3xs font-black bg-rose-500 text-white">
-                {unreadMentionsCount}
+                {totalUnreadMentions}
               </span>
             )}
           </button>
@@ -285,8 +398,8 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <i className="fa-solid fa-list-ul text-xs"></i>
-            All Comments ({comments.length})
+            <i className="fa-solid fa-layer-group text-xs"></i>
+            All Active Discussions ({ticketGroups.length})
           </button>
         </div>
 
@@ -298,14 +411,14 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Filter by ticket #, user, or keyword..."
+              placeholder="Search by ticket #, requester, route, or comment..."
               className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
             />
           </div>
 
           <button
             onClick={() => setUnreadOnly(prev => !prev)}
-            title="Filter unread only"
+            title="Filter unread mentions only"
             className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               unreadOnly
                 ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
@@ -316,159 +429,206 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
             <span className="hidden sm:inline">Unread</span>
           </button>
 
-          {unreadMentionsCount > 0 && (
+          {totalUnreadMentions > 0 && (
             <button
               onClick={markAllAsRead}
               className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 transition-all cursor-pointer"
               title="Mark all as read"
             >
               <i className="fa-solid fa-check-double text-2xs mr-1"></i>
-              <span className="hidden md:inline">Mark read</span>
+              <span className="hidden md:inline">Mark all read</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Comment Cards List */}
+      {/* Ticket Stubs Grid / List */}
       {loading ? (
         <div className="py-16 text-center space-y-3">
           <div className="inline-block w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs font-medium text-slate-400">Loading ticket comments...</p>
+          <p className="text-xs font-medium text-slate-400">Loading ticket stubs...</p>
         </div>
-      ) : displayComments.length === 0 ? (
+      ) : displayGroups.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-3">
           <div className="w-14 h-14 mx-auto rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl">
-            <i className="fa-solid fa-comments"></i>
+            <i className="fa-solid fa-ticket"></i>
           </div>
           <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-            {activeSubTab === 'mentioned' ? 'No @mentions found' : 'No comments found'}
+            {activeSubTab === 'mentioned' ? 'No ticket mentions found' : 'No ticket discussions found'}
           </h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
             {activeSubTab === 'mentioned'
-              ? 'When someone mentions you in a ticket stub with @your-name, it will appear right here with a direct link to the ticket.'
+              ? 'When someone mentions you in a ticket stub with @your-name, the ticket stub with a mention badge will appear here.'
               : 'No ticket comments match your filter criteria.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-3.5">
-          {displayComments.map(c => {
-            const req = requestsById.get(c.ticket_id);
-            const isMentioned = isUserMentionedInComment(c, currentUser);
-            const isUnread = !readCommentIds.has(c.id);
-            const authorInitial = (c.author_name || 'U').charAt(0).toUpperCase();
-            const authorColor = getMentionColor(c.author_name);
+        <div className="grid grid-cols-1 gap-4">
+          {displayGroups.map(group => {
+            const req = group.request;
+            const fromCity = req?.from || 'Origin';
+            const toCity = req?.to || 'Destination';
+            const fromCode = fromCity.length >= 3 ? fromCity.substring(0, 3).toUpperCase() : fromCity.toUpperCase();
+            const toCode = toCity.length >= 3 ? toCity.substring(0, 3).toUpperCase() : toCity.toUpperCase();
+            const modeIcon = getModeIcon(req?.mode);
+            const isUnread = group.hasUnread;
 
             return (
               <div
-                key={c.id}
-                onClick={() => handleOpenTicket(c)}
-                className={`group relative p-4 sm:p-5 rounded-xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+                key={group.ticketId}
+                onClick={() => handleOpenTicketStub(group)}
+                className={`group relative bg-white dark:bg-slate-900 rounded-xl flex flex-col md:flex-row overflow-hidden border cursor-pointer shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 ${
                   isUnread
-                    ? 'bg-white dark:bg-slate-900 border-indigo-300/80 dark:border-indigo-800/80 ring-1 ring-indigo-500/20'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    ? 'border-indigo-400/80 dark:border-indigo-600/80 ring-1 ring-indigo-500/20'
+                    : 'border-slate-200/90 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700'
                 }`}
               >
-                {/* Unread indicator badge */}
-                {isUnread && (
-                  <span className="absolute top-4 right-4 w-2 h-2 rounded-full bg-rose-500 ring-4 ring-rose-500/20" />
-                )}
+                {/* Left Ticket Main Body (Boarding Pass Layout) */}
+                <div className="flex-1 p-5 sm:p-6 relative overflow-hidden bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/20 border-b md:border-b-0 md:border-r border-dashed border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                  {/* Background Watermark Icon */}
+                  <div className="absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.04] text-[9rem] pointer-events-none text-indigo-900 dark:text-indigo-200">
+                    <i className={`fa-solid ${modeIcon}`}></i>
+                  </div>
 
-                {/* Ticket Reference Header Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800/80">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded text-3xs font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                      {req?.submissionId || c.ticket_id.slice(0, 8)}
-                    </span>
-
-                    {req && (
-                      <>
-                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          {req.requesterName}
+                  <div>
+                    {/* Top Header Row of the Stub */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4 relative z-10">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="text-3xs font-black uppercase tracking-widest px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                          {req?.submissionId || group.ticketId.slice(0, 8)}
                         </span>
-                        {req.from && req.to && (
-                          <span className="text-3xs text-slate-400 flex items-center gap-1 font-medium">
-                            <i className="fa-solid fa-arrow-right text-[9px] text-slate-400"></i>
-                            {req.from} → {req.to}
+
+                        {/* Prominent Mentions Notification Badge */}
+                        {group.mentionCount > 0 && (
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs ${
+                            group.unreadMentionCount > 0
+                              ? 'bg-rose-500 text-white animate-pulse'
+                              : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                          }`}>
+                            <i className="fa-solid fa-at text-xs"></i>
+                            {group.mentionCount} {group.mentionCount === 1 ? 'mention' : 'mentions'}
                           </span>
                         )}
-                        {req.pncStatus && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                            {req.pncStatus}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    {isMentioned && (
-                      <span className="px-2 py-0.5 rounded text-3xs font-bold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
-                        <i className="fa-solid fa-at text-[10px]"></i>
-                        Mentioned You
-                      </span>
-                    )}
-                    <span className="text-3xs text-slate-400 font-mono">
-                      {new Date(c.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                    </span>
-                  </div>
-                </div>
+                        <span className="text-3xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                          <i className="fa-solid fa-comments text-slate-400 mr-1"></i>
+                          {group.comments.length} {group.comments.length === 1 ? 'comment' : 'comments'}
+                        </span>
+                      </div>
 
-                {/* Comment Content */}
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${authorColor}`}>
-                    {authorInitial}
-                  </div>
-
-                  <div className="space-y-1.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white">
-                        {c.author_name}
-                      </span>
-                      {c.is_edited && (
-                        <span className="text-3xs text-slate-400 italic">(edited)</span>
+                      {req?.pncStatus && (
+                        <div className="shrink-0">
+                          <StatusBadge type="pnc" value={req.pncStatus} audience="employee" />
+                        </div>
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                      {renderCommentContent(c.comment_text)}
-                    </p>
+                    {/* Route Display */}
+                    <div className="flex items-center justify-between mb-5 relative z-10">
+                      <div className="text-left flex-1 min-w-0">
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                          {fromCode}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[120px] sm:max-w-[180px]">
+                          {fromCity}
+                        </p>
+                      </div>
+
+                      <div className="flex-[2] flex flex-col items-center justify-center px-3 sm:px-6">
+                        <div className="w-full flex items-center opacity-60">
+                          <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
+                          <i className={`fa-solid ${modeIcon} text-indigo-600 dark:text-indigo-400 mx-3 text-base sm:text-xl group-hover:scale-125 transition-transform duration-300`}></i>
+                          <div className="h-[2px] flex-1 bg-transparent border-t-[2px] border-dashed border-slate-300 dark:border-slate-600"></div>
+                        </div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 mt-1">
+                          {req?.mode || 'Travel'}
+                        </span>
+                      </div>
+
+                      <div className="text-right flex-1 min-w-0">
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                          {toCode}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold truncate max-w-[120px] sm:max-w-[180px]">
+                          {toCity}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requester & Date Meta Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 relative z-10 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-3xs uppercase font-bold text-slate-400">Requester:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        {req?.requesterName || 'Employee Request'}
+                      </span>
+                      {req?.requesterDepartment && (
+                        <span className="text-3xs text-slate-400 font-medium">({req.requesterDepartment})</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-4 text-slate-500 dark:text-slate-400 text-3xs font-mono">
+                      {req?.dateOfTravel && (
+                        <span>
+                          <i className="fa-solid fa-calendar mr-1 text-slate-400"></i>
+                          {new Date(req.dateOfTravel).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      )}
+                      <span>
+                        <i className="fa-solid fa-clock mr-1 text-slate-400"></i>
+                        Active {new Date(group.latestComment.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Action Hover / Footer */}
-                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-2xs">
-                  <span className="text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-1 font-semibold">
-                    <i className="fa-solid fa-arrow-up-right-from-square text-3xs"></i>
-                    Click to view full ticket stub & reply
-                  </span>
+                {/* Right Tear-Off Stub (Discussion Preview & Action) */}
+                <div className="w-full md:w-80 bg-slate-50/80 dark:bg-slate-900/80 p-5 flex flex-col justify-between relative overflow-hidden">
+                  {/* Perforation holes on md screens */}
+                  <div className="hidden md:block absolute -left-3 top-[-10px] w-6 h-6 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                  <div className="hidden md:block absolute -left-3 bottom-[-10px] w-6 h-6 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isUnread) {
-                        markCommentAsRead(c.id);
-                      } else {
-                        // Mark unread
-                        setReadCommentIds(prev => {
-                          const next = new Set(prev);
-                          next.delete(c.id);
-                          if (currentUser?.id) {
-                            try {
-                              localStorage.setItem(`read_comments_${currentUser.id}`, JSON.stringify(Array.from(next)));
-                            } catch (err) {
-                              console.warn('Could not save read comments', err);
-                            }
-                          }
-                          return next;
-                        });
-                        if (onCommentsViewed) onCommentsViewed();
-                      }
-                    }}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2 py-0.5 rounded font-medium transition-colors"
-                  >
-                    {isUnread ? 'Mark as read' : 'Mark unread'}
-                  </button>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-3xs font-black uppercase tracking-wider text-slate-400">
+                        Latest Comment
+                      </span>
+                      <span className="text-3xs text-slate-400 font-mono">
+                        {new Date(group.latestComment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {/* Latest Comment Bubble */}
+                    <div className="p-3 bg-white dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700/80 space-y-1 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                          {group.latestComment.author_name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                        {renderCommentContent(group.latestComment.comment_text)}
+                      </p>
+                    </div>
+
+                    {group.comments.length > 1 && (
+                      <p className="text-3xs text-slate-400 text-center font-medium">
+                        + {group.comments.length - 1} earlier {group.comments.length - 1 === 1 ? 'comment' : 'comments'} in thread
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Primary Stub CTA */}
+                  <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 group-hover:translate-x-1 transition-transform">
+                      Open Ticket Stub
+                      <i className="fa-solid fa-arrow-right text-2xs"></i>
+                    </span>
+
+                    {isUnread && (
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-4 ring-rose-500/20 shrink-0" />
+                    )}
+                  </div>
                 </div>
               </div>
             );

@@ -27,6 +27,20 @@ ALTER TABLE public.pnc_questions
   ADD COLUMN IF NOT EXISTS employee_email TEXT,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
+-- Drop NOT NULL on legacy asker_* columns if present from prior schema
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pnc_questions' AND column_name = 'asker_id') THEN
+    ALTER TABLE public.pnc_questions ALTER COLUMN asker_id DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pnc_questions' AND column_name = 'asker_name') THEN
+    ALTER TABLE public.pnc_questions ALTER COLUMN asker_name DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pnc_questions' AND column_name = 'asker_email') THEN
+    ALTER TABLE public.pnc_questions ALTER COLUMN asker_email DROP NOT NULL;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_pnc_questions_employee ON public.pnc_questions(employee_id);
 CREATE INDEX IF NOT EXISTS idx_pnc_questions_status ON public.pnc_questions(status);
 

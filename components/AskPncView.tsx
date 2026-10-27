@@ -92,11 +92,17 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
       const { data: authData } = await supabase.auth.getUser();
       const authUserId = authData?.user?.id;
       const effectiveEmployeeId = authUserId || currentUser.id;
+      const userName = currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email;
+      const userEmail = currentUser.email || authData?.user?.email;
 
+      // Primary payload populated with both employee_* and legacy asker_* columns to satisfy all constraints
       const payload: any = {
         employee_id: effectiveEmployeeId,
-        employee_name: currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email,
-        employee_email: currentUser.email || authData?.user?.email,
+        asker_id: effectiveEmployeeId,
+        employee_name: userName,
+        asker_name: userName,
+        employee_email: userEmail,
+        asker_email: userEmail,
         title: newQuestionTitle.trim(),
         content: newQuestionContent.trim(),
         status: 'Open'
@@ -108,25 +114,31 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
         .select()
         .single();
 
-      // If content column is missing from schema, retry with question column
-      if (error && (error.message?.includes('content') || error.code === 'PGRST204')) {
-        const altPayload: any = {
-          employee_id: effectiveEmployeeId,
-          employee_name: currentUser.name || authData?.user?.user_metadata?.full_name || currentUser.email,
-          employee_email: currentUser.email || authData?.user?.email,
-          title: newQuestionTitle.trim(),
-          question: newQuestionContent.trim(),
-          status: 'Open'
-        };
-        const altRes = await supabase
-          .from('pnc_questions')
-          .insert(altPayload)
-          .select()
-          .single();
-
-        if (!altRes.error) {
-          data = altRes.data;
+      // If schema does not recognise asker_* columns, retry without them
+      if (error && (error.message?.includes('asker_') || error.code === 'PGRST204')) {
+        const cleanPayload = { ...payload };
+        delete cleanPayload.asker_id;
+        delete cleanPayload.asker_name;
+        delete cleanPayload.asker_email;
+        const retry1 = await supabase.from('pnc_questions').insert(cleanPayload).select().single();
+        if (!retry1.error) {
+          data = retry1.data;
           error = null;
+        } else {
+          error = retry1.error;
+        }
+      }
+
+      // If schema rejects content column, retry with question column
+      if (error && (error.message?.includes('content') || error.code === 'PGRST204')) {
+        const altPayload = { ...payload, question: newQuestionContent.trim() };
+        delete altPayload.content;
+        const retry2 = await supabase.from('pnc_questions').insert(altPayload).select().single();
+        if (!retry2.error) {
+          data = retry2.data;
+          error = null;
+        } else {
+          error = retry2.error;
         }
       }
 

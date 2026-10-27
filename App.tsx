@@ -107,21 +107,35 @@ const App: React.FC = () => {
     sessionStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
 
-  // Deep link from an alert: the SOS mail or Slack card links to
-  // /?tab=sos&alertId=..., so a reader lands on the alert feed with that specific
-  // alert expanded and focused.
+  const [deepTicketId, setDeepTicketId] = useState<string | null>(null);
+
+  // Deep link from an alert or email ticket/approval:
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get('tab');
     const alertId = params.get('alertId');
+    const deepTicket = params.get('ticketId') || params.get('requestId') || params.get('id');
+    if (deepTicket) setDeepTicketId(deepTicket);
     if (alertId) setFocusAlertId(alertId);
-    if (!requested) return;
-    setActiveTab(requested);
+    if (requested) setActiveTab(requested);
     const url = new URL(window.location.href);
     url.searchParams.delete('tab');
     url.searchParams.delete('alertId');
+    url.searchParams.delete('ticketId');
+    url.searchParams.delete('requestId');
+    url.searchParams.delete('id');
     window.history.replaceState({}, '', url.toString());
   }, []);
+
+  // When requests load, if deepTicketId is set and we're NOT on approvals tab, open the ticket overlay
+  useEffect(() => {
+    if (deepTicketId && requests.length > 0 && activeTab !== 'approvals') {
+      const match = requests.find(r => r.id === deepTicketId || r.submissionId === deepTicketId);
+      if (match) {
+        setSelectedRequest(match);
+      }
+    }
+  }, [deepTicketId, requests, activeTab]);
 
   // Anything that escapes every try/catch in the app still gets reported, and watch for new deployments.
   useEffect(() => {
@@ -390,7 +404,7 @@ const App: React.FC = () => {
         const fetchTravelRequests = async () => {
           let query = supabase.from('travel_requests').select('*');
           if (mappedUser.role === UserRole.EMPLOYEE) {
-            query = query.or(`requester_id.eq.${mappedUser.id},approving_manager_email.eq.${mappedUser.email}`);
+            query = query.or(`requester_id.eq.${mappedUser.id},approving_manager_email.ilike.${mappedUser.email}`);
           }
           const { data: reqs, error: reqsError } = await query.order('created_at', { ascending: false });
           if (reqsError) throw reqsError;
@@ -1003,107 +1017,108 @@ const App: React.FC = () => {
         );
       case 'guide':
         return <EmployeeGuideView onTabChange={handleTabChange} policies={travelModePolicies} isChatEnabled={isChatEnabled} />;
-      case 'approvals':
-        if (currentUser.role === UserRole.EMPLOYEE) {
-          const pendingApprovals = requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING);
-          return <ManagerApprovalsView
-            requests={pendingApprovals}
-            currentUser={currentUser}
-            onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus, rejectReason?: string) => {
-              try {
-                const reason = rejectReason || 'Manager Action';
-                const newTimeline = [
-                  ...updatedReq.timeline,
+      case 'approvals': {
+        const pendingApprovals = requests.filter(r => 
+          r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && 
+          r.pncStatus === PNCStatus.APPROVAL_PENDING
+        );
+        return <ManagerApprovalsView
+          requests={pendingApprovals}
+          currentUser={currentUser}
+          initialSelectedTicketId={deepTicketId}
+          onUpdate={async (updatedReq: TravelRequest, newStatus: PNCStatus, rejectReason?: string) => {
+            try {
+              const reason = rejectReason || 'Manager Action';
+              const newTimeline = [
+                ...updatedReq.timeline,
+                {
+                  id: Date.now().toString(),
+                  timestamp: new Date().toISOString(),
+                  actor: currentUser.name,
+                  event: `Status changed to: ${newStatus}`,
+                  details: reason
+                }
+              ];
+
+              const { error } = await supabase
+                .from('travel_requests')
+                .update({
+                  pnc_status: newStatus,
+                  status_change_reason: reason,
+                  timeline: newTimeline,
+                  ...(newStatus === PNCStatus.APPROVED ? { manager_approval_date: new Date().toISOString() } : {})
+                })
+                .eq('id', updatedReq.id);
+
+              if (error) throw error;
+
+              let finalStatus = newStatus;
+              let finalTimeline = newTimeline;
+
+              // Auto-advance Approved → Processing
+              if (newStatus === PNCStatus.APPROVED) {
+                const processingTimeline = [
+                  ...newTimeline,
                   {
-                    id: Date.now().toString(),
+                    id: (Date.now() + 1).toString(),
                     timestamp: new Date().toISOString(),
-                    actor: currentUser.name,
-                    event: `Status changed to: ${newStatus}`,
-                    details: reason
+                    actor: 'System',
+                    event: `Status changed to: ${PNCStatus.PROCESSING}`,
+                    details: 'Auto-advanced to Processing after manager approval'
                   }
                 ];
 
-                const { error } = await supabase
+                const { error: procError } = await supabase
                   .from('travel_requests')
                   .update({
-                    pnc_status: newStatus,
-                    status_change_reason: reason,
-                    timeline: newTimeline,
-                    ...(newStatus === PNCStatus.APPROVED ? { manager_approval_date: new Date().toISOString() } : {})
+                    pnc_status: PNCStatus.PROCESSING,
+                    status_change_reason: 'Auto-advanced to Processing after manager approval',
+                    timeline: processingTimeline
                   })
                   .eq('id', updatedReq.id);
 
-                if (error) throw error;
-
-                let finalStatus = newStatus;
-                let finalTimeline = newTimeline;
-
-                // Auto-advance Approved → Processing
-                if (newStatus === PNCStatus.APPROVED) {
-                  const processingTimeline = [
-                    ...newTimeline,
-                    {
-                      id: (Date.now() + 1).toString(),
-                      timestamp: new Date().toISOString(),
-                      actor: 'System',
-                      event: `Status changed to: ${PNCStatus.PROCESSING}`,
-                      details: 'Auto-advanced to Processing after manager approval'
-                    }
-                  ];
-
-                  const { error: procError } = await supabase
-                    .from('travel_requests')
-                    .update({
-                      pnc_status: PNCStatus.PROCESSING,
-                      status_change_reason: 'Auto-advanced to Processing after manager approval',
-                      timeline: processingTimeline
-                    })
-                    .eq('id', updatedReq.id);
-
-                  if (!procError) {
-                    finalStatus = PNCStatus.PROCESSING;
-                    finalTimeline = processingTimeline;
-                  } else {
-                    // The approval saved but the request is now parked in a
-                    // state the desk queue does not pick up.
-                    reportSos('AUTO_ADVANCE_FAILED', procError, { ticketId: updatedReq.id });
-                  }
+                if (!procError) {
+                  finalStatus = PNCStatus.PROCESSING;
+                  finalTimeline = processingTimeline;
+                } else {
+                  // The approval saved but the request is now parked in a
+                  // state the desk queue does not pick up.
+                  reportSos('AUTO_ADVANCE_FAILED', procError, { ticketId: updatedReq.id });
                 }
-
-                const updated = {
-                  ...updatedReq,
-                  pncStatus: finalStatus,
-                  statusChangeReason: finalStatus === PNCStatus.PROCESSING
-                    ? 'Auto-advanced to Processing after manager approval'
-                    : reason,
-                  timeline: finalTimeline,
-                  ...(newStatus === PNCStatus.APPROVED ? { managerApprovalDate: new Date().toISOString() } : {})
-                };
-
-                setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
-                toast.success(
-                  finalStatus === PNCStatus.PROCESSING
-                    ? 'Approved & moved to Processing'
-                    : newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'
-                );
-
-                // Queue emails for manager's action (Approved or Rejected)
-                await queueEmailsForTransition(updated, updatedReq.pncStatus, newStatus);
-
-                // Queue emails for the auto-advance to Processing (MANAGER_APPROVED event)
-                if (finalStatus === PNCStatus.PROCESSING) {
-                  await queueEmailsForTransition(updated, newStatus, PNCStatus.PROCESSING);
-                }
-
-                if (pendingApprovals.length <= 1) handleTabChange('dashboard');
-              } catch (e: any) {
-                toast.error("Failed to update: " + e.message);
               }
-            }}
 
-          />;
-        }
-        return renderDashboard();
+              const updated = {
+                ...updatedReq,
+                pncStatus: finalStatus,
+                statusChangeReason: finalStatus === PNCStatus.PROCESSING
+                  ? 'Auto-advanced to Processing after manager approval'
+                  : reason,
+                timeline: finalTimeline,
+                ...(newStatus === PNCStatus.APPROVED ? { managerApprovalDate: new Date().toISOString() } : {})
+              };
+
+              setRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
+              toast.success(
+                finalStatus === PNCStatus.PROCESSING
+                  ? 'Approved & moved to Processing'
+                  : newStatus === PNCStatus.APPROVED ? 'Approved' : 'Rejected'
+              );
+
+              // Queue emails for manager's action (Approved or Rejected)
+              await queueEmailsForTransition(updated, updatedReq.pncStatus, newStatus);
+
+              // Queue emails for the auto-advance to Processing (MANAGER_APPROVED event)
+              if (finalStatus === PNCStatus.PROCESSING) {
+                await queueEmailsForTransition(updated, newStatus, PNCStatus.PROCESSING);
+              }
+
+              if (pendingApprovals.length <= 1) handleTabChange('dashboard');
+            } catch (e: any) {
+              toast.error("Failed to update: " + e.message);
+            }
+          }}
+        />;
+      }
       case 'chat':
         if (!isChatEnabled) return renderDashboard();
         return <ChatView currentUser={currentUser} requests={requests} onViewRequest={setSelectedRequest} />;
@@ -1185,14 +1200,19 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
         <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
         <nav className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-8 flex items-center justify-between transition-colors duration-300">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleTabChange('dashboard')}
+            className="flex items-center gap-3 cursor-pointer hover:opacity-85 transition-opacity text-left focus:outline-none"
+            title="Go to Dashboard"
+          >
             <img
               src="/ng-icon.png"
               alt="NavGurukul Logo"
               className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
             />
             <h1 className="font-bold tracking-tight text-slate-800 dark:text-white">NG Travel Desk</h1>
-          </div>
+          </button>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
@@ -1209,15 +1229,17 @@ const App: React.FC = () => {
             </button>
           </div>
         </nav>
-        <div className="flex-1 flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/50 via-transparent to-transparent dark:from-indigo-900/10 transition-colors duration-300">
-          <OnboardingView
-            user={currentUser!}
-            policy={policy}
-            onUpdate={handleUpdateUser}
-            isLock={true}
-            onSkip={handleSkipVerification}
-            departments={departments}
-          />
+        <div className="flex-1 flex items-start justify-center p-4 sm:p-6 lg:p-10 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/50 via-transparent to-transparent dark:from-indigo-900/10 transition-colors duration-300 overflow-y-auto">
+          <div className="w-full max-w-6xl xl:max-w-7xl mx-auto">
+            <OnboardingView
+              user={currentUser!}
+              policy={policy}
+              onUpdate={handleUpdateUser}
+              isLock={true}
+              onSkip={handleSkipVerification}
+              departments={departments}
+            />
+          </div>
         </div>
       </div>
     );
@@ -1226,13 +1248,23 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
       <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
-      <Navbar currentUser={currentUser!} baseRole={baseRole} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} onToggleRole={(r) => {
-        const allowed = getVisibleRolesForBaseRole(baseRole);
-        if (!allowed.includes(r)) return;
-        sessionStorage.setItem('currentRole', r);
-        setCurrentUser(prev => prev ? { ...prev, role: r } : null);
-        handleTabChange('dashboard');
-      }} onOpenProfile={() => handleTabChange('profile')} />
+      <Navbar
+        currentUser={currentUser!}
+        baseRole={baseRole}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+        onToggleRole={(r) => {
+          const allowed = getVisibleRolesForBaseRole(baseRole);
+          if (!allowed.includes(r)) return;
+          sessionStorage.setItem('currentRole', r);
+          setCurrentUser(prev => prev ? { ...prev, role: r } : null);
+          handleTabChange('dashboard');
+        }}
+        onOpenProfile={() => handleTabChange('profile')}
+        onNavigateDashboard={() => handleTabChange('dashboard')}
+      />
 
       <div className="flex-1 flex flex-col md:flex-row transition-colors duration-300">
         <aside className={`app-sidebar ${isSidebarOpen ? 'sidebar-open' : ''} w-full md:w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 flex flex-col transition-colors duration-300 md:sticky md:top-16 md:h-[calc(100vh-4rem)]`}>
@@ -1245,13 +1277,13 @@ const App: React.FC = () => {
                   <SidebarLink icon="fa-money-bill-transfer" label="Cancellations" active={activeTab === 'cancellations'} onClick={() => handleTabChange('cancellations')} />
                   {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
                   {isIgatpuriEnabled && <SidebarLink icon="fa-person-shelter" label="Igathpuri Meetup" active={activeTab === 'igathpuri-meetup'} onClick={() => handleTabChange('igathpuri-meetup')} />}
-                  {requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
                     <SidebarLink
                       icon="fa-file-signature"
                       label="Approvals"
                       active={activeTab === 'approvals'}
                       onClick={() => handleTabChange('approvals')}
-                      badge={requests.filter(r => r.approvingManagerEmail === currentUser?.email && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
                     />
                   )}
                   {isMeetupApprover && isIgatpuriEnabled && (
@@ -1275,6 +1307,15 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+                    <SidebarLink
+                      icon="fa-file-signature"
+                      label="Approvals"
+                      active={activeTab === 'approvals'}
+                      onClick={() => handleTabChange('approvals')}
+                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                    />
+                  )}
                   <SidebarLink
                     icon="fa-calendar-plus"
                     label="Self Booking"
@@ -1331,6 +1372,15 @@ const App: React.FC = () => {
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">FINANCE</p>
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics' || activeTab === 'dashboard'} onClick={() => handleTabChange('analytics')} />
                   <SidebarLink icon="fa-table-list" label="All Requests" active={activeTab === 'all-requests'} onClick={() => handleTabChange('all-requests')} />
+                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+                    <SidebarLink
+                      icon="fa-file-signature"
+                      label="Approvals"
+                      active={activeTab === 'approvals'}
+                      onClick={() => handleTabChange('approvals')}
+                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                    />
+                  )}
                 </div>
 
               </>
@@ -1341,6 +1391,15 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  {requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length > 0 && (
+                    <SidebarLink
+                      icon="fa-file-signature"
+                      label="Approvals"
+                      active={activeTab === 'approvals'}
+                      onClick={() => handleTabChange('approvals')}
+                      badge={requests.filter(r => r.approvingManagerEmail?.trim().toLowerCase() === currentUser?.email?.trim().toLowerCase() && r.pncStatus === PNCStatus.APPROVAL_PENDING).length}
+                    />
+                  )}
                   <SidebarLink icon="fa-circle-question" label="PnC Inquiries" active={activeTab === 'pnc-inquiries'} onClick={() => handleTabChange('pnc-inquiries')} />
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
                 </div>

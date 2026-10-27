@@ -43,11 +43,23 @@ interface SignedImageProps {
 
 export const SignedImage: React.FC<SignedImageProps> = ({ storedUrl, className, alt = '', fallback = null }) => {
   const { url, loading } = useSignedUrl(storedUrl);
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    setHasError(false);
+  }, [url]);
 
   if (loading) {
     return <div className={`${className ?? ''} animate-pulse bg-slate-200 dark:bg-slate-800`} aria-busy="true" />;
   }
-  if (!url) return <>{fallback}</>;
+  if (!url || hasError) return <>{fallback}</>;
 
-  return <img src={url} alt={alt} className={className} />;
+  return (
+    <img
+      src={url}
+      alt={alt}
+      className={className}
+      onError={() => setHasError(true)}
+    />
+  );
 };

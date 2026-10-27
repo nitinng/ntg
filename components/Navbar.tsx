@@ -8,6 +8,7 @@ interface NavbarProps {
   baseRole: UserRole | null;
   onToggleRole: (role: UserRole) => void;
   onOpenProfile: () => void;
+  onNavigateDashboard?: () => void;
   onToggleSidebar?: () => void;
   isSidebarOpen?: boolean;
   isDarkMode: boolean;
@@ -19,6 +20,7 @@ export const Navbar = ({
   baseRole,
   onToggleRole,
   onOpenProfile,
+  onNavigateDashboard,
   onToggleSidebar,
   isSidebarOpen,
   isDarkMode,
@@ -49,16 +51,21 @@ export const Navbar = ({
             <i className={`fa-solid ${isSidebarOpen ? 'fa-xmark' : 'fa-bars'} text-xl`}></i>
           </button>
         )}
-        <div className="flex items-center gap-3 md:w-[calc(16rem-1.5rem)] flex-shrink-0">
+        <button
+          type="button"
+          onClick={onNavigateDashboard}
+          className="flex items-center gap-3 md:w-[calc(16rem-1.5rem)] flex-shrink-0 cursor-pointer hover:opacity-85 transition-opacity text-left group focus:outline-none"
+          title="Go to Dashboard"
+        >
           <img
             src="/ng-icon.png"
             alt="NavGurukul Logo"
-            className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
+            className="w-8 h-8 rounded-lg object-contain flex-shrink-0 group-hover:scale-105 transition-transform"
           />
           <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight whitespace-nowrap">
             NG Travel Desk
           </h1>
-        </div>
+        </button>
         {visibleRoles.length > 0 && (
           <>
             {/* Desktop standard role tabs - starts beyond the sidenav line */}
@@ -139,11 +146,21 @@ export const Navbar = ({
             className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 font-bold rounded-full overflow-hidden border border-slate-200/80 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-slate-700 flex items-center justify-center transition-all shadow-sm ring-2 ring-transparent hover:ring-indigo-500/20"
           >
             {currentUser.avatar ? (
-              <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
+              <SignedImage
+                storedUrl={currentUser.avatar}
+                alt="Profile"
+                className="w-full h-full object-cover rounded-full"
+                fallback={<span className="font-bold">{currentUser.name?.charAt(0) || 'U'}</span>}
+              />
             ) : currentUser.passportPhoto?.fileUrl ? (
-              <SignedImage storedUrl={currentUser.passportPhoto.fileUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />
+              <SignedImage
+                storedUrl={currentUser.passportPhoto.fileUrl}
+                alt="Profile"
+                className="w-full h-full object-cover rounded-full"
+                fallback={<span className="font-bold">{currentUser.name?.charAt(0) || 'U'}</span>}
+              />
             ) : (
-              currentUser.name.charAt(0)
+              <span className="font-bold">{currentUser.name?.charAt(0) || 'U'}</span>
             )}
           </button>
         </div>

@@ -95,10 +95,11 @@ export const resolveTemplateVariables = (
     '{{booking_reference}}': bookingRef,
     '{{cancellation_reason}}': request.cancelledReason || request.statusChangeReason || 'Plans changed',
     '{{cancelledReason}}': request.cancelledReason || '',
-    '{{portal_url}}': 'https://ng-travel-desk.vercel.app',
-    '{{approval_url}}': 'https://ng-travel-desk.vercel.app/?tab=approvals',
-    '{{action_url}}': 'https://ng-travel-desk.vercel.app/?tab=approvals',
-    '{{support_email}}': 'travel.team@navgurukul.org',
+    '{{portal_url}}': extraContext?.['{{portal_url}}'] || 'https://ng-travel-desk.vercel.app',
+    '{{ticket_url}}': extraContext?.['{{ticket_url}}'] || `https://ng-travel-desk.vercel.app/?ticketId=${encodeURIComponent(request.submissionId || request.id || '')}`,
+    '{{approval_url}}': extraContext?.['{{approval_url}}'] || `https://ng-travel-desk.vercel.app/?tab=approvals&ticketId=${encodeURIComponent(request.submissionId || request.id || '')}`,
+    '{{action_url}}': extraContext?.['{{action_url}}'] || `https://ng-travel-desk.vercel.app/?tab=approvals&ticketId=${encodeURIComponent(request.submissionId || request.id || '')}`,
+    '{{support_email}}': extraContext?.['{{support_email}}'] || 'travel.team@navgurukul.org',
 
     // Refund and reconciliation (sheet rows 37-53).
     '{{original_fare}}': money(request.originalFare ?? request.ticketCost),
@@ -137,6 +138,11 @@ export const resolveTemplateVariables = (
     /<h1[^>]*>navgurukul(?: travel desk)?<\/h1>/gi,
     '<img src="https://ng-travel-desk.vercel.app/navgurukul-brand-logo.png" alt="NavGurukul" style="height:36px;width:auto;max-width:200px;display:inline-block;" />'
   );
+
+  // Upgrade plain text "View Your Request" into a styled interactive CTA button
+  const resolvedTicketUrl = variables['{{ticket_url}}'] || `${variables['{{portal_url}}']}/?ticketId=${encodeURIComponent(request.submissionId || request.id || '')}`;
+  const styledTicketBtn = `<div style="text-align:center;margin:24px 0;"><a href="${resolvedTicketUrl}" style="background-color:#4F46E5;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.2);">View Your Request &rarr;</a></div>`;
+  rendered = rendered.replace(/<p[^>]*>\s*View Your Request\s*<\/p>/gi, styledTicketBtn);
 
   return rendered;
 };

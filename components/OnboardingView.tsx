@@ -194,18 +194,28 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
       const fileName = `${field}_${Date.now()}.${fileExt}`;
       const filePath = `${formData.id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('user-documents')
+      const bucketName = field === 'avatar' ? 'avatars' : 'user-documents';
+      let targetBucket = bucketName;
+      let uploadResult = await supabase.storage
+        .from(targetBucket)
         .upload(filePath, file, { upsert: true });
 
-      if (uploadError) throw uploadError;
+      // If dedicated avatars bucket is not yet provisioned, fallback to user-documents
+      if (uploadResult.error && field === 'avatar') {
+        targetBucket = 'user-documents';
+        uploadResult = await supabase.storage
+          .from('user-documents')
+          .upload(filePath, file, { upsert: true });
+      }
+
+      if (uploadResult.error) throw uploadResult.error;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('user-documents')
+        .from(targetBucket)
         .getPublicUrl(filePath);
 
       if (field === 'avatar') {
-        setFormData({ ...formData, avatar: publicUrl });
+        setFormData(prev => ({ ...prev, avatar: publicUrl }));
       } else {
         const currentDoc = formData[field] || { status: VerificationStatus.INCOMPLETE };
         setFormData({
@@ -260,14 +270,19 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-16 w-full max-w-5xl mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-16 w-full max-w-6xl xl:max-w-7xl mx-auto">
       <header className="flex flex-col md:flex-row items-center gap-6 bg-white dark:bg-slate-900 p-5 md:p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="relative group shrink-0">
           <div className={`w-20 h-20 sm:w-24 sm:h-24 bg-indigo-50 dark:bg-slate-800 rounded-full overflow-hidden border-2 border-white dark:border-slate-900 shadow-md transition-all group-hover:brightness-90 flex items-center justify-center ${isUploading === 'avatar' ? 'animate-pulse' : ''}`}>
             {isUploading === 'avatar' ? (
               <i className="fa-solid fa-spinner fa-spin text-indigo-600 text-2xl"></i>
             ) : formData.avatar ? (
-              <img src={formData.avatar} className="w-full h-full object-cover" />
+              <SignedImage
+                storedUrl={formData.avatar}
+                alt="Profile"
+                className="w-full h-full object-cover"
+                fallback={<span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{formData.name?.charAt(0) || 'U'}</span>}
+              />
             ) : (
               <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{formData.name?.charAt(0) || 'U'}</span>
             )}

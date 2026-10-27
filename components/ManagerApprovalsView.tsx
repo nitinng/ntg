@@ -6,6 +6,7 @@ interface ManagerApprovalsViewProps {
   requests: TravelRequest[];
   onUpdate: (request: TravelRequest, newStatus: PNCStatus, reason?: string) => void;
   currentUser: any;
+  initialSelectedTicketId?: string | null;
 }
 
 const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) => (
@@ -92,8 +93,17 @@ const ManagerApprovalModal = ({ request, onClose, onApprove, onReject }: any) =>
   </div>
 );
 
-export const ManagerApprovalsView = ({ requests, onUpdate }: ManagerApprovalsViewProps) => {
+export const ManagerApprovalsView = ({ requests, onUpdate, initialSelectedTicketId }: ManagerApprovalsViewProps) => {
   const [selectedRequest, setSelectedRequest] = useState<TravelRequest | null>(null);
+
+  React.useEffect(() => {
+    if (initialSelectedTicketId && requests && requests.length > 0) {
+      const target = requests.find(r => r.id === initialSelectedTicketId || r.submissionId === initialSelectedTicketId);
+      if (target) {
+        setSelectedRequest(target);
+      }
+    }
+  }, [initialSelectedTicketId, requests]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

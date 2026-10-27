@@ -729,11 +729,15 @@ export const queueEmailsForEvent = async (
     const fromStatus = options.fromStatus ?? null;
 
     const basePortal = (config.portalUrl || 'https://ng-travel-desk.vercel.app').replace(/\/+$/, '');
+    const ticketIdParam = request.submissionId || request.id;
+    const ticketUrl = `${basePortal}/?ticketId=${encodeURIComponent(ticketIdParam)}`;
+    const approvalUrl = `${basePortal}/?tab=approvals&ticketId=${encodeURIComponent(ticketIdParam)}`;
     const extraContext = {
       '{{support_email}}': config.supportEmail,
       '{{portal_url}}': config.portalUrl,
-      '{{approval_url}}': `${basePortal}/?tab=approvals`,
-      '{{action_url}}': `${basePortal}/?tab=approvals`,
+      '{{ticket_url}}': ticketUrl,
+      '{{approval_url}}': approvalUrl,
+      '{{action_url}}': approvalUrl,
       ...(await priorityContext(request, event, audiences)),
       ...(options.extraContext || {})
     };

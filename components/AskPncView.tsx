@@ -189,7 +189,7 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
 
       if (error) throw error;
 
-      // Update question status to Answered if PnC replied and it was Open
+      // If PnC replies to an Open question, mark it Answered
       if (isDeskStaff && selectedQuestion.status === 'Open') {
         await supabase
           .from('pnc_questions')
@@ -199,10 +199,20 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
         setSelectedQuestion(prev => prev ? { ...prev, status: 'Answered' } : null);
       }
 
+      // If Employee posts a follow-up to an Answered/Resolved question, mark it Open so PnC sees the new follow-up
+      if (!isDeskStaff && (selectedQuestion.status === 'Answered' || selectedQuestion.status === 'Resolved')) {
+        await supabase
+          .from('pnc_questions')
+          .update({ status: 'Open', updated_at: new Date().toISOString() })
+          .eq('id', selectedQuestion.id);
+
+        setSelectedQuestion(prev => prev ? { ...prev, status: 'Open' } : null);
+      }
+
       setReplyText('');
       loadReplies(selectedQuestion.id);
       loadQuestions();
-      toast.success("Reply sent");
+      toast.success(isDeskStaff ? "Response sent to employee" : "Follow-up question sent to PnC Desk");
     } catch (err: any) {
       toast.error("Failed to post reply: " + err.message);
     } finally {
@@ -506,47 +516,77 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
 
               {/* Discussion Thread */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
-                  <i className="fa-solid fa-comments text-indigo-600"></i>
-                  Responses ({replies.length})
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
+                    <i className="fa-solid fa-comments text-indigo-600"></i>
+                    Inquiry Thread ({replies.length})
+                  </h4>
+                  {replies.length > 0 && (
+                    <span className="text-3xs text-slate-400 font-medium">
+                      {replies.filter(r => r.author_role === 'PNC' || r.author_role === 'PNC Admin' || r.author_role === 'Admin').length} Responses • {replies.filter(r => r.author_role === 'Employee' || r.author_id === selectedQuestion.employee_id).length} Follow-ups
+                    </span>
+                  )}
+                </div>
 
                 <div className="space-y-3 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                   {replies.length === 0 ? (
                     <div className="p-4 text-center text-slate-400 text-xs italic bg-slate-50 dark:bg-slate-800/20 rounded border border-dashed border-slate-200 dark:border-slate-800">
-                      No responses yet. PnC team will reply soon.
+                      {isDeskStaff
+                        ? 'No responses yet. Type your response below to assist the employee.'
+                        : 'No responses yet from PnC Desk. You can post a follow-up note below if you have additional details.'}
                     </div>
                   ) : (
-                    replies.map(r => (
-                      <div
-                        key={r.id}
-                        className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200/80 dark:border-slate-800 space-y-1 text-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800 dark:text-slate-200">{r.author_name}</span>
-                            <span className="px-1.5 py-0.2 rounded text-3xs font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 border border-indigo-200 dark:border-indigo-800">
-                              {r.author_role}
+                    replies.map(r => {
+                      const isReplyFromEmployee =
+                        r.author_role === 'Employee' ||
+                        r.author_role === UserRole.EMPLOYEE ||
+                        r.author_id === selectedQuestion.employee_id;
+
+                      return (
+                        <div
+                          key={r.id}
+                          className={`p-3.5 rounded-lg border space-y-1 text-xs ${
+                            isReplyFromEmployee
+                              ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800'
+                              : 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200/80 dark:border-indigo-900/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{r.author_name}</span>
+                              {isReplyFromEmployee ? (
+                                <span className="px-2 py-0.5 rounded text-3xs font-semibold bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-300/80 dark:border-slate-600">
+                                  Follow-up
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-3xs font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                  PnC Response
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-3xs text-slate-400 font-mono">
+                              {new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <span className="text-3xs text-slate-400">
-                            {new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                            {r.reply_text}
+                          </p>
                         </div>
-                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                          {r.reply_text}
-                        </p>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
-                {/* Reply Input */}
+                {/* Reply / Follow-up Input */}
                 <div className="space-y-2 pt-2">
                   <textarea
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
-                    placeholder="Type your response here..."
+                    placeholder={
+                      isDeskStaff
+                        ? "Type your response to the employee..."
+                        : "Ask a follow-up question or provide more details..."
+                    }
                     rows={3}
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                   />
@@ -554,10 +594,10 @@ export const AskPncView: React.FC<AskPncViewProps> = ({ currentUser, isPncQueue 
                     <button
                       onClick={handleSendReply}
                       disabled={isSubmittingReply || !replyText.trim()}
-                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                     >
-                      <i className="fa-solid fa-paper-plane text-2xs"></i>
-                      Send Response
+                      <i className={`fa-solid ${isDeskStaff ? 'fa-paper-plane' : 'fa-reply'} text-2xs`}></i>
+                      {isDeskStaff ? 'Send Response' : 'Send Follow-up'}
                     </button>
                   </div>
                 </div>

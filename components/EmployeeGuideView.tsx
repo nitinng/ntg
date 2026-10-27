@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MermaidDiagram } from './MermaidDiagram';
-import { PNCStatus, Priority, ApprovalStatus, VerificationStatus, TravelModePolicy, TravelMode } from '../types';
+import { PNCStatus, Priority, ApprovalStatus, VerificationStatus, TravelModePolicy, TravelMode, PublishedFaq } from '../types';
 import { STATUS_GUIDE, STATUS_STAGES, statusesInStage } from '../utils/statusGuide';
+import { supabase } from '../supabaseClient';
 
 interface EmployeeGuideViewProps {
   onTabChange?: (tab: string) => void;
@@ -33,6 +34,20 @@ const sections: Section[] = [
 
 export const EmployeeGuideView: React.FC<EmployeeGuideViewProps> = ({ onTabChange, policies = [] }) => {
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [publishedFaqs, setPublishedFaqs] = useState<PublishedFaq[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from('published_faqs')
+      .select('*')
+      .eq('is_published', true)
+      .order('sort_order', { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          setPublishedFaqs(data as PublishedFaq[]);
+        }
+      });
+  }, []);
 
   const flightDays = policies.find(p => p.travelMode === TravelMode.FLIGHT)?.minAdvanceDays ?? 7;
   const trainDays = policies.find(p => p.travelMode === TravelMode.TRAIN)?.minAdvanceDays ?? 3;
@@ -1000,42 +1015,48 @@ export const EmployeeGuideView: React.FC<EmployeeGuideViewProps> = ({ onTabChang
 
 
       case 'faq': {
+        const staticFaqs = [
+          {
+            q: 'My request still says Not Started. Is it stuck?',
+            a: 'No. That\'s just the policy check running, and it takes seconds. It\'ll move to Processing if you booked with enough notice, or Approval Pending if you didn\'t.',
+          },
+          {
+            q: 'My manager hasn\'t responded and it\'s been days.',
+            a: 'Nothing chases them automatically, so follow up directly. If they\'re on leave or unreachable, contact PNC — they can advise on an alternative approver.',
+          },
+          {
+            q: 'Can I change a request after submitting it?',
+            a: 'Only if it\'s been rejected — then use Edit & Resubmit, up to three times. For a request still in progress, cancel it and submit a corrected one. For a minor detail, message PNC on chat instead of starting over.',
+          },
+          {
+            q: 'I don\'t know my travel times yet.',
+            a: 'Choose Anytime in the Preferred Time dropdown. It gives PNC the widest search and usually gets you a better fare.',
+          },
+          {
+            q: 'My temporary access window is about to expire.',
+            a: 'Ask PNC or an Admin to review your documents. Once it lapses you can\'t submit anything new, but any request already in progress carries on as normal.',
+          },
+          {
+            q: 'My document was rejected — do I get another grace period?',
+            a: 'No. A rejection locks booking straight away. Upload a corrected version and it goes back into the review queue.',
+          },
+          {
+            q: 'Will cancelling cost me anything?',
+            a: 'Not if the ticket hasn\'t been bought yet — that\'s clean, with no penalty. After booking it depends on why: cancellations driven by the airline or by ops are absorbed by the organisation, while a change in your own plans may leave you owing a share of the fare. Anything owed shows in the Cancellations dashboard as Pending Refund until it\'s settled.',
+          },
+          {
+            q: 'I\'ve used all three resubmissions.',
+            a: 'The button locks after the third attempt. Speak to PNC or your manager directly — at that point the issue needs a conversation, then a fresh request.',
+          },
+        ];
+
+        const displayFaqs = publishedFaqs.length > 0
+          ? publishedFaqs.map(f => ({ q: f.question, a: f.answer }))
+          : staticFaqs;
+
         return (
           <div className="space-y-4 w-full">
-            {[
-              {
-                q: 'My request still says Not Started. Is it stuck?',
-                a: 'No. That\'s just the policy check running, and it takes seconds. It\'ll move to Processing if you booked with enough notice, or Approval Pending if you didn\'t.',
-              },
-              {
-                q: 'My manager hasn\'t responded and it\'s been days.',
-                a: 'Nothing chases them automatically, so follow up directly. If they\'re on leave or unreachable, contact PNC — they can advise on an alternative approver.',
-              },
-              {
-                q: 'Can I change a request after submitting it?',
-                a: 'Only if it\'s been rejected — then use Edit & Resubmit, up to three times. For a request still in progress, cancel it and submit a corrected one. For a minor detail, message PNC on chat instead of starting over.',
-              },
-              {
-                q: 'I don\'t know my travel times yet.',
-                a: 'Choose Anytime in the Preferred Time dropdown. It gives PNC the widest search and usually gets you a better fare.',
-              },
-              {
-                q: 'My temporary access window is about to expire.',
-                a: 'Ask PNC or an Admin to review your documents. Once it lapses you can\'t submit anything new, but any request already in progress carries on as normal.',
-              },
-              {
-                q: 'My document was rejected — do I get another grace period?',
-                a: 'No. A rejection locks booking straight away. Upload a corrected version and it goes back into the review queue.',
-              },
-              {
-                q: 'Will cancelling cost me anything?',
-                a: 'Not if the ticket hasn\'t been bought yet — that\'s clean, with no penalty. After booking it depends on why: cancellations driven by the airline or by ops are absorbed by the organisation, while a change in your own plans may leave you owing a share of the fare. Anything owed shows in the Cancellations dashboard as Pending Refund until it\'s settled.',
-              },
-              {
-                q: 'I\'ve used all three resubmissions.',
-                a: 'The button locks after the third attempt. Speak to PNC or your manager directly — at that point the issue needs a conversation, then a fresh request.',
-              },
-            ].map((faq, i) => (
+            {displayFaqs.map((faq, i) => (
               <details key={i} className="group border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-2xs w-full">
                 <summary className="flex items-center gap-3 p-4 font-bold text-slate-800 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 select-none">
                   <i className="fa-solid fa-circle-question text-indigo-500 text-xs shrink-0"></i>

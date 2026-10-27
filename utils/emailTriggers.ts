@@ -423,6 +423,20 @@ export const resolveRecipients = async (
     case 'manager':
       return dedupe([request.approvingManagerEmail || request.managerEmail]);
     case 'pnc':
+      if (request.assignedPncId) {
+        try {
+          const { data: assignedProf } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', request.assignedPncId)
+            .maybeSingle();
+          if (assignedProf?.email) {
+            return dedupe([assignedProf.email, ...config.pncQueueCc]);
+          }
+        } catch {
+          // fallback to getPncEmails
+        }
+      }
       return getPncEmails(config);
     case 'finance':
       return dedupe(config.financeCc);
@@ -543,7 +557,7 @@ export const AUDIENCES_FOR_EVENT: Partial<Record<TravelEvent, EmailAudience[]>> 
   [E.APPROVAL_COMPLETED]: ['pnc'],
   [E.MANAGER_APPROVED]: ['employee'],
   [E.MANAGER_REJECTED]: ['employee'],
-  [E.EMPLOYEE_CANCELLED_PRE_APPROVAL]: ['employee', 'manager'],
+  [E.EMPLOYEE_CANCELLED_PRE_APPROVAL]: ['employee', 'manager', 'pnc'],
   [E.PNC_REJECTED]: ['employee'],
   [E.INFO_REQUESTED]: ['employee'],
   [E.INFO_PROVIDED]: ['pnc'],
@@ -714,9 +728,12 @@ export const queueEmailsForEvent = async (
     const config = await getEmailRoutingConfig();
     const fromStatus = options.fromStatus ?? null;
 
+    const basePortal = (config.portalUrl || 'https://ng-travel-desk.vercel.app').replace(/\/+$/, '');
     const extraContext = {
       '{{support_email}}': config.supportEmail,
       '{{portal_url}}': config.portalUrl,
+      '{{approval_url}}': `${basePortal}/?tab=approvals`,
+      '{{action_url}}': `${basePortal}/?tab=approvals`,
       ...(await priorityContext(request, event, audiences)),
       ...(options.extraContext || {})
     };

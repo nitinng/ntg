@@ -96,6 +96,8 @@ export const resolveTemplateVariables = (
     '{{cancellation_reason}}': request.cancelledReason || request.statusChangeReason || 'Plans changed',
     '{{cancelledReason}}': request.cancelledReason || '',
     '{{portal_url}}': 'https://ng-travel-desk.vercel.app',
+    '{{approval_url}}': 'https://ng-travel-desk.vercel.app/?tab=approvals',
+    '{{action_url}}': 'https://ng-travel-desk.vercel.app/?tab=approvals',
     '{{support_email}}': 'travel.team@navgurukul.org',
 
     // Refund and reconciliation (sheet rows 37-53).

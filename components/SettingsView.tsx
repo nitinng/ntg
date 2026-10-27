@@ -5,6 +5,7 @@ import { PolicyConfig, Priority, User } from '../types';
 import Card from './Card';
 import { toast } from 'sonner';
 import { APP_VERSION } from '../utils/changelog';
+import { supabase } from '../supabaseClient';
 
 interface SettingsViewProps {
   isDarkMode: boolean;
@@ -18,8 +19,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   isDarkMode,
   onToggleTheme,
   policy,
-  onUpdatePolicy
+  onUpdatePolicy,
+  currentUser
 }) => {
+  const [commentNotificationsEnabled, setCommentNotificationsEnabled] = React.useState<boolean>(true);
+  const [isLoadingCommentSettings, setIsLoadingCommentSettings] = React.useState<boolean>(true);
+
+  React.useEffect(() => {
+    const fetchCommentSetting = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('meetup_settings')
+          .select('setting_value')
+          .eq('setting_key', 'comment_notifications_enabled')
+          .maybeSingle();
+        if (!error && data?.setting_value !== undefined) {
+          setCommentNotificationsEnabled(Boolean(data.setting_value));
+        }
+      } catch (e) {
+        console.warn('Failed to load comment notifications setting:', e);
+      } finally {
+        setIsLoadingCommentSettings(false);
+      }
+    };
+    fetchCommentSetting();
+  }, []);
+
+  const handleToggleCommentNotifications = async () => {
+    const nextVal = !commentNotificationsEnabled;
+    try {
+      const { error: upsertErr } = await supabase
+        .from('meetup_settings')
+        .upsert({
+          setting_key: 'comment_notifications_enabled',
+          setting_value: nextVal,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+
+      if (upsertErr) throw upsertErr;
+
+      await supabase.from('setting_change_logs').insert({
+        setting_key: 'comment_notifications_enabled',
+        old_value: commentNotificationsEnabled,
+        new_value: nextVal,
+        changed_by: currentUser?.id,
+        changed_by_name: currentUser?.name || 'Administrator'
+      });
+
+      setCommentNotificationsEnabled(nextVal);
+      toast.success(`Ticket comment notifications ${nextVal ? 'enabled' : 'disabled'}`);
+    } catch (err: any) {
+      toast.error('Failed to update setting: ' + err.message);
+    }
+  };
   const allowRequester = policy?.allowRequesterUrgency === true;
   const enableUrgencySla = policy?.enableUrgencySla === true;
   const criticalDays = policy?.urgencyThresholds?.criticalDays ?? 2;
@@ -105,6 +157,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span className="text-xs text-slate-500 dark:text-neutral-400 font-medium">Use high-contrast neutral dark theme aligned with PNC ELC.</span>
           </div>
           <Toggle active={isDarkMode} onChange={onToggleTheme} />
+        </div>
+      </Card>
+
+      {/* Communication & Notification Controls */}
+      <Card className="p-6 space-y-4">
+        <div className="flex items-center gap-3 pb-3 border-b dark:border-neutral-800">
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-neutral-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm">
+            <i className="fa-solid fa-comments"></i>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm sm:text-base font-bold text-slate-800 dark:text-neutral-100">Ticket Remarks & Comments Notifications</h4>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50">Audit Logged</span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-neutral-400">Control central email dispatch when questions or replies are posted on travel request threads.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <div className="pr-4">
+            <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100 block">Dispatch Comment Emails</span>
+            <span className="text-xs text-slate-500 dark:text-neutral-400 font-medium">When active, employees, managers, and assigned desk admins receive notifications when remarks or @mentions are submitted.</span>
+          </div>
+          <Toggle
+            active={commentNotificationsEnabled}
+            onChange={handleToggleCommentNotifications}
+            disabled={isLoadingCommentSettings}
+          />
         </div>
       </Card>
 

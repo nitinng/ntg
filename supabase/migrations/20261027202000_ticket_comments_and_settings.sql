@@ -97,7 +97,7 @@ CREATE POLICY "Staff insert setting change logs" ON public.setting_change_logs
   );
 
 -- Seed central comment notifications setting
-INSERT INTO public.settings (setting_key, setting_value, updated_at)
+INSERT INTO public.meetup_settings (setting_key, setting_value, updated_at)
 VALUES (
   'comment_notifications_enabled',
   'true'::jsonb,

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry, CreditCard, CreditCardChangelogEntry, User } from '../types';
+import { TravelRequest, PNCStatus, UserRole, TripType, Advance, AdvanceChangelogEntry, CreditCard, CreditCardChangelogEntry, User, VerificationStatus } from '../types';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { SignedLink } from './SignedMedia';
 import { assignRequestTo, canClaim, canReassign, canOwnRequests, ownerLabel } from '../utils/assignment';
 import { isClosedStatus, employeeStatusLabel, STATUS_GUIDE } from '../utils/statusGuide';
 import EmployeeStatusTimeline from './EmployeeStatusTimeline';
+import TicketCommentThread from './TicketCommentThread';
 import { reportSos } from '../utils/sos/raiseSos';
 
 interface RequestDetailOverlayProps {
@@ -66,6 +67,12 @@ export const RequestDetailOverlay = ({
   const eligibleDeskStaff = useMemo(() => {
     return (users || []).filter(u => canOwnRequests(u.role));
   }, [users]);
+
+  const requesterUser = useMemo(() => {
+    return (users || []).find(u => u.id === request.requesterId || u.email === request.requesterEmail);
+  }, [users, request.requesterId, request.requesterEmail]);
+
+  const docVerified = requesterUser?.idProof?.status === VerificationStatus.APPROVED && requesterUser?.passportPhoto?.status === VerificationStatus.APPROVED;
 
   const handleClaim = async () => {
     if (!currentUser) return;
@@ -671,12 +678,19 @@ export const RequestDetailOverlay = ({
       <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col animate-in zoom-in-95 transition-all duration-300 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
 
         {/* Header */}
-        <header className="px-6 py-4 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        <header className="px-6 py-4 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-between items-center flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
             <h3 className="text-lg font-black font-mono text-indigo-600 tracking-tight">{request.submissionId || request.id}</h3>
             <StatusBadge type="pnc" value={request.pncStatus} />
             <StatusBadge type="priority" value={request.priority} />
+
+            {/* Desk Claim Status: visible to employee & all users */}
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 shadow-2xs">
+              <i className={`fa-solid ${request.assignedPncId ? 'fa-user-check text-indigo-500' : 'fa-clock text-amber-500'} text-xs`}></i>
+              <span>{request.assignedPncId ? `Claimed by ${ownerLabel(request, users)}` : 'Unassigned'}</span>
+            </div>
+
             {isPolicyViolated && (
               <div className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-3 py-1 rounded-full text-xs font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
                 <i className="fa-solid fa-triangle-exclamation"></i>
@@ -715,6 +729,16 @@ export const RequestDetailOverlay = ({
                 <InfoRow label="Email Address" value={request.requesterEmail} icon={<i className="fa-solid fa-envelope"></i>} />
                 <InfoRow label="Phone Number" value={request.requesterPhone} icon={<i className="fa-solid fa-phone"></i>} />
                 <InfoRow label="Dept / Campus" value={`${request.requesterDepartment || '—'} / ${request.requesterCampus || '—'}`} icon={<i className="fa-solid fa-building"></i>} />
+                <InfoRow
+                  label="Base Location"
+                  value={request.baseLocation ? `${request.baseLocation}${request.baseLocation === 'Remote' && request.remoteLocationDetails ? ` (${request.remoteLocationDetails})` : ''}` : (request.requesterCampus || '—')}
+                  icon={<i className="fa-solid fa-location-dot"></i>}
+                />
+                <InfoRow
+                  label="Approving Manager"
+                  value={request.approvingManagerName ? `${request.approvingManagerName} (${request.approvingManagerEmail || 'no email'})` : '—'}
+                  icon={<i className="fa-solid fa-user-tie"></i>}
+                />
               </div>
             </div>
 
@@ -738,6 +762,47 @@ export const RequestDetailOverlay = ({
                 <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
                 <InfoRow label="Travel Purpose" value={request.purpose} fullWidth icon={<i className="fa-solid fa-bullseye"></i>} />
                 <InfoRow label="Special Requirements" value={request.specialRequirements} fullWidth icon={<i className="fa-solid fa-hand-holding-heart"></i>} />
+                <InfoRow label="Travel Preferences" value={request.travelPreferences || 'None specified'} fullWidth icon={<i className="fa-solid fa-sliders"></i>} />
+
+                {/* Screenshot Quote Attachment */}
+                {request.screenshotUrl && (
+                  <div className="col-span-2 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 flex items-center justify-center">
+                        <i className="fa-solid fa-paperclip"></i>
+                      </div>
+                      <div>
+                        <span className="text-2xs font-bold uppercase tracking-wider text-slate-400">Attached Booking Quote / Itinerary</span>
+                        <div className="text-xs font-bold text-slate-800 dark:text-white">Uploaded File Attachment</div>
+                      </div>
+                    </div>
+                    <a
+                      href={request.screenshotUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                    >
+                      <i className="fa-solid fa-arrow-up-right-from-square text-2xs"></i>
+                      View Attachment
+                    </a>
+                  </div>
+                )}
+
+                {/* Document Verification Status (Visible to Desk Staff) */}
+                {isDeskUser && (
+                  <div className="col-span-2 p-3 rounded-xl border flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <i className="fa-solid fa-file-shield text-indigo-500"></i>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Employee Document Status:</span>
+                      <span className={`px-2 py-0.5 rounded text-3xs font-bold uppercase ${
+                        docVerified ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                      }`}>
+                        {docVerified ? 'Verified' : 'Pending Verification'}
+                      </span>
+                    </div>
+                    <span className="text-3xs text-slate-400 italic">Document verification does not block booking</span>
+                  </div>
+                )}
 
                 <div className="col-span-2 h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
                 <div className="col-span-2 space-y-1">
@@ -1582,6 +1647,11 @@ export const RequestDetailOverlay = ({
               </div>
             </div>
           )}
+
+          {/* Ticket Comments & Mentions Thread */}
+          <div className="w-full pt-6 border-t border-slate-200 dark:border-slate-800">
+            <TicketCommentThread ticketId={request.id} currentUser={currentUser} users={users} />
+          </div>
         </div>
       </div>
     </div>

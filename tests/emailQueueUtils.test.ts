@@ -15,7 +15,8 @@ const mocks = createSupabaseMock({
     template(TravelEvent.INFO_PROVIDED, 'pnc'),
     template(TravelEvent.BOOKING_CONFIRMED, 'employee'),
     template(TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, 'employee'),
-    template(TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, 'manager')
+    template(TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, 'manager'),
+    template(TravelEvent.EMPLOYEE_CANCELLED_PRE_APPROVAL, 'pnc')
   ]
 });
 
@@ -102,17 +103,17 @@ describe('queueEmailsForTransition', () => {
     });
   });
 
-  it('tells both sides when the employee withdraws before a manager decision', async () => {
-    // Sheet rows 8 and 9: the manager's pending task is closed out explicitly.
+  it('tells employee, manager and pnc when the employee withdraws before a manager decision', async () => {
+    // The manager's pending task is closed out and PnC desk is notified.
     await queueEmailsForTransition(
       createMockRequest(),
       PNCStatus.APPROVAL_PENDING,
       PNCStatus.CANCELLED_BY_EMPLOYEE
     );
 
-    expect(mocks.insertMock).toHaveBeenCalledTimes(2);
+    expect(mocks.insertMock).toHaveBeenCalledTimes(3);
     const audiences = mocks.insertMock.mock.calls.map(c => c[0].audience).sort();
-    expect(audiences).toEqual(['employee', 'manager']);
+    expect(audiences).toEqual(['employee', 'manager', 'pnc']);
   });
 
   it('sends nothing for a transition the sheet marks silent', async () => {

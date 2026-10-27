@@ -78,6 +78,7 @@ const IgathpuriMeetupView = lazyWithRetry(() => import('./components/IgathpuriMe
 const UserRoleManagement = lazyWithRetry(() => import('./components/UserRoleManagement'));
 const OnboardingView = lazyWithRetry(() => import('./components/OnboardingView'));
 const AnalyticsView = lazyWithRetry(() => import('./components/AnalyticsView'));
+const AskPncView = lazyWithRetry(() => import('./components/AskPncView'));
 const MeetupApprovalsView = lazyWithRetry(() => import('./components/MeetupApprovalsView'));
 const VerificationQueue = lazyWithRetry(() => import('./components/VerificationQueue'));
 const SettingsView = lazyWithRetry(() => import('./components/SettingsView'));
@@ -165,6 +166,7 @@ const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [baseRole, setBaseRole] = useState<UserRole | null>(null);
   const [meetupContext, setMeetupContext] = useState<any>(null);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
 
   const [policy, setPolicy] = useState<PolicyConfig>({
     flightNoticeDays: 15,
@@ -653,6 +655,14 @@ const App: React.FC = () => {
       setUsers(prev => prev.map(u => u.id === finalUser.id ? finalUser : u));
       if (currentUser?.id === finalUser.id) {
         setCurrentUser(finalUser);
+        if (returnTo === 'new-request') {
+          const newCompleteness = calculateProfileCompleteness(finalUser);
+          if (newCompleteness === 100) {
+            setReturnTo(null);
+            setIsNewRequestModalOpen(true);
+            toast.success("Profile complete! Resuming your travel booking.");
+          }
+        }
       }
       toast.success("Profile updated in database");
     } catch (err: any) {
@@ -817,6 +827,14 @@ const App: React.FC = () => {
           <EmployeeDashboard
             requests={requests.filter(r => r.requesterId === currentUser.id)}
             onNewRequest={(context?: any) => {
+              const completeness = calculateProfileCompleteness(currentUser);
+              if (currentUser.role === UserRole.EMPLOYEE && completeness < 100) {
+                toast.error("Please complete your profile (100%) before submitting a travel request.");
+                setReturnTo('new-request');
+                setMeetupContext(context);
+                handleTabChange('profile');
+                return;
+              }
               setMeetupContext(context);
               setIsNewRequestModalOpen(true);
             }}
@@ -960,7 +978,12 @@ const App: React.FC = () => {
         />;
       case 'role-management':
         if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PNC_ADMIN && currentUser.role !== UserRole.PNC) return renderDashboard();
-        return <UserRoleManagement users={users} onUpdateRole={handleUpdateUserRole} currentUser={currentUser} />;
+        return <UserRoleManagement users={users} onUpdateRole={handleUpdateUserRole} currentUser={currentUser} requests={requests} />;
+      case 'ask-pnc':
+        return <AskPncView currentUser={currentUser} isPncQueue={false} />;
+      case 'pnc-inquiries':
+        if (currentUser.role === UserRole.EMPLOYEE) return renderDashboard();
+        return <AskPncView currentUser={currentUser} isPncQueue={true} />;
       case 'profile':
         return (
           <div className="w-full transition-all duration-300">
@@ -1087,6 +1110,14 @@ const App: React.FC = () => {
         if (!isIgatpuriEnabled) return renderDashboard();
         return <IgathpuriMeetupView
           onNewRequest={(context?: any) => {
+            const completeness = calculateProfileCompleteness(currentUser);
+            if (currentUser.role === UserRole.EMPLOYEE && completeness < 100) {
+              toast.error("Please complete your profile (100%) before submitting a travel request.");
+              setReturnTo('new-request');
+              setMeetupContext(context);
+              handleTabChange('profile');
+              return;
+            }
             setMeetupContext(context);
             setIsNewRequestModalOpen(true);
           }}
@@ -1228,6 +1259,7 @@ const App: React.FC = () => {
                     />
                   )}
                   <SidebarLink icon="fa-book" label="Employee Guide" active={activeTab === 'guide'} onClick={() => handleTabChange('guide')} />
+                  <SidebarLink icon="fa-circle-question" label="Ask PnC" active={activeTab === 'ask-pnc'} onClick={() => handleTabChange('ask-pnc')} />
                 </div>
 
               </>
@@ -1260,6 +1292,7 @@ const App: React.FC = () => {
                     badgeColor="bg-rose-600 px-1.5 py-0.5"
                   />
                   {isChatEnabled && <SidebarLink icon="fa-comments" label="Chat Support" active={activeTab === 'chat'} onClick={() => handleTabChange('chat')} badge={unreadChatCount > 0 ? " " : null} badgeColor="w-2.5 h-2.5 bg-rose-500 rounded-full flex-shrink-0" />}
+                  <SidebarLink icon="fa-circle-question" label="PnC Inquiries" active={activeTab === 'pnc-inquiries'} onClick={() => handleTabChange('pnc-inquiries')} />
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
                 </div>
                 <div className="space-y-1">
@@ -1303,6 +1336,7 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 font-mono transition-colors duration-300">OPERATIONS</p>
                   <SidebarLink icon="fa-chart-pie" label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+                  <SidebarLink icon="fa-circle-question" label="PnC Inquiries" active={activeTab === 'pnc-inquiries'} onClick={() => handleTabChange('pnc-inquiries')} />
                   <SidebarLink icon="fa-chart-simple" label="Analytics" active={activeTab === 'analytics'} onClick={() => handleTabChange('analytics')} />
                 </div>
                 <div className="space-y-1">
@@ -1394,6 +1428,10 @@ const App: React.FC = () => {
                   requester_phone: data.requesterPhone,
                   requester_department: data.requesterDepartment || currentUser!.department,
                   requester_campus: data.requesterCampus || currentUser!.campus,
+                  base_location: data.baseLocation || null,
+                  remote_location_details: data.remoteLocationDetails || null,
+                  travel_preferences: data.travelPreferences || null,
+                  screenshot_url: data.screenshotUrl || null,
                   purpose: data.purpose,
                   approving_manager_name: data.approvingManagerName,
                   approving_manager_email: data.approvingManagerEmail,
@@ -1459,14 +1497,17 @@ const App: React.FC = () => {
                 const mappedUpdated = mapDbRequest(updatedRow);
 
                 // Auto-advance logic:
-                // From NOT_STARTED, if violation -> Approval Pending, else -> Processing
-                const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
+                // All submissions must wait for manager approval before PnC processing
+                const nextStatus = PNCStatus.APPROVAL_PENDING;
+                const statusChangeReason = isViolated
+                  ? 'Auto-advanced: Approval Pending (notice policy violation flagged)'
+                  : 'Auto-advanced: Approval Pending (awaiting manager approval)';
                 const autoAdvancedRow = requireWrittenRow(
                   await supabase
                     .from('travel_requests')
                     .update({
                       pnc_status: nextStatus,
-                      status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                      status_change_reason: statusChangeReason,
                       updated_at: new Date().toISOString(),
                       timeline: [
                         ...mappedUpdated.timeline,
@@ -1475,7 +1516,7 @@ const App: React.FC = () => {
                           timestamp: new Date().toISOString(),
                           actor: 'System',
                           event: `Status changed to: ${nextStatus}`,
-                          details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                          details: statusChangeReason
                         }
                       ]
                     })
@@ -1509,6 +1550,10 @@ const App: React.FC = () => {
                   requester_phone: data.requesterPhone,
                   requester_department: data.requesterDepartment || currentUser!.department,
                   requester_campus: data.requesterCampus || currentUser!.campus,
+                  base_location: data.baseLocation || null,
+                  remote_location_details: data.remoteLocationDetails || null,
+                  travel_preferences: data.travelPreferences || null,
+                  screenshot_url: data.screenshotUrl || null,
                   purpose: data.purpose,
                   approving_manager_name: data.approvingManagerName,
                   approving_manager_email: data.approvingManagerEmail,
@@ -1556,14 +1601,17 @@ const App: React.FC = () => {
 
                 const mappedInserted = mapDbRequest(inserted);
 
-                // Auto-advance logic:
-                const nextStatus = isViolated ? PNCStatus.APPROVAL_PENDING : PNCStatus.PROCESSING;
+                // Auto-advance logic: All new requests advance to Approval Pending awaiting manager review
+                const nextStatus = PNCStatus.APPROVAL_PENDING;
+                const statusChangeReason = isViolated
+                  ? 'Auto-advanced: Approval Pending (notice policy violation flagged)'
+                  : 'Auto-advanced: Approval Pending (awaiting manager approval)';
                 const autoAdvancedRow = requireWrittenRow(
                   await supabase
                     .from('travel_requests')
                     .update({
                       pnc_status: nextStatus,
-                      status_change_reason: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation',
+                      status_change_reason: statusChangeReason,
                       updated_at: new Date().toISOString(),
                       timeline: [
                         ...mappedInserted.timeline,
@@ -1572,7 +1620,7 @@ const App: React.FC = () => {
                           timestamp: new Date().toISOString(),
                           actor: 'System',
                           event: `Status changed to: ${nextStatus}`,
-                          details: isViolated ? 'Auto-advanced due to policy violation' : 'Auto-advanced: no policy violation'
+                          details: statusChangeReason
                         }
                       ]
                     })

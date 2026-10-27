@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, UserRole, VerificationStatus } from '../types';
+import { User, UserRole, VerificationStatus, PNCStatus, TravelRequest } from '../types';
 import Card from './Card';
 import StatusBadge from './StatusBadge';
 import { supabase } from '../supabaseClient';
@@ -10,6 +10,8 @@ interface UserRoleManagementProps {
   users: User[];
   onUpdateRole: (user: User, newRole: UserRole) => void;
   currentUser: User;
+  requests?: TravelRequest[];
+  onRefreshUsers?: () => void;
 }
 
 const ROLE_TABS = [
@@ -24,7 +26,9 @@ const ROLE_TABS = [
 export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
   users,
   onUpdateRole,
-  currentUser
+  currentUser,
+  requests = [],
+  onRefreshUsers
 }) => {
   const [selectedRoleTab, setSelectedRoleTab] = useState<string>('ALL');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -36,6 +40,15 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
+
+  // Demotion Guard Modal State
+  const [blockedDemotion, setBlockedDemotion] = useState<{ user: User; openRequests: TravelRequest[] } | null>(null);
+
+  // Edit Manager Modal State
+  const [editingManagerUser, setEditingManagerUser] = useState<User | null>(null);
+  const [newMgrName, setNewMgrName] = useState('');
+  const [newMgrEmail, setNewMgrEmail] = useState('');
+  const [isSavingManager, setIsSavingManager] = useState(false);
 
   const departmentOptions = useMemo(() => {
     const depts = new Set<string>();
@@ -158,6 +171,77 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
       toast.error('Failed to send invite: ' + err.message);
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const handleRoleSelectChange = (targetUser: User, newRole: UserRole) => {
+    // Demotion check: if demoting from PnC/PnC Admin to Employee, verify no active tickets are assigned
+    if (
+      (targetUser.role === UserRole.PNC || targetUser.role === UserRole.PNC_ADMIN) &&
+      newRole === UserRole.EMPLOYEE
+    ) {
+      const closedStatuses = [
+        PNCStatus.BOOKED,
+        PNCStatus.REJECTED_BY_PNC,
+        PNCStatus.REJECTED_BY_MANAGER,
+        PNCStatus.CANCELLED_BY_EMPLOYEE,
+        PNCStatus.CANCELLED_BY_PNC,
+        PNCStatus.CLOSED
+      ];
+      const openAssigned = (requests || []).filter(
+        r => r.assignedPncId === targetUser.id && !closedStatuses.includes(r.pncStatus)
+      );
+
+      if (openAssigned.length > 0) {
+        setBlockedDemotion({ user: targetUser, openRequests: openAssigned });
+        return;
+      }
+    }
+    onUpdateRole(targetUser, newRole);
+  };
+
+  const handleSaveManagerChange = async () => {
+    if (!editingManagerUser) return;
+    if (!newMgrName.trim() || !newMgrEmail.trim()) {
+      toast.error("Manager name and email are required");
+      return;
+    }
+    setIsSavingManager(true);
+    try {
+      // 1. Update profiles table
+      const { error: profErr } = await supabase
+        .from('profiles')
+        .update({
+          manager_name: newMgrName.trim(),
+          manager_email: newMgrEmail.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingManagerUser.id);
+
+      if (profErr) throw profErr;
+
+      // 2. Insert into manager_change_logs audit table
+      await supabase
+        .from('manager_change_logs')
+        .insert({
+          employee_id: editingManagerUser.id,
+          old_manager_name: editingManagerUser.managerName || null,
+          old_manager_email: editingManagerUser.managerEmail || null,
+          new_manager_name: newMgrName.trim(),
+          new_manager_email: newMgrEmail.trim(),
+          changed_by: currentUser.id,
+          changed_by_name: currentUser.name || currentUser.email
+        });
+
+      toast.success(`Manager updated to ${newMgrName.trim()} with audit trail.`);
+      editingManagerUser.managerName = newMgrName.trim();
+      editingManagerUser.managerEmail = newMgrEmail.trim();
+      setEditingManagerUser(null);
+      if (onRefreshUsers) onRefreshUsers();
+    } catch (err: any) {
+      toast.error("Failed to update manager: " + err.message);
+    } finally {
+      setIsSavingManager(false);
     }
   };
 
@@ -366,16 +450,32 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
                           <i className="fa-solid fa-phone text-[9px] text-slate-400"></i>
                           {user.phone || <span className="text-slate-400 italic font-sans">No phone</span>}
                         </p>
-                        <p className="text-2xs text-slate-500 truncate" title={user.managerEmail ? `Manager: ${user.managerEmail}` : undefined}>
-                          <span className="text-slate-400 font-normal">Mgr:</span>{' '}
-                          {user.managerName || user.managerEmail ? (
-                            <span className="font-medium text-slate-700 dark:text-slate-300">
-                              {user.managerName || user.managerEmail}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 italic">None assigned</span>
+                        <div className="flex items-center justify-between gap-1 text-2xs text-slate-500">
+                          <span className="truncate" title={user.managerEmail ? `Manager: ${user.managerEmail}` : undefined}>
+                            <span className="text-slate-400 font-normal">Mgr:</span>{' '}
+                            {user.managerName || user.managerEmail ? (
+                              <span className="font-medium text-slate-700 dark:text-slate-300">
+                                {user.managerName || user.managerEmail}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">None assigned</span>
+                            )}
+                          </span>
+                          {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PNC_ADMIN) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingManagerUser(user);
+                                setNewMgrName(user.managerName || '');
+                                setNewMgrEmail(user.managerEmail || '');
+                              }}
+                              className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 p-0.5 rounded text-[10px] shrink-0"
+                              title="Edit Reporting Manager"
+                            >
+                              <i className="fa-solid fa-pen"></i>
+                            </button>
                           )}
-                        </p>
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
@@ -401,7 +501,7 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
                       ) : (
                         <select
                           value={user.role}
-                          onChange={(e) => onUpdateRole(user, e.target.value as UserRole)}
+                          onChange={(e) => handleRoleSelectChange(user, e.target.value as UserRole)}
                           className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-2xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-2xs hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                           disabled={isSelectDisabled(user)}
                           title={isSelectDisabled(user) ? (user.id === currentUser.id ? 'You cannot change your own role' : `${currentUser.role} cannot modify ${user.role} accounts`) : undefined}
@@ -559,6 +659,127 @@ export const UserRoleManagement: React.FC<UserRoleManagementProps> = ({
                 ) : (
                   <><i className="fa-solid fa-paper-plane"></i> Send Invite</>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Blocked Demotion Modal */}
+      {blockedDemotion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setBlockedDemotion(null)}></div>
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-rose-200 dark:border-rose-900/50 p-6 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center text-lg">
+                <i className="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Cannot Remove PnC Access</h3>
+                <p className="text-xs text-slate-500">Active tickets are currently assigned to this administrator</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              <strong>{blockedDemotion.user.name || blockedDemotion.user.email}</strong> is currently assigned to{' '}
+              <strong>{blockedDemotion.openRequests.length} active travel request(s)</strong>. To prevent tickets from becoming orphaned or hidden from the queue, please reassign these requests to another team member before demoting to Employee.
+            </p>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800 max-h-48 overflow-y-auto space-y-2 text-xs">
+              {blockedDemotion.openRequests.map(r => (
+                <div key={r.id} className="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{r.submissionId || r.id.slice(0, 8)}</span>
+                    <span className="text-slate-700 dark:text-slate-300 ml-2 font-medium">{r.requesterName}</span>
+                    <span className="text-slate-400 text-2xs block">{r.from} → {r.to}</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-3xs font-bold uppercase bg-amber-50 text-amber-700 border border-amber-200">
+                    {r.pncStatus}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setBlockedDemotion(null)}
+                className="px-5 py-2 bg-slate-800 text-white dark:bg-slate-700 hover:bg-slate-900 rounded-lg text-xs font-bold shadow-sm"
+              >
+                Understood, Keep PnC Role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Reporting Manager Modal */}
+      {editingManagerUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setEditingManagerUser(null)}></div>
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 flex items-center justify-center">
+                <i className="fa-solid fa-user-tie"></i>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Update Reporting Manager</h3>
+                <p className="text-xs text-slate-500">For {editingManagerUser.name || editingManagerUser.email}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-2xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Current Manager
+                </label>
+                <div className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  {editingManagerUser.managerName || 'None'} ({editingManagerUser.managerEmail || 'None'})
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-2xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  New Manager Name
+                </label>
+                <input
+                  type="text"
+                  value={newMgrName}
+                  onChange={e => setNewMgrName(e.target.value)}
+                  placeholder="Full Name"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  New Manager Email
+                </label>
+                <input
+                  type="email"
+                  value={newMgrEmail}
+                  onChange={e => setNewMgrEmail(e.target.value)}
+                  placeholder="manager@navgurukul.org"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingManagerUser(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveManagerChange}
+                disabled={isSavingManager}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-600/20"
+              >
+                {isSavingManager ? 'Saving...' : 'Save & Log Change'}
               </button>
             </div>
           </div>

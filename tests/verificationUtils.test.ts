@@ -73,6 +73,15 @@ describe('Verification Utilities: calculateProfileCompleteness', () => {
     });
     expect(calculateProfileCompleteness(partialUser)).toBe(45);
   });
+
+  it('requires remote city when campus starts with Remote', () => {
+    const remoteWithoutCity = createMockUser({ campus: 'Remote' });
+    // 10 of 11 fields filled (missing remote city) -> 10/11 = 91%
+    expect(calculateProfileCompleteness(remoteWithoutCity)).toBe(91);
+
+    const remoteWithCity = createMockUser({ campus: 'Remote: Jaipur' });
+    expect(calculateProfileCompleteness(remoteWithCity)).toBe(100);
+  });
 });
 
 describe('Verification Utilities: isUserVerified & Temporary Unlock', () => {

@@ -9,7 +9,16 @@ export const calculateProfileCompleteness = (user: User | null): number => {
 
   if (user.name && user.name.trim() !== '') completed++;
   if (user.department && user.department.trim() !== '') completed++;
-  if (user.campus && user.campus.trim() !== '') completed++;
+  if (user.campus && user.campus.trim() !== '') {
+    if (user.campus.startsWith('Remote')) {
+      const parts = user.campus.split(':');
+      if (parts.length > 1 && parts[1].trim() !== '') {
+        completed++;
+      }
+    } else {
+      completed++;
+    }
+  }
   if (user.managerName && user.managerName.trim() !== '') completed++;
   if (user.managerEmail && user.managerEmail.trim() !== '') completed++;
   if (user.passportPhoto?.fileUrl) completed++;

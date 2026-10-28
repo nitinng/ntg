@@ -587,7 +587,7 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
           {displayGroups.map(group => {
             const req = group.request;
             const fromCity = req?.from || 'Origin';
@@ -601,7 +601,7 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
               <div
                 key={group.ticketId}
                 onClick={() => handleOpenTicketStub(group)}
-                className={`group relative bg-white dark:bg-slate-900 rounded-lg flex flex-col md:flex-row overflow-hidden border cursor-pointer shadow-2xs hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${
+                className={`group relative bg-white dark:bg-slate-900 rounded-lg flex flex-col sm:flex-row overflow-hidden border cursor-pointer shadow-2xs hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${
                   group.isResolved
                     ? 'border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/10'
                     : isUnread
@@ -610,7 +610,7 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                 }`}
               >
                 {/* Left Ticket Main Body (Compact Boarding Pass) */}
-                <div className="flex-1 p-3.5 sm:p-4 relative overflow-hidden bg-gradient-to-br from-white via-slate-50/40 to-indigo-50/15 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/20 border-b md:border-b-0 md:border-r border-dashed border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                <div className="flex-1 p-3 sm:p-3.5 relative overflow-hidden bg-gradient-to-br from-white via-slate-50/40 to-indigo-50/15 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/20 border-b sm:border-b-0 sm:border-r border-dashed border-slate-200 dark:border-slate-800 flex flex-col justify-between">
                   {/* Subtle Background Watermark Icon */}
                   <div className="absolute -right-4 -bottom-4 opacity-[0.03] dark:opacity-[0.03] text-[7rem] pointer-events-none text-indigo-900 dark:text-indigo-200">
                     <i className={`fa-solid ${modeIcon}`}></i>
@@ -618,70 +618,70 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
 
                   <div>
                     {/* Header Strip */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2 relative z-10">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2 relative z-10">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                        <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
                           {req?.submissionId || group.ticketId.slice(0, 8)}
                         </span>
 
                         {group.mentionCount > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 shadow-2xs ${
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shadow-2xs ${
                             group.unreadMentionCount > 0
                               ? 'bg-rose-500 text-white animate-pulse'
                               : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
                           }`}>
-                            <i className="fa-solid fa-at text-[8.5px]"></i>
+                            <i className="fa-solid fa-at text-[8px]"></i>
                             {group.mentionCount} {group.mentionCount === 1 ? 'mention' : 'mentions'}
                           </span>
                         )}
 
-                        <span className="text-[9.5px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                          <i className="fa-solid fa-comments text-slate-400 text-[8.5px]"></i>
-                          {group.comments.length} comments
+                        <span className="text-[9px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                          <i className="fa-solid fa-comments text-slate-400 text-[8px]"></i>
+                          {group.comments.length}
                         </span>
 
                         {group.isResolved && (
-                          <span className="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
-                            <i className="fa-solid fa-check text-emerald-600 dark:text-emerald-400 text-[8.5px]"></i>
-                            Resolved {group.resolvedBy ? `by ${group.resolvedBy}` : ''} {group.resolutionDurationMs ? `(${formatResolutionDuration(group.resolutionDurationMs)})` : ''}
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                            <i className="fa-solid fa-check text-emerald-600 dark:text-emerald-400 text-[8px]"></i>
+                            Resolved {group.resolvedBy ? `by ${group.resolvedBy}` : ''}
                           </span>
                         )}
                       </div>
 
                       {req?.pncStatus && (
-                        <div className="shrink-0 text-3xs scale-90 origin-right">
+                        <div className="shrink-0 scale-85 origin-right">
                           <StatusBadge type="pnc" value={req.pncStatus} audience="employee" />
                         </div>
                       )}
                     </div>
 
                     {/* Route Section */}
-                    <div className="flex items-center justify-between my-2 relative z-10">
+                    <div className="flex items-center justify-between my-1.5 relative z-10">
                       <div className="text-left flex-1 min-w-0">
-                        <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
+                        <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
                           {fromCode}
                         </p>
-                        <p className="text-3xs text-slate-400 font-medium truncate max-w-[120px] sm:max-w-[150px] mt-0.5">
+                        <p className="text-[9.5px] text-slate-400 font-medium truncate max-w-[90px] sm:max-w-[110px] mt-0.5">
                           {fromCity}
                         </p>
                       </div>
 
-                      <div className="flex-[2] flex flex-col items-center justify-center px-2 sm:px-4">
+                      <div className="flex-[2] flex flex-col items-center justify-center px-1 sm:px-2">
                         <div className="w-full flex items-center opacity-60">
                           <div className="h-[1px] flex-1 border-t border-dashed border-slate-300 dark:border-slate-600"></div>
-                          <i className={`fa-solid ${modeIcon} text-indigo-600 dark:text-indigo-400 mx-2 text-sm group-hover:scale-115 transition-transform duration-200`}></i>
+                          <i className={`fa-solid ${modeIcon} text-indigo-600 dark:text-indigo-400 mx-1.5 text-xs group-hover:scale-115 transition-transform duration-200`}></i>
                           <div className="h-[1px] flex-1 border-t border-dashed border-slate-300 dark:border-slate-600"></div>
                         </div>
-                        <span className="text-[9px] uppercase font-bold text-slate-400 mt-0.5">
+                        <span className="text-[8.5px] uppercase font-bold text-slate-400 mt-0.5">
                           {req?.mode || 'Travel'}
                         </span>
                       </div>
 
                       <div className="text-right flex-1 min-w-0">
-                        <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
+                        <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
                           {toCode}
                         </p>
-                        <p className="text-3xs text-slate-400 font-medium truncate max-w-[120px] sm:max-w-[150px] mt-0.5">
+                        <p className="text-[9.5px] text-slate-400 font-medium truncate max-w-[90px] sm:max-w-[110px] mt-0.5">
                           {toCity}
                         </p>
                       </div>
@@ -689,18 +689,18 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                   </div>
 
                   {/* Requester & Date Meta Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 relative z-10 text-3xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="uppercase font-bold text-slate-400">Requester:</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 relative z-10 text-[9.5px]">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="uppercase font-semibold text-slate-400 text-[8.5px] shrink-0">Requester:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                         {req?.requesterName || 'Employee Request'}
                       </span>
                       {req?.requesterDepartment && (
-                        <span className="text-slate-400">({req.requesterDepartment})</span>
+                        <span className="text-slate-400 text-[8.5px] shrink-0">({req.requesterDepartment})</span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3 text-slate-400 font-mono">
+                    <div className="flex items-center gap-2 text-slate-400 font-mono text-[8.5px] shrink-0">
                       {req?.dateOfTravel && (
                         <span>
                           <i className="fa-solid fa-calendar mr-1 text-slate-400"></i>
@@ -716,48 +716,48 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
                 </div>
 
                 {/* Right Tear-Off Stub (Compact Discussion Preview & Actions) */}
-                <div className="w-full md:w-72 bg-slate-50/70 dark:bg-slate-900/60 p-3 sm:p-3.5 flex flex-col justify-between relative overflow-hidden">
-                  {/* Perforation holes on md screens */}
-                  <div className="hidden md:block absolute -left-2.5 top-[-8px] w-5 h-5 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
-                  <div className="hidden md:block absolute -left-2.5 bottom-[-8px] w-5 h-5 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                <div className="w-full sm:w-56 md:w-60 lg:w-56 xl:w-60 bg-slate-50/70 dark:bg-slate-900/60 p-2.5 sm:p-3 flex flex-col justify-between relative overflow-hidden shrink-0">
+                  {/* Perforation holes on sm screens */}
+                  <div className="hidden sm:block absolute -left-2 top-[-6px] w-4 h-4 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
+                  <div className="hidden sm:block absolute -left-2 bottom-[-6px] w-4 h-4 bg-slate-100 dark:bg-slate-950 rounded-full z-20 shadow-inner"></div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-3xs font-black uppercase tracking-wider text-slate-400">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
                         Latest Comment
                       </span>
-                      <span className="text-3xs text-slate-400 font-mono">
+                      <span className="text-[9px] text-slate-400 font-mono">
                         {new Date(group.latestComment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
                     {/* Latest Comment Bubble */}
-                    <div className="p-2 bg-white dark:bg-slate-800/80 rounded border border-slate-200/80 dark:border-slate-700/80 space-y-0.5 text-xs">
-                      <span className="font-bold text-3xs text-slate-800 dark:text-slate-200 block truncate">
+                    <div className="p-2 bg-white dark:bg-slate-800/80 rounded border border-slate-200/80 dark:border-slate-700/80 space-y-0.5">
+                      <span className="font-bold text-[9.5px] text-slate-800 dark:text-slate-200 block truncate">
                         {group.latestComment.author_name}
                       </span>
-                      <p className="text-3xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                      <p className="text-[9.5px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                         {renderCommentContent(group.latestComment.comment_text)}
                       </p>
                     </div>
 
                     {group.comments.length > 1 && (
-                      <p className="text-[10px] text-slate-400 text-center font-medium">
+                      <p className="text-[9px] text-slate-400 text-center font-medium">
                         + {group.comments.length - 1} earlier {group.comments.length - 1 === 1 ? 'comment' : 'comments'} in thread
                       </p>
                     )}
 
                     {group.isResolved && (
-                      <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/40 rounded border border-emerald-200 dark:border-emerald-800/80 text-3xs space-y-0.5">
+                      <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/40 rounded border border-emerald-200 dark:border-emerald-800/80 text-[9px] space-y-0.5">
                         <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
                           <span className="font-semibold flex items-center gap-1">
                             <i className="fa-solid fa-check-circle text-emerald-600 dark:text-emerald-400"></i>
                             Resolved by
                           </span>
-                          <span className="font-bold truncate max-w-[120px]">{group.resolvedBy || 'Staff'}</span>
+                          <span className="font-bold truncate max-w-[100px]">{group.resolvedBy || 'Staff'}</span>
                         </div>
                         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 pt-0.5 border-t border-emerald-200/50 dark:border-emerald-800/40">
-                          <span>Resolution time:</span>
+                          <span>Resolution:</span>
                           <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
                             {formatResolutionDuration(group.resolutionDurationMs)}
                           </span>
@@ -768,9 +768,9 @@ export const TicketCommentsView: React.FC<TicketCommentsViewProps> = ({
 
                   {/* Stub Actions: Resolve / Reopen & Open */}
                   <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
-                    <span className="text-2xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
                       Open Stub
-                      <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                      <i className="fa-solid fa-arrow-right text-[9px]"></i>
                     </span>
 
                     <div className="flex items-center gap-1.5">

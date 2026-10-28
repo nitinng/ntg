@@ -192,6 +192,22 @@ const isChunkLoadError = (msg?: string): boolean => {
   );
 };
 
+const isAbortError = (reason: unknown, stack?: string): boolean => {
+  if (!reason && !stack) return false;
+  const errorObj = typeof reason === 'object' && reason !== null ? (reason as any) : null;
+  const name = errorObj?.name || '';
+  const message = errorObj?.message || (typeof reason === 'string' ? reason : '');
+  const combined = `${name} ${message} ${stack || ''}`.toLowerCase();
+
+  return (
+    name === 'AbortError' ||
+    combined.includes('signal is aborted') ||
+    combined.includes('aborterror') ||
+    combined.includes('the user aborted a request') ||
+    (combined.includes('abort') && (combined.includes('signal') || combined.includes('operation was aborted') || combined.includes('fetch')))
+  );
+};
+
 const triggerStaleBundleReload = (): boolean => {
   try {
     const key = 'last_chunk_reload_ts';
@@ -232,6 +248,10 @@ export const installGlobalSosHandlers = (): (() => void) => {
       return;
     }
 
+    if (isAbortError(event.error, errorStack) || isAbortError(errorMsg)) {
+      return;
+    }
+
     void raiseSos('CLIENT_UNCAUGHT_ERROR', {
       message: event.message || 'Uncaught error in the browser',
       context: {
@@ -248,6 +268,11 @@ export const installGlobalSosHandlers = (): (() => void) => {
     if (isChunkLoadError(reason) || isChunkLoadError(stack)) {
       console.warn('[App] Dynamic chunk promise rejected (release in progress), reloading...');
       triggerStaleBundleReload();
+      return;
+    }
+
+    if (isAbortError(event.reason, stack) || isAbortError(reason)) {
+      // Benign client abort (Fetch/Supabase cancellation on component unmount or navigation)
       return;
     }
 

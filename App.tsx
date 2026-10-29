@@ -89,7 +89,7 @@ const EmailSettingsView = lazyWithRetry(() => import('./components/EmailSettings
 const EmailNotificationCenter = lazyWithRetry(() => import('./components/EmailNotificationCenter').then(module => ({ default: module.EmailNotificationCenter })));
 const VersionChangelogView = lazyWithRetry(() => import('./components/VersionChangelogView'));
 const TicketCommentsView = lazyWithRetry(() => import('./components/TicketCommentsView'));
-import { isUserMentionedInComment } from './components/TicketCommentsView';
+import { isUserMentionedInComment } from './utils/commentUtils';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);

@@ -184,9 +184,18 @@ export const sendNotification = async (
       options.idempotencySuffix ? `seq:${options.idempotencySuffix}` : null
     ].filter(Boolean).join('|');
 
-    const { data: queueItem, error: insertErr } = await supabase
+    // The id is generated client-side so the insert needs no RETURNING read:
+    // only desk staff may SELECT from email_queue, and PostgREST reports a
+    // failed read-back as "new row violates row-level security policy".
+    const queueId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : undefined;
+
+    const { error: insertErr } = await supabase
       .from('email_queue')
       .insert({
+        ...(queueId ? { id: queueId } : {}),
         ticket_id: options.ticketId || null,
         to_status: options.request?.pncStatus || 'Notification',
         event: options.event || null,
@@ -203,9 +212,7 @@ export const sendNotification = async (
         attempt_count: 0,
         idempotency_key: idempotencyKey,
         available_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
+      });
 
     if (insertErr) {
       // Check for duplicate idempotency
@@ -221,7 +228,7 @@ export const sendNotification = async (
 
     return {
       success: true,
-      queueId: queueItem?.id,
+      queueId,
       status: 'Queued'
     };
   } catch (err: any) {
